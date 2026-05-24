@@ -1,0 +1,104 @@
+[
+    {
+        "algorithm": "SHA2-256",
+        "revision": "1.0",
+        "messageLength": [
+            {
+                "min": 0,
+                "max": 65528,
+                "increment": 8
+            }
+        ],
+        "performLargeDataTest": [
+            1,
+            2,
+            4,
+            8
+        ]
+    },
+    {
+        "algorithm": "SHA3-256",
+        "revision": "2.0",
+        "messageLength": [
+            {
+                "min": 0,
+                "max": 65536,
+                "increment": 8
+            }
+        ],
+        "performLargeDataTest": [
+            1,
+            2,
+            4,
+            8
+        ]
+    },
+    {
+        "algorithm": "hashDRBG",
+        "revision": "1.0",
+        "prereqVals": [
+            {
+                "algorithm": "SHA",
+                "valValue": "same"
+            }
+        ],
+        "predResistanceEnabled": [
+            true
+        ],
+        "reseedImplemented": false,
+        "capabilities": [
+            {
+                "mode": "SHA2-256",
+                "entropyInputLen": [
+                    {
+                        "max": 1024,
+                        "min": 256,
+                        "increment": 256
+                    }
+                ],
+                "nonceLen": [
+                    {
+                        "max": 256,
+                        "min": 128,
+                        "increment": 128
+                    }
+                ],
+                "persoStringLen": [
+                    {
+                        "max": 1024,
+                        "min": 0,
+                        "increment": 256
+                    }
+                ],
+                "additionalInputLen": [
+                    {
+                        "max": 1024,
+                        "min": 0,
+                        "increment": 256
+                    }
+                ],
+                "returnedBitsLen": 256
+            }
+        ]
+    },
+    {
+        "algorithm": "HMAC-SHA2-256",
+        "revision": "1.0",
+        "prereqVals": [
+            {
+                "algorithm": "SHA",
+                "valValue": "same"
+            }
+        ],
+        "keyLen": [
+            {
+                "min": 112,
+                "max": 2048,
+                "increment": 8
+            }
+        ],
+        "macLen": [
+            256
+        ]
+    }
+]

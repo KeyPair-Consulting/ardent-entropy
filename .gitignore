@@ -1,0 +1,11 @@
+# Visual Studio Code configuration
+.vscode/
+
+# All object files
+**/*.o
+
+# CMake directories
+bin/**
+build*/**
+
+

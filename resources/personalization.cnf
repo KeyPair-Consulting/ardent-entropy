@@ -1,0 +1,9 @@
+# A "Personalization String" used to initialize the seed source.  This value should be 
+# unique for each device, some examples:
+#   1) UUID/GUID
+#   2) Machine FQDN
+#   3) Ethernet MAC
+#   4) A unique machine-id (e.g., the contents of /etc/machine-id)
+#   5) A per-boot fixed ID (e.g., /proc/sys/kernel/random/boot_id)
+# Quotes required if spaces, max length 1024 characters.  
+perso = "A unique string for this device"
