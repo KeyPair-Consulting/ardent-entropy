@@ -24,6 +24,11 @@
 extern "C" {
 #endif
 
+/* Retry 100 iterations, as per Intel recommendation (Section 5.3.1.2, pg. 32): */
+/* https://www.intel.com/content/dam/develop/external/us/en/documents/drng-software-implementation-guide-2-1-185467.pdf */
+
+#define RDSEED_RETRY_DEFAULT 100
+#define RDRAND_RETRY_DEFAULT 100
 
 /* ***********************************************************************************************
  * ***********************************************************************************************
@@ -31,7 +36,7 @@ extern "C" {
  * Based on:
  * https://github.com/dj-on-github/rdrand_stdint
  * 
- * 1) No license text is required, but acknowledgement, at least here in code, is only respectful
+ * 1) No license text is required, but we acknowledge here in source
  * 2) Unnecessary functions and features have been removed
  * 3) Functions have been renamed
  * ***********************************************************************************************
@@ -79,7 +84,7 @@ int rdseed_get_n_uint64_retry(uint32_t n, uint32_t retry_limit, uint64_t *dest);
 /*   Returns 1 on success, 0 on failure                         */
 /****************************************************************/
 
-int rdrand_get_bytes_step(unsigned int n, unsigned char *dest);
+int rdrand_get_bytes_step(unsigned int n, unsigned char *dest, unsigned int retry_count);
 
 /****************************************************************/
 /* Uses RdSeed to acquire a block of random bytes               */
@@ -89,7 +94,7 @@ int rdrand_get_bytes_step(unsigned int n, unsigned char *dest);
 /*   Returns 1 on success, 0 on failure                         */
 /****************************************************************/
 
-int rdseed_get_bytes_step(unsigned int n, unsigned char *dest);
+int rdseed_get_bytes_step(unsigned int n, unsigned char *dest, unsigned int retry_count);
 
 #ifdef __cplusplus
 }

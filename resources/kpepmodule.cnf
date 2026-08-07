@@ -97,7 +97,7 @@ extseed = extseed_sect
 # These values should not be altered by vendors unless done in consultation with KeyPair.
 
 [jitter_sect]
-activate = 1
+activate = 0
 validated = "E239"
 
 block-size = 256
@@ -112,17 +112,17 @@ oversample-rate = 4
 # compliance is highly dependent on CPU and environmental considerations.  
 
 [rdseed_sect]
-activate = 0
+activate = 1
 validated = "Exxx"
 hardware-source=1
 
 # Intel RDSEED
-#block-size = 128
-#block-count = 2
+block-size = 128
+block-count = 2
 
 # AMD RDSEED
-block-size = 128
-block-count = 192
+#block-size = 128
+#block-count = 192
 
 ############################################################################################
 # RDRAND seed source
@@ -157,7 +157,8 @@ block-count = 192
 [osrand_sect]
 
 # Linux Kernel x.y.z
-0.activate = 0
+0.activate = 1
+0.validated = "FOR EVAL"
 0.block-size = 256
 0.block-count = 1
 0.filepath = /dev/random

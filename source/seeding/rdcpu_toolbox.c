@@ -21,7 +21,7 @@
  * which is clearly based on:
  * https://www.intel.com/content/dam/develop/external/us/en/documents/drng-software-implementation-guide-2-1-185467.pdf
  *
- * 1) No license text is required, but acknowledgement, at least here in code, is just respectful
+ * 1) No license text is required, but we acknowledge here in source
  * 2) Unnecessary functions and features have been removed
  * 3) Functions have been renamed
  * ***********************************************************************************************/
@@ -92,6 +92,9 @@ int rdrand_get_n_uint64_retry(uint32_t n, uint32_t retry_limit, uint64_t *dest)
         count = 0;
         do {
             success = rdrand64_step(dest);
+            // As per Intel recommendation (Section 5.3.1.2, pg. 32):
+            // https://www.intel.com/content/dam/develop/external/us/en/documents/drng-software-implementation-guide-2-1-185467.pdf
+            _mm_pause();  
         } while((success == 0) && (count++ < retry_limit));
         if (success == 0) 
             return 0;
@@ -138,7 +141,7 @@ int rdseed_get_n_uint64_retry(uint32_t n, uint32_t retry_limit, uint64_t *dest)
 /****************************************************************/
 
 EXPORT_VISIBILITY_HIDDEN
-int rdrand_get_bytes_step(unsigned int n, unsigned char *dest)
+int rdrand_get_bytes_step(unsigned int n, unsigned char *dest, unsigned int retry_count)
 {
     unsigned char *start;
     unsigned char *residualstart;
@@ -172,7 +175,7 @@ int rdrand_get_bytes_step(unsigned int n, unsigned char *dest)
 
     /* Get a temporary random number for use in the residuals. Failout if retry fails */
     if (startlen > 0) {
-        if (rdrand_get_n_uint64_retry(1, 10, (void *)&temprand) == 0) 
+        if (rdrand_get_n_uint64_retry(1, retry_count, (void *)&temprand) == 0) 
             return 0;
     }
 
@@ -183,12 +186,12 @@ int rdrand_get_bytes_step(unsigned int n, unsigned char *dest)
     }
 
     /* populate the central aligned block. Fail out if retry fails */
-    if (rdrand_get_n_uint64_retry(length, 10, (void *)(blockstart)) == 0) 
+    if (rdrand_get_n_uint64_retry(length, retry_count, (void *)(blockstart)) == 0) 
         return 0;
 
     /* populate the final misaligned block */
     if (residual > 0) {
-        if (rdrand_get_n_uint64_retry(1, 10, (void *)&temprand) == 0) 
+        if (rdrand_get_n_uint64_retry(1, retry_count, (void *)&temprand) == 0) 
             return 0;
         for (i = 0; i<residual; i++) {
             residualstart[i] = (unsigned char)(temprand & 0xff);
@@ -208,7 +211,7 @@ int rdrand_get_bytes_step(unsigned int n, unsigned char *dest)
 /****************************************************************/
 
 EXPORT_VISIBILITY_HIDDEN
-int rdseed_get_bytes_step(unsigned int n, unsigned char *dest)
+int rdseed_get_bytes_step(unsigned int n, unsigned char *dest, unsigned int retry_count)
 {
     unsigned char *start;
     unsigned char *residualstart;
@@ -241,10 +244,8 @@ int rdseed_get_bytes_step(unsigned int n, unsigned char *dest)
     }
 
     /* Get a temporary random number for use in the residuals. Failout if retry fails. */
-    /* Retry 100 iterations, as per Intel recommendation (Section 5.3.1.2, pg. 32): */
-    /* https://www.intel.com/content/dam/develop/external/us/en/documents/drng-software-implementation-guide-2-1-185467.pdf */
     if (startlen > 0) {
-        if (rdseed_get_n_uint64_retry(1, 100, (void *)&temprand) == 0) 
+        if (rdseed_get_n_uint64_retry(1, retry_count, (void *)&temprand) == 0) 
             return 0;
     }
 
@@ -255,12 +256,12 @@ int rdseed_get_bytes_step(unsigned int n, unsigned char *dest)
     }
 
     /* populate the central aligned block. Fail out if retry fails */
-    if (rdseed_get_n_uint64_retry(length, 10, (void *)(blockstart)) == 0) 
+    if (rdseed_get_n_uint64_retry(length, retry_count, (void *)(blockstart)) == 0) 
         return 0;
 
     /* populate the final misaligned block */
     if (residual > 0) {
-        if (rdseed_get_n_uint64_retry(1, 10, (void *)&temprand) == 0) 
+        if (rdseed_get_n_uint64_retry(1, retry_count, (void *)&temprand) == 0) 
             return 0;
         for (i = 0; i<residual; i++) {
             residualstart[i] = (unsigned char)(temprand & 0xff);

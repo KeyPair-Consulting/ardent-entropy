@@ -16,8 +16,8 @@
 
 #include "kpep/kpep.h"
 #include "kpep/kpep_names.h"
-#include "kpep/kpep_cpuinfo.h"
 #include "kpep/kpep_seed_stub.h"
+#include "seed_context.h"
 
 #include "openssl/params.h"
 #include <unistd.h>
@@ -35,15 +35,7 @@
 #define MODULE_NAME "SEED-OSRAND"
 
 typedef struct {
-    char     name[32];
-    uint32_t state;
-    uint32_t full_entropy;
-    double   entropy_per_bit;
-    size_t   block_size;
-    size_t   block_count;
-
-    // Multiple type index
-    uint8_t  idx;
+    COMMON_STUB_INFO  // See seed_context.h
 
     // Source-specific parameters
     const char *filepath;

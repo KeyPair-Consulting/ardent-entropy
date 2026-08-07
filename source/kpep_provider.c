@@ -56,11 +56,13 @@
 #include "crypto/hmac.h"              /* HMAC functions */
 
 /* ************************************************************************************************
+ * ************************************************************************************************
  *  DECLARATIONS 
+ * ************************************************************************************************
  * ***********************************************************************************************/
 // Top-level identification
 #define KPEP_PROVIDER_MODULE_NAME "KeyPair Entropy Provider for OpenSSL"
-#define KPEP_PROVIDER_VERSION_STR "0.0.1-dev"
+#define KPEP_PROVIDER_VERSION_STR "0.0.2-dev"
 #define KPEP_PROVIDER_BUILDINFO_STR "KPEP_" KPEP_PROVIDER_VERSION_STR
 
 #define MODULE_NAME "KPEP-PROV"
@@ -100,7 +102,9 @@ static OSSL_FUNC_self_test_cb_fn             *c_stcbfn = NULL;
 static OSSL_FUNC_core_get_libctx_fn          *c_get_libctx = NULL;
 
 /* ************************************************************************************************
+ * ************************************************************************************************
  * FIPS INDICATOR LOGGING
+ * ************************************************************************************************
  * ***********************************************************************************************/
 
 /* A callback that is triggered if fips unapproved mode is detected */
@@ -114,7 +118,9 @@ static int fips_indicator_cb(const char *type, const char *desc, const OSSL_PARA
 }
 
 /* ************************************************************************************************
+ * ************************************************************************************************
  * PROVIDER PARAMETERS -- LOAD-FROM-CORE and APP-FACING
+ * ************************************************************************************************
  * ***********************************************************************************************/
 
 /* *** LOAD-FROM-CORE (read from config file *****************************************************/
@@ -217,7 +223,9 @@ static int kpep_get_params(void *provctx, OSSL_PARAM params[])
 }
 
 /* ************************************************************************************************
+ * ************************************************************************************************
  * OpenSSL RAND_bytes() infrastructure
+ * ************************************************************************************************
  * ***********************************************************************************************/
 
 extern const OSSL_DISPATCH kpep_seeding_functions[];
@@ -255,7 +263,9 @@ static int kpep_random_bytes(void *vprov, int which,
 }
 
 /* ************************************************************************************************
+ * ************************************************************************************************
  * SELF-TEST INFRASTRUCTURE
+ * ************************************************************************************************
  * ***********************************************************************************************/
 
 static void set_self_test_cb(KPEP_PROVIDER_CTX *ctx)
@@ -291,6 +301,7 @@ static int kpep_self_test(void *provctx)
 #define KPEP_NAMES_SHA2_256  "SHA2-256:SHA-256:SHA256:2.16.840.1.101.3.4.2.1"
 #define KPEP_NAMES_SHA3_256  "SHA3-256:2.16.840.1.101.3.4.2.8"
 #define KPEP_NAMES_SEED      "KPEP-SEED"
+//#define KPEP_NAMES_CORE      "CORE-SEED"
 #define DEFAULT_NAMES_SEED   "SEED-SRC"  // This is hardcoded and not in "names.h"
 
 EXPORT_VISIBILITY_HIDDEN
@@ -301,10 +312,13 @@ EXPORT_VISIBILITY_HIDDEN
 extern const OSSL_DISPATCH kpep_hmac_functions[];
 EXPORT_VISIBILITY_HIDDEN
 extern const OSSL_DISPATCH kpep_seeding_functions[];
+//EXPORT_VISIBILITY_HIDDEN
+//extern const OSSL_DISPATCH kpep_core_seed_functions[];
 
 static const OSSL_ALGORITHM kpep_rands[] = {
     { DEFAULT_NAMES_SEED, KPEP_MODULE_PROPERTIES, kpep_seeding_functions, NULL }, // OpenSSL default seed name
     { KPEP_NAMES_SEED, KPEP_MODULE_PROPERTIES, kpep_seeding_functions, NULL },
+//    { KPEP_NAMES_CORE, KPEP_INTEROP_PROPERTIES, kpep_core_seed_functions, NULL },
     { NULL, NULL, NULL, NULL }
 };
 
@@ -335,13 +349,20 @@ static const OSSL_ALGORITHM *kpep_query(void *provctx, int operation_id, int *no
         return kpep_digests;
     case OSSL_OP_MAC:
         return kpep_macs;
+#else
+    case OSSL_OP_DIGEST:
+        return OSSL_PROVIDER_available(ctx->libctx, "kpfp")?NULL:kpep_digests;
+    case OSSL_OP_MAC:
+        return OSSL_PROVIDER_available(ctx->libctx, "kpfp")?NULL:kpep_macs;
 #endif
     }
    return NULL;
 }
 
 /* ************************************************************************************************
+ * ************************************************************************************************
  * PROVIDER FUNCTIONS -- INIT, DISPATCH, TEARDOWN, ETC
+ * ************************************************************************************************
  * ***********************************************************************************************/
 
 static KPEP_PROVIDER_CTX *kpep_ctx_new(OSSL_LIB_CTX *libctx, 
@@ -382,8 +403,14 @@ static void kpep_ctx_free(KPEP_PROVIDER_CTX *ctx)
 
 static void kpep_teardown(void *provctx)
 {
+    KPEP_PROVIDER_CTX *ctx = (KPEP_PROVIDER_CTX*)provctx;
+
     kpep_seeding_fini();
 	kpep_logging_fini();
+    if (ctx->libctx) {
+        OSSL_LIB_CTX_free(ctx->libctx);
+        ctx->libctx = NULL;
+    }
     kpep_ctx_free((KPEP_PROVIDER_CTX*)provctx);
 }
 
@@ -500,8 +527,7 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
 
 err:
     if (!result) {
-        OSSL_LIB_CTX_free(libctx);
-        kpep_teardown(*provctx);
+        kpep_teardown(newctx);
         *provctx = NULL;
     }
 
@@ -516,7 +542,9 @@ ret:
 }
 
 /* ************************************************************************************************
+ * ************************************************************************************************
  * BIO Infrastructure
+ * ************************************************************************************************
  * ***********************************************************************************************/
 
 EXPORT_VISIBILITY_HIDDEN

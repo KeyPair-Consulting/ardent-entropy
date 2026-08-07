@@ -2,7 +2,7 @@
 
 ## Logging to a KPEP-specific syslog file
 
-All logging messages from KEMP use the "KEMP-" or "SEED-" prefix.  This can be used to filter the log messages for output to an alternative file rather than the default/global /var/log/syslog.
+All logging messages from KPEP use the "KPEP-" or "SEED-" prefix.  This can be used to filter the log messages for output to an alternative file rather than the default/global /var/log/syslog.
 
 ## Configure rsyslog to route Logs
 
@@ -13,7 +13,7 @@ You’ll need to create or modify an rsyslog configuration file to define routin
     You can add custom rules in a new configuration file under /etc/rsyslog.d/.  To create a new file, use:
 
     ```text
-    sudo nano /etc/rsyslog.d/10-kpep-.conf
+    sudo nano /etc/rsyslog.d/10-kpep.conf
     ```
 
     The numeric value that the start of the filename is used to order the processing of each configuration file (lowest first).  The number you select should be low enough to guarantee these messages are not already logged before this configuraiton file is processed.

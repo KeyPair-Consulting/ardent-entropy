@@ -17,6 +17,7 @@
 #include "kpep/kpep.h"
 #include "kpep/kpep_names.h"
 #include "kpep/kpep_seed_stub.h"
+#include "seed_context.h"
 
 /*  External libraries can be disabled by compilation flags */
 #ifdef KPEP_DISABLE_EXTERNAL
@@ -47,15 +48,7 @@ const STUB_FUNCTIONS stub_extern = {
 #define MODULE_NAME "SEED-EXTERN"
 
 typedef struct {
-    char     name[256];
-    uint32_t state;
-    uint32_t full_entropy;
-    double   entropy_per_bit;
-    size_t   block_size;
-    size_t   block_count;
-
-    // Multiple type index
-    uint8_t  idx;
+    COMMON_STUB_INFO  // See seed_context.h
 
     // Source-specific parameters
     const char     *validated;

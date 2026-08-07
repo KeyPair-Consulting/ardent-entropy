@@ -16,8 +16,9 @@
 
 #include "kpep/kpep.h"
 #include "kpep/kpep_names.h"
-#include "kpep/kpep_cpuinfo.h"
 #include "kpep/kpep_seed_stub.h"
+#include "seed_context.h"
+#include "kpep/kpep_cpuinfo.h"
 #include "rdcpu_toolbox.h"
 
 #include "openssl/params.h"
@@ -36,14 +37,10 @@
 #define MODULE_NAME "SEED-RDSEED"
 
 typedef struct {
-    char     name[32];
-    uint32_t state;
-    uint32_t full_entropy;
-    double   entropy_per_bit;
-    size_t   block_size;
-    size_t   block_count;
+    COMMON_STUB_INFO  // See seed_context.h
 
     // Source-specific parameters
+    uint32_t retry_count;
     CPU_TYPE type;
 } RDSEED_CTX;
 
@@ -222,7 +219,7 @@ KPEP_RESULT stub_rdseed_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     }
 
     // Get the entropy from CPU
-    if (!rdseed_get_bytes_step(gather_sz, out)) {
+    if (!rdseed_get_bytes_step(gather_sz, out, ctx->retry_count)) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'rdseed' gather failed (rdseed)");
         goto err;
     }
@@ -292,10 +289,11 @@ static KPEP_RESULT load_params(void* prov_ctx, RDSEED_CTX *ctx)
 {
     const char *bsize_str = NULL;
     const char *bcount_str = NULL;
+    const char *retry_str = NULL;
     const char *valid_str = NULL;
 
     if (prov_ctx) {
-        OSSL_PARAM params[4], *p = params;
+        OSSL_PARAM params[5], *p = params;
         *p++ = OSSL_PARAM_construct_utf8_ptr(
             KPEP_PROV_PARAM_SEED_RDSEED"."KPEP_PROV_PARAM_SEED_VALIDATED,
             (char **) &valid_str,
@@ -308,6 +306,10 @@ static KPEP_RESULT load_params(void* prov_ctx, RDSEED_CTX *ctx)
             KPEP_PROV_PARAM_SEED_RDSEED"."KPEP_PROV_PARAM_SEED_BLOCK_COUNT,
             (char **) &bcount_str,
             sizeof(bcount_str));
+        *p++ = OSSL_PARAM_construct_utf8_ptr(
+            KPEP_PROV_PARAM_SEED_RDSEED"."KPEP_PROV_PARAM_SEED_RETRY_COUNT,
+            (char **) &retry_str,
+            sizeof(retry_str));
         *p = OSSL_PARAM_construct_end();
 
         if (!kpep_get_core_params(prov_ctx, params)) {
@@ -318,6 +320,7 @@ static KPEP_RESULT load_params(void* prov_ctx, RDSEED_CTX *ctx)
     else {
         bsize_str = getenv(ENV_SEED_RDSEED_BLOCK_SIZE);
         bcount_str = getenv(ENV_SEED_RDSEED_BLOCK_COUNT);
+        retry_str = getenv(ENV_SEED_RDSEED_RETRY_COUNT);
     }
 
     // Name
@@ -352,6 +355,18 @@ static KPEP_RESULT load_params(void* prov_ctx, RDSEED_CTX *ctx)
     else {
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_MISSING);
         return KPEP_R_CONFIG_PARAMETER_MISSING;
+    }
+
+    // Retry Count (optional)
+    if (retry_str) {
+        ctx->retry_count = atoi(retry_str);
+        if (errno) {
+            LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
+            return KPEP_R_CONFIG_PARAMETER_INVALID;
+        }
+    }
+    else {
+        ctx->retry_count = RDSEED_RETRY_DEFAULT;
     }
 
     return KPEP_R_SUCCESS;

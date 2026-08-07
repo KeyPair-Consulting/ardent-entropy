@@ -155,7 +155,7 @@ extern "C" {
  * (if no JENT_MAX_MEMSIZE_* flag is provided).
  */
 #ifndef JENT_CACHE_SHIFT_BITS
-// : Per ESV E239
+// KPEP: Per ESV E239
 //#define JENT_CACHE_SHIFT_BITS 0
 #define JENT_CACHE_SHIFT_BITS 3
 #endif
@@ -254,7 +254,7 @@ struct rand_data
 #ifdef JENT_RANDOM_MEMACCESS
   /* The step size should be larger than the cacheline size. */
 # ifndef JENT_MEMORY_BITS
-// : Per ESV E239
+// KPEP: Per ESV E239
 //#  define JENT_MEMORY_BITS 17
 #  define JENT_MEMORY_BITS 30
 # endif
@@ -410,7 +410,7 @@ struct rand_data
 #ifdef JENT_CONF_DISABLE_LOOP_SHUFFLE
 # define JENT_MIN_OSR	3
 #else
-// : Per ESV E239
+// KPEP: Per ESV E239
 //# define JENT_MIN_OSR	1
 # define JENT_MIN_OSR	3
 #endif

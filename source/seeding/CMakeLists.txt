@@ -23,6 +23,7 @@ SET  (KPEP_seeding_sources seed_control.c)
 LIST (APPEND KPEP_seeding_sources seed_stub_jitter.c)
 LIST (APPEND KPEP_seeding_sources seed_stub_rdseed.c seed_stub_rdrand.c rdcpu_toolbox.c)
 LIST (APPEND KPEP_seeding_sources seed_stub_osrand.c seed_stub_extern.c)
+LIST (APPEND KPEP_seeding_sources async_ringbuffer.c seed_ringbuffer.c)
 
 # ##################################################################################################
 # STATIC Compilation for linking

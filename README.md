@@ -6,15 +6,15 @@ Started as KPMP (part of KPFP+), modified to standalone FIPS provider
 
 ## Modifications
 
-Short Term:
+Notable large-scale changes:
 
-1) Remove KDFs and associated CASTs
-2) Remove interop/interdependence with KPFP
-3) Update names and labels
-4) Modify install script
+* Remove KDFs and associated CASTs
+* Remove interop/interdependence with KPFP
+* Update names and labels
+* Modify install script
 
-Long Term:
+Long Term Plans:
 
-1) Integrate into OpenSSL tree and build system
-
-
+* Integrate into OpenSSL tree and build system
+* Use OpenSSL built-in threading and mutex to handle async operation
+* Allow operation as an RBG2 construction

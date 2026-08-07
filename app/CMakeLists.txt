@@ -21,7 +21,7 @@
 IF (utility)
     # Set project source files
     SET  (APP_utility_sources keypair_utility.c)
-    LIST (APPEND APP_utility_sources ../source/kpep_internal.c)
+    LIST (APPEND APP_utility_sources ../source/kpep_internal.c ../source/kpep_integrity.c)
     LIST (APPEND APP_utility_sources ../source/crypto/sha2.c ../source/crypto/hmac.c)
 
     ADD_EXECUTABLE         (APP_utility ${APP_utility_sources})

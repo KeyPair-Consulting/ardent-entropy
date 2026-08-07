@@ -155,6 +155,13 @@ IF (NOT rand)
 ENDIF (NOT rand)
 
 # ##################################################
+# Should we build KPEP test applications?
+SET(tests OFF CACHE BOOL  "Specify to build unit test and stress test applications (default: OFF)")
+IF (tests)
+    MESSAGE("-- Testing applications are ENABLED and will be built")
+ENDIF (tests)
+
+# ##################################################
 # Should we build the EXAMPLE external jitter source?
 SET(example-external-jitter OFF CACHE BOOL "Specify to build the example external library using the built-in libjitterentropy.a (default: OFF)")
 IF (example-external-jitter)
@@ -344,6 +351,11 @@ IF (FIPS_OPTEST)
     ADD_SUBDIRECTORY ("optest")
 ENDIF (FIPS_OPTEST)
 
+# Test Applications?
+IF (tests)
+    ADD_SUBDIRECTORY ("test")
+ENDIF (tests)
+
 # ##################################################################################################
 # Install Information
 # ##################################################################################################
@@ -383,6 +395,20 @@ IF (rand)
             GROUP_READ GROUP_EXECUTE
             WORLD_READ WORLD_EXECUTE)
 ENDIF (rand)
+
+# KPEP Test Applications
+IF (tests)
+    INSTALL(TARGETS APP_test_ringbuffer DESTINATION ${OPENSSL_ROOT}/test
+        PERMISSIONS 
+            OWNER_READ OWNER_EXECUTE OWNER_WRITE
+            GROUP_READ GROUP_EXECUTE 
+            WORLD_READ WORLD_EXECUTE)
+    INSTALL(TARGETS APP_rand_stress DESTINATION ${OPENSSL_ROOT}/test
+        PERMISSIONS 
+            OWNER_READ OWNER_EXECUTE OWNER_WRITE
+            GROUP_READ GROUP_EXECUTE 
+            WORLD_READ WORLD_EXECUTE)            
+ENDIF (tests)
 
 # Example external entropy source using libjitterentropy.a
 IF (example-external-jitter)

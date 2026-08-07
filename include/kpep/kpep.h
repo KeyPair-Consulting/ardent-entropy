@@ -64,9 +64,10 @@ typedef struct kpep_provider_ctx_st KPEP_PROVIDER_CTX;
 #define MAX(x,y)    (((x)>(y))?(x):(y))
 
 // Safe memory handling
-void  kpep_free(void* ptr);
-void  kpep_cleanse(void* ptr, size_t size);
-void* kpep_zalloc(size_t size);
+void  kpep_free(void* ptr);                  // Release memory
+void  kpep_zeroize(void* ptr, size_t size);  // Set memory to zero
+void  kpep_cleanse(void* ptr, size_t size);  // Set to zero then release
+void* kpep_zalloc(size_t size);              // Allocate and set to zero
 
 // Stores the trimmed input string into the given output buffer, which must be
 // large enough to store the result.  If it is too small, the output is truncated.

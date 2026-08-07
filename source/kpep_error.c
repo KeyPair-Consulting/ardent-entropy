@@ -73,8 +73,14 @@ static ERR_STRING_DATA reasons[] = {
 	{.string = "Failure looking up a configuration parameter"},
 	{.string = "A configuration parameter was missing"},
 	{.string = "A configuration parameter was invalid or could not be converted to the proper format"},
-	{.string = "RESERVED #134"},
-	{.string = "RESERVED #134"},
+	{.string = "A KDF failed the self-test"},
+	{.string = "A synchronization lock failed to be acquired"},
+	// 136
+	{.string = "Ring buffer requested size is not valid"},
+	{.string = "Ring buffer size is not a power of two"},
+	{.string = "Ring buffer is full"},
+	{.string = "Ring buffer is empty"},
+	{.string = "RESERVED 140"},
 };
 
  /* ************************************************************************************************

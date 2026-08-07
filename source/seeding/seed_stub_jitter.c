@@ -17,11 +17,12 @@
 #include "kpep/kpep.h"
 #include "kpep/kpep_names.h"
 #include "kpep/kpep_seed_stub.h"
+#include "seed_context.h"
 
 #include "openssl/params.h"
 #include "jitterentropy.h"
 
-//: For Debugging "__func__"
+//KPEP: For Debugging "__func__"
 #include <stdio.h>
 
 /* ***********************************************************************************************
@@ -35,15 +36,10 @@
 
 #define JITTER_MAX_NUM_TRIES 3
 
-#define MODULE_NAME "SEED-JTTR"
+#define MODULE_NAME "SEED-JITTER"
 
 typedef struct {
-    char     name[32];
-    uint32_t state;
-    uint32_t full_entropy;
-    double   entropy_per_bit;
-    size_t   block_size;
-    size_t   block_count;
+    COMMON_STUB_INFO  // See seed_context.h
 
     // Source-specific parameters
     unsigned int osr; 

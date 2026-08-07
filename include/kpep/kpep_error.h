@@ -78,9 +78,15 @@ extern int ERR_LIB_;           // Handle for accessing OpenSSL error functions
 #define KPEP_R_CONFIG_PARAMETER_MISSING  132
 #define KPEP_R_CONFIG_PARAMETER_INVALID  133
 #define KPEP_R_KDF_CAST_FAILED           134
-#define KPEP_R_RESERVED_135              135
+#define KPEP_R_LOCK_ERROR                135
 
-#define KPEP_R_END                       135   /* MUST BE SAME AS LAST INDEX */
+#define KPEP_R_RING_INVALID_SIZE         136
+#define KPEP_R_RING_NOT_POWER_OF_TWO     137
+#define KPEP_R_RING_FULL                 138
+#define KPEP_R_RING_EMPTY                139
+#define KPEP_R_RESERVED_140              140
+
+#define KPEP_R_END                       140   /* MUST BE SAME AS LAST INDEX */
 
 #define KPEP_R_COUNT (KPEP_R_END-KPEP_R_START+1)
 

@@ -53,6 +53,12 @@ extern "C" {
 #define KPEP_PROV_PARAM_SEED_PERSO  "seed.perso"
 
 /*
+ * Type: OSSL_PARAM_UTF8_STRING
+ * Purpose: BOOL whether to defer DRBG instantiation until first-use.  Default: No/Off
+ */
+#define KPEP_PROV_PARAM_LAZY_START  "seed.lazy-start"
+
+/*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: Whether to use the more restrictive entropy counting "Method 1"
  */
@@ -105,7 +111,23 @@ extern "C" {
  * Purpose: The number of blocks of 'block-size' to meet 128-bit security strength
  */
 #define KPEP_PROV_PARAM_SEED_BLOCK_COUNT "block-count"
-
+/*
+ * Type: OSSL_PARAM_UNSIGNED_INTEGER
+ * Purpose: The number of times to retry for RdSeed and RdRand (each set independently).  
+ *          This option is ignored by other sources.
+ */
+#define KPEP_PROV_PARAM_SEED_RETRY_COUNT "retry-count"
+/*
+ * Type: OSSL_PARAM_UNSIGNED_INTEGER
+ * Purpose: Size of the ring buffer (in bits) to store entropy for async operations.  This value
+ *          specifies the "min-entropy" or "quality entropy" to store.  The actual size of the 
+ *          buffer can be significantly larger, based on the quality of the seed source, and is
+ *          calculated based on the block-size and block-count configuration options.  This
+ *          value must be a power-of-2.
+ *          This should be sized with burst conditions in mind, but it won't help long-term
+ *          resource starvation.
+ */
+#define KPEP_PROV_PARAM_SEED_RING_SIZE  "ring-size"
 
 /* *** Options  ************************************************************************** */
 
@@ -214,9 +236,11 @@ extern "C" {
 
 #define ENV_SEED_RDSEED_BLOCK_SIZE   "KPEP_SEED_RDSEED_BLOCK_SIZE"
 #define ENV_SEED_RDSEED_BLOCK_COUNT  "KPEP_SEED_RDSEED_BLOCK_COUNT"
+#define ENV_SEED_RDSEED_RETRY_COUNT  "KPEP_SEED_RDSEED_RETRY_COUNT"
 
 #define ENV_SEED_RDRAND_BLOCK_SIZE   "KPEP_SEED_RDRAND_BLOCK_SIZE"
 #define ENV_SEED_RDRAND_BLOCK_COUNT  "KPEP_SEED_RDRAND_BLOCK_COUNT"
+#define ENV_SEED_RDRAND_RETRY_COUNT  "KPEP_SEED_RDRAND_RETRY_COUNT"
 
 #define ENV_SEED_OSRAND_BLOCK_SIZE   "KPEP_SEED_OSRAND_BLOCK_SIZE"
 #define ENV_SEED_OSRAND_BLOCK_COUNT  "KPEP_SEED_OSRAND_BLOCK_COUNT"

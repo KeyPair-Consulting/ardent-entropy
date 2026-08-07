@@ -34,14 +34,14 @@ typedef int (OSSL_FUNC_interop_fn)(void);  // OSSL_FUNC prefix for consistency, 
  * SEED-SOURCE descriptions and Mode
  * ***********************************************************************************************/
 
-// Get a multi-line string containing a description of all the seed sources, one per line; source in kpep_kpep_seeding.c
+// Get a multi-line string containing a description of all the seed sources, one per line; source in kpep_seeding.c
 const char* kpep_seeding_get_description(void);
 
 // Get a boolean (0/1) whether entropy restrive counting (Method #1) is enabled
 int kpep_seeding_get_restricted_mode(void);
 
 // Set the KPFP interop function for error detection
-void kpep_set_kpep_seeding_interop_fn(OSSL_FUNC_interop_fn *fn);
+void kpep_set_seeding_interop_fn(OSSL_FUNC_interop_fn *fn);
 
 /* ************************************************************************************************
  * ERROR Reason strings
