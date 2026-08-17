@@ -27,6 +27,7 @@ LIST (APPEND KPEP_sources kpep_seeding.c kpep_cpuinfo.c)
 
 # Subsystems added by 'objects' instead of static libraries
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_crypto>)
+LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_thread>)
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_jitter>)
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_logging>)
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_seeding>)

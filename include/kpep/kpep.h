@@ -87,7 +87,11 @@ size_t kpep_trimwhitespace(char *out, size_t len, const char *str);
  * LOGGER
  * ***********************************************************************************************/
 
- typedef enum { 
+#if defined (KPEP_TRACE_SEED) || defined (KPEP_TRACE_SINK) || defined (KPEP_TRACE_THREAD)
+#define TRACE_ENABLED
+#endif
+
+typedef enum { 
     LOG_LVL_FATAL = 0,	/* 0 == (FATAL) system is unusable and cannot be used */
     LOG_LVL_ALERT,      /* 1 == (NOT USED) action must be taken immediately */
     LOG_LVL_CRIT,       /* 2 == (NOT USED) critical conditions */
@@ -131,6 +135,27 @@ void kpep_log(LogLevel level, const char* module, const char *fmt, ...);
 
 void kpep_log_data(LogLevel level, const char* module, const char* label, 
                     unsigned char *bytes, size_t bytes_len);
+
+#ifdef TRACE_ENABLED
+// Write a trace entry to the active trace target (stdout or trace file)
+void kpep_trace(const char* module, const char* msg);
+void kpep_trace_sub(const char* module, const char* submodule, const char* msg);
+void kpep_trace_fmt(const char* module, const char* fmt, ...);
+void kpep_trace_sub_fmt(const char* module, const char* submodule, const char* fmt, ...);
+
+#define TRACE_START \
+    kpep_trace_fmt((MODULE_NAME), "START %s", __func__)
+
+#define TRACE_END \
+    kpep_trace_fmt((MODULE_NAME), "END %s", __func__)
+
+#define TRACE_START_SUB \
+    kpep_trace_sub_fmt((MODULE_NAME), (ctx) ? (ctx)->desc : "NULL", "START %s", __func__)
+
+#define TRACE_END_SUB \
+    kpep_trace_sub_fmt((MODULE_NAME), (ctx) ? (ctx)->desc : "NULL", "END %s", __func__)
+
+#endif
 
 #define LOG_KPEP_ERROR(module, errnum) \
     kpep_log(LOG_LVL_ERR, (module), "[%s:%d] %s", __FILE__, __LINE__, kpep_get_reason_string((errnum)));

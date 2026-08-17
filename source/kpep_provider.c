@@ -238,7 +238,7 @@ static int kpep_random_bytes(void *vprov, int which,
     static OSSL_FUNC_rand_generate_fn *generate_fn = NULL;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     // Ensure provider is not in error state
@@ -441,7 +441,7 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
     int result = 0;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: Provider Init Start\n", MODULE_NAME);
+    kpep_trace(MODULE_NAME, "Provider Init Start");
     #endif
 
     // Load our error strings into OpenSSL
@@ -535,7 +535,7 @@ err:
 
 ret:
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: Provider Init Complete\n", MODULE_NAME);
+    kpep_trace(MODULE_NAME, "Provider Init Complete");
     #endif
 
     return result;

@@ -457,7 +457,7 @@ int SELF_TEST_post(SELF_TEST_PARAMS *st, int on_demand_test)
     int loclstate;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** KPEP-CAST: START\n");
+    kpep_trace("KPEP-CAST", "START");
     #endif
 
     if (!RUN_ONCE(&fips_self_test_init, do_fips_self_test_init)) {
@@ -523,7 +523,7 @@ int SELF_TEST_post(SELF_TEST_PARAMS *st, int on_demand_test)
 err:
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** KPEP-CAST: END\n");
+    kpep_trace("KPEP-CAST", "END");
     #endif
 
     return ok;

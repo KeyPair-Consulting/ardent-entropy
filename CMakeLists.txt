@@ -338,6 +338,7 @@ INCLUDE_DIRECTORIES(${OPENSSL_ROOT}/include)
 # Subdirectories containing core  source files
 ADD_SUBDIRECTORY ("source")
 ADD_SUBDIRECTORY ("source/crypto")
+ADD_SUBDIRECTORY ("source/thread")
 ADD_SUBDIRECTORY ("source/seeding")
 ADD_SUBDIRECTORY ("source/logging")
 ADD_SUBDIRECTORY ("source/jitterentropy")

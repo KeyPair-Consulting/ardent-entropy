@@ -77,7 +77,7 @@ void* drbg_new(void *vctx, KPEP_RESULT *errnum)
 	KPEP_DRBG_CTX* ctx = NULL;
 
 #ifdef KPEP_TRACE_SEED
-	printf("*** %s: %s\n", MODULE_NAME, __func__);
+	TRACE_START;
 #endif
 
 	// Allocate for DRBG context
@@ -114,7 +114,7 @@ EXPORT_VISIBILITY_HIDDEN
 void drbg_free(KPEP_DRBG_CTX* ctx) 
 {
 #ifdef KPEP_TRACE_SEED
-	printf("*** %s: %s\n", MODULE_NAME, __func__);
+	TRACE_START;
 #endif
 	if (ctx) {
 		sha2_ctx_free(ctx->hash_ctx);              // NULL check inside
@@ -175,7 +175,7 @@ KPEP_RESULT hash_df(KPEP_DRBG_CTX* ctx,
 	}
 
 #ifdef DEBUG_DRBG
-	printf("*** HASH_DF ***\n");
+	kpep_trace(MODULE_NAME, "HASH_DF");
 	printf("Output: \n");
 	print_bytes(output, SEED_BYTE_LENGTH, 4); printf("\n");
 #endif
@@ -204,7 +204,7 @@ KPEP_RESULT drbg_instantiate_ex(KPEP_DRBG_CTX* ctx, int strength_bits,
 	uint8_t *p, *buffer = NULL;
 
 #ifdef DEBUG_DRBG
-	printf("*** INSTANTIATE_EX ***\n");
+	kpep_trace(MODULE_NAME, "INSTANTIATE_EX");
 	printf("Entropy: \n");
 	print_bytes(entropy, entropy_len, 4); printf("\n");
 	printf("Nonce  : \n");
@@ -311,7 +311,7 @@ EXPORT_VISIBILITY_HIDDEN
 void drbg_uninstantiate(KPEP_DRBG_CTX* ctx)
 {
 #ifdef KPEP_TRACE_SEED
-	printf("*** %s: %s\n", MODULE_NAME, __func__);
+	TRACE_START;
 #endif
 	if (ctx) {
 		ctx->running = 0;
@@ -354,7 +354,7 @@ KPEP_RESULT drbg_reseed_ex(KPEP_DRBG_CTX* ctx,
 	uint8_t *p, *buffer = NULL;
 
 #ifdef KPEP_TRACE_SEED
-	printf("*** %s: %s\n", MODULE_NAME, __func__);
+	TRACE_START;
 #endif
 
 	if (!ctx || (addl_len > MAX_ADDL_LEN)) {
@@ -368,7 +368,7 @@ KPEP_RESULT drbg_reseed_ex(KPEP_DRBG_CTX* ctx,
 	}
 
 #ifdef DEBUG_DRBG
-	printf("*** RESEED_EX ***\n");
+	kpep_trace(MODULE_NAME, "RESEED_EX");
 	printf("Entropy: \n");
 	print_bytes(entropy, entropy_len, 4); printf("\n");
 	printf("Addin  : \n");
@@ -556,7 +556,7 @@ KPEP_RESULT drbg_generate_ex(KPEP_DRBG_CTX* ctx,
 	uint8_t H[64] = { 0 };
 
 	#ifdef KPEP_TRACE_SEED
-	printf("*** %s: %s\n", MODULE_NAME, __func__);
+	TRACE_START;
 	#endif
 
 	if (!ctx)
@@ -577,7 +577,7 @@ KPEP_RESULT drbg_generate_ex(KPEP_DRBG_CTX* ctx,
 		return rv;
 
 #ifdef DEBUG_DRBG
-	printf("*** GENERATE_EX ***\n");
+	kpep_trace(MODULE_NAME, "GENERATE_EX");
 #endif
 
 	do {
@@ -640,7 +640,7 @@ KPEP_RESULT drbg_instantiate(KPEP_DRBG_CTX* ctx, int strength_bits, const uint8_
 	size_t ent_len = 0, nonce_len = 0;
 
 #ifdef KPEP_TRACE_SEED
-	printf("*** %s: %s\n", MODULE_NAME, __func__);
+	TRACE_START;
 #endif
 
 	if (!ctx)
@@ -687,7 +687,7 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 	uint8_t drbg_out[KPEP_SECURITY_STRENGTH_BYTES];
 
 #ifdef KPEP_TRACE_SEED
-	printf("*** %s: %s (req %u)\n", MODULE_NAME, __func__, rand_len<<3);
+	kpep_trace_fmt(MODULE_NAME, "%s (req %u)", __func__, rand_len<<3);
 #endif
 
 	// Validate

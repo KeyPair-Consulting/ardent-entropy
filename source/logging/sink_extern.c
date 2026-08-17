@@ -136,7 +136,7 @@ static KPEP_RESULT init_log_extern(void* prov_ctx)
 	KPEP_RESULT rv = KPEP_R_SUCCESS;
 
 	#if defined (KPEP_TRACE_SINK)
-    printf("*** -SINK: %s\n", __func__);
+	kpep_trace("KPEP-SINK", __func__);
     #endif
 	rv = prov_ctx?load_params_from_openssl(prov_ctx)
 	             :load_params_from_environment();
@@ -183,7 +183,7 @@ err:
 static void fini_log_extern(void)
 {
 	#if defined (KPEP_TRACE_SINK)
-    printf("*** -SINK: %s\n", __func__);
+	kpep_trace("KPEP-SINK", __func__);
     #endif
 	ext_sink->fini_fn();
 	return;
@@ -202,7 +202,7 @@ static LogLevel get_level_extern(void)
 static void write_log_extern(LogLevel level, const char* module, const char* fmt, va_list args)
 {
 	#if defined (KPEP_TRACE_SINK)
-    printf("*** -SINK: %s\n", __func__);
+	kpep_trace("KPEP-SINK", __func__);
     #endif
 	ext_sink->write_fn(level, module, fmt, args);
 	return;
@@ -211,7 +211,7 @@ static void write_log_extern(LogLevel level, const char* module, const char* fmt
 static void write_log_data_extern(LogLevel level, const char* module, const char* label, unsigned char *bytes, size_t bytes_len)
 {
 	#if defined (KPEP_TRACE_SINK)
-    printf("*** -SINK: %s\n", __func__);
+	kpep_trace("KPEP-SINK", __func__);
     #endif
 	ext_sink->write_data_fn(level, module, label, bytes, bytes_len);
 	return;
