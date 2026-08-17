@@ -27,12 +27,14 @@
 extern "C" {
 #endif
 
+// Function collections defined in the stub source files
 extern const STUB_FUNCTIONS stub_jitter;
 extern const STUB_FUNCTIONS stub_rdseed;
 extern const STUB_FUNCTIONS stub_rdrand;
 extern const STUB_FUNCTIONS stub_osrand;
 extern const STUB_FUNCTIONS stub_extern;
 
+// Package of information for each seed source
 typedef struct seed_source_def_st {
     const char *desc;
     const char *prefix;
@@ -41,7 +43,8 @@ typedef struct seed_source_def_st {
     const STUB_FUNCTIONS *stub_fn;
 } SEED_SOURCE_DEF;
 
-static const SEED_SOURCE_DEF seed_source_defs[] = {
+// All seed sources are defined here, with their associated stub function collections and parameters
+static SEED_SOURCE_DEF seed_source_defs[] = {
     { "jitter",  KPEP_PROV_PARAM_SEED_JITTER, 0, 0, &stub_jitter },
     { "rdseed",  KPEP_PROV_PARAM_SEED_RDSEED, 1, 0, &stub_rdseed },
     { "rdrand",  KPEP_PROV_PARAM_SEED_RDRAND, 1, 0, &stub_rdrand },
@@ -55,6 +58,31 @@ static const SEED_SOURCE_DEF seed_source_defs[] = {
     { "extern4", KPEP_PROV_PARAM_SEED_EXTERN, 0, 4, &stub_extern },
     { NULL, NULL, 0, 0, NULL }
 };
+
+#define STUB_NAME_LENGTH 32
+
+/*
+ * This definition is REQUIRED to be the first item in every seed_stud_source context variable.
+ * This definition is used with the structure below to provide limited visibility into the
+ * otherwise opaque context structures.
+ */
+#define COMMON_STUB_INFO             \
+    char     name[STUB_NAME_LENGTH]; \
+    uint32_t idx;                    \
+    uint32_t state;                  \
+    uint32_t full_entropy;           \
+    uint32_t block_size;             \
+    uint32_t block_count;            \
+    double   entropy_per_bit;
+
+/*
+ * This structure is used to cast each opaque seed-source context structure so the 
+ * async ring buffer can read the capabilities of each seed-source in order to make 
+ * make use of this information common to all seed-sources.
+ */
+typedef struct {
+    COMMON_STUB_INFO
+} SEED_STUB_INFO;
 
 #ifdef __cplusplus
 }

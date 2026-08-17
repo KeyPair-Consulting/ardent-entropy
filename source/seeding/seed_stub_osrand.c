@@ -17,7 +17,7 @@
 #include "kpep/kpep.h"
 #include "kpep/kpep_names.h"
 #include "kpep/kpep_seed_stub.h"
-#include "seed_context.h"
+#include "seed_sources.h"
 
 #include "openssl/params.h"
 #include <unistd.h>
@@ -33,6 +33,7 @@
  * ***********************************************************************************************/
 
 #define MODULE_NAME "SEED-OSRAND"
+static const char *base_name = "OSRAND";
 
 typedef struct {
     COMMON_STUB_INFO  // See seed_context.h
@@ -42,8 +43,6 @@ typedef struct {
 } OSRAND_CTX;
 
 static KPEP_RESULT load_params(void* prov_ctx, OSRAND_CTX *ctx);
-
-static const char *base_name = "OSRAND";
 
 /* ************************************************************************************************
  * ***********************************************************************************************
@@ -67,11 +66,12 @@ void stub_osrand_free(void *stub_ctx)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-void* stub_osrand_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
+void* stub_osrand_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
 {
     OSRAND_CTX *ctx;
     KPEP_RESULT result;
     size_t full_entropy_sz;
+    uint32_t len;
 
     #if defined (KPEP_TRACE_SEED)
     TRACE_START;
@@ -105,7 +105,7 @@ void* stub_osrand_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
         return NULL;        
     }
 
-        // Set entropy factors
+    // Set entropy factors
     full_entropy_sz = ctx->block_size * ctx->block_count;
     if (full_entropy_sz < KPEP_SECURITY_STRENGTH_BITS) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'osrand' failed startup (block size check)");
@@ -118,6 +118,22 @@ void* stub_osrand_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
         ctx->entropy_per_bit = (double) KPEP_SECURITY_STRENGTH_BITS / (double) full_entropy_sz;
     }
  
+    // Name
+    len = snprintf(ctx->name,
+                sizeof(ctx->name),
+                "%s (%s)",
+                base_name,
+                ctx->filepath);
+    if (len < 0) {
+        LOG_FORMATTED_ERROR(MODULE_NAME, "Unable to format source name for ID#%d", ctx->idx);
+        return NULL;
+    }
+    if ((size_t)len >= sizeof(ctx->name)) {
+        LOG_FORMATTED_ERROR(MODULE_NAME,
+                            "Seed source name at ID#%d truncated",
+                            ctx->idx);
+    }
+
     // Initialize source
     // NOTHING!
 
@@ -297,57 +313,40 @@ static KPEP_RESULT load_params(void* prov_ctx, OSRAND_CTX *ctx)
 {
     const char *bsize_str = NULL;
     const char *bcount_str = NULL;
-    const char *valid_str = NULL;
     char        bsize_key[32];
     char        bcount_key[32];
-    char        valid_key[32];
-    char        filepath_key[32];    
+    char        filepath_key[32];
 
-    if (prov_ctx) {
-        OSSL_PARAM params[5], *p = params;
-        sprintf(valid_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_OSRAND, ctx->idx, KPEP_PROV_PARAM_SEED_VALIDATED);
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            valid_key,
-            (char **) &valid_str,
-            sizeof(valid_str));
-        sprintf(bsize_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_OSRAND, ctx->idx, KPEP_PROV_PARAM_SEED_BLOCK_SIZE);
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            bsize_key,
-            (char **) &bsize_str,
-            sizeof(bsize_str));
-        sprintf(bcount_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_OSRAND, ctx->idx, KPEP_PROV_PARAM_SEED_BLOCK_COUNT);
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            bcount_key,
-            (char **) &bcount_str,
-            sizeof(bcount_str));
-        sprintf(filepath_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_OSRAND, ctx->idx, KPEP_PROV_PARAM_SEED_FILEPATH);
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            filepath_key,
-            (char **) &ctx->filepath,
-            sizeof(ctx->filepath));
-        *p = OSSL_PARAM_construct_end();
+    if (!prov_ctx)
+        return KPEP_R_NULL_ARG;
 
-        if (!kpep_get_core_params(prov_ctx, params)) {
-            LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_LOOKUP_FAILURE);
-            return KPEP_R_CONFIG_LOOKUP_FAILURE;
-        }
-    }
-    else {
-        bsize_str = getenv(ENV_SEED_OSRAND_BLOCK_SIZE);
-        bcount_str = getenv(ENV_SEED_OSRAND_BLOCK_COUNT);
-        ctx->filepath = getenv(ENV_SEED_OSRAND_FILEPATH);
+    OSSL_PARAM params[4], *p = params;
+    sprintf(bsize_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_OSRAND, ctx->idx, KPEP_PROV_PARAM_SEED_BLOCK_SIZE);
+    *p++ = OSSL_PARAM_construct_utf8_ptr(
+        bsize_key,
+        (char **) &bsize_str,
+        sizeof(bsize_str));
+    sprintf(bcount_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_OSRAND, ctx->idx, KPEP_PROV_PARAM_SEED_BLOCK_COUNT);
+    *p++ = OSSL_PARAM_construct_utf8_ptr(
+        bcount_key,
+        (char **) &bcount_str,
+        sizeof(bcount_str));
+    sprintf(filepath_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_OSRAND, ctx->idx, KPEP_PROV_PARAM_SEED_FILEPATH);
+    *p++ = OSSL_PARAM_construct_utf8_ptr(
+        filepath_key,
+        (char **) &ctx->filepath,
+        sizeof(ctx->filepath));
+    *p = OSSL_PARAM_construct_end();
+
+    if (!kpep_get_core_params(prov_ctx, params)) {
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_LOOKUP_FAILURE);
+        return KPEP_R_CONFIG_LOOKUP_FAILURE;
     }
 
     // Check required 
     if (!ctx->filepath) {
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_MISSING);
         return KPEP_R_CONFIG_PARAMETER_MISSING;
-    }
-    
-    // Name
-    sprintf(ctx->name, "%s (%s)", base_name, ctx->filepath);
-    if (valid_str && strncmp(valid_str, "0", 1)) {
-        sprintf(ctx->name+strlen(ctx->name), " [%s]", valid_str);
     }
     
     // Block Size

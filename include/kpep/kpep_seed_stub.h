@@ -41,7 +41,7 @@ extern "C" {
  * ***********************************************************************************************/
 
 /* Allocate and return an opaque context structure or NULL and error number set */
-typedef void*       (*stub_new_fn)       (void* prov_ctx, uint8_t idx, KPEP_RESULT* errnum);
+typedef void*       (*stub_new_fn)       (void* prov_ctx, uint32_t idx, KPEP_RESULT* errnum);
 /* Free the opaque context structure */
 typedef void        (*stub_free_fn)      (void* ctx);
 /* Return the simple "pretty" name for the source (e.g. "jitter" or "vendor-jitter") */

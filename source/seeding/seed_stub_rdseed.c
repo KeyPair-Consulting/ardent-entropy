@@ -17,7 +17,7 @@
 #include "kpep/kpep.h"
 #include "kpep/kpep_names.h"
 #include "kpep/kpep_seed_stub.h"
-#include "seed_context.h"
+#include "seed_sources.h"
 #include "kpep/kpep_cpuinfo.h"
 #include "rdcpu_toolbox.h"
 
@@ -35,18 +35,17 @@
  * ***********************************************************************************************/
 
 #define MODULE_NAME "SEED-RDSEED"
+static const char *base_name = "RDSEED";
 
 typedef struct {
     COMMON_STUB_INFO  // See seed_context.h
 
     // Source-specific parameters
     uint32_t retry_count;
-    CPU_TYPE type;
+    CPU_TYPE cpu_type;
 } RDSEED_CTX;
 
 static KPEP_RESULT load_params(void* prov_ctx, RDSEED_CTX *ctx);
-
-static const char *base_name = "RDSEED";
 
 /* ************************************************************************************************
  * ***********************************************************************************************
@@ -70,11 +69,12 @@ void stub_rdseed_free(void *stub_ctx)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-void* stub_rdseed_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
+void* stub_rdseed_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
 {
     RDSEED_CTX *ctx;
     KPEP_RESULT result;
     size_t full_entropy_sz;
+    uint32_t len;
 
     #if defined (KPEP_TRACE_SEED)
     TRACE_START;
@@ -101,10 +101,10 @@ void* stub_rdseed_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
 
     // Check for CPU support
     if (check_is_intel()) {
-        ctx->type = CPU_INTEL;
+        ctx->cpu_type = CPU_INTEL;
     }
     else if (check_is_amd()) {
-        ctx->type = CPU_AMD;
+        ctx->cpu_type = CPU_AMD;
     }
     else {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'rdseed' failed startup (cpuid)");
@@ -140,6 +140,24 @@ void* stub_rdseed_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
         ctx->entropy_per_bit = (double) KPEP_SECURITY_STRENGTH_BITS / (double) full_entropy_sz;
     }
 
+    // Name
+    len = snprintf(ctx->name,
+                sizeof(ctx->name),
+                "%s (%s)",
+                base_name,
+                (ctx->cpu_type==CPU_AMD)  ?"AMD":
+                (ctx->cpu_type==CPU_INTEL)?"Intel":
+                                           "Unknown");
+    if (len < 0) {
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Unable to format source name");
+        return NULL;
+    }
+    if ((size_t)len >= sizeof(ctx->name)) {
+        LOG_FORMATTED_ERROR(MODULE_NAME,
+                            "Seed source name '%s' truncated",
+                            base_name);
+    }
+ 
     // Initialize source
     // NOTHING!
 
@@ -290,47 +308,30 @@ static KPEP_RESULT load_params(void* prov_ctx, RDSEED_CTX *ctx)
     const char *bsize_str = NULL;
     const char *bcount_str = NULL;
     const char *retry_str = NULL;
-    const char *valid_str = NULL;
 
-    if (prov_ctx) {
-        OSSL_PARAM params[5], *p = params;
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_RDSEED"."KPEP_PROV_PARAM_SEED_VALIDATED,
-            (char **) &valid_str,
-            sizeof(valid_str));
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_RDSEED"."KPEP_PROV_PARAM_SEED_BLOCK_SIZE,
-            (char **) &bsize_str,
-            sizeof(bsize_str));
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_RDSEED"."KPEP_PROV_PARAM_SEED_BLOCK_COUNT,
-            (char **) &bcount_str,
-            sizeof(bcount_str));
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_RDSEED"."KPEP_PROV_PARAM_SEED_RETRY_COUNT,
-            (char **) &retry_str,
-            sizeof(retry_str));
-        *p = OSSL_PARAM_construct_end();
+    if (!prov_ctx)
+        return KPEP_R_NULL_ARG;
 
-        if (!kpep_get_core_params(prov_ctx, params)) {
-            LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_LOOKUP_FAILURE);
-            return KPEP_R_CONFIG_LOOKUP_FAILURE;
-        }
-    }
-    else {
-        bsize_str = getenv(ENV_SEED_RDSEED_BLOCK_SIZE);
-        bcount_str = getenv(ENV_SEED_RDSEED_BLOCK_COUNT);
-        retry_str = getenv(ENV_SEED_RDSEED_RETRY_COUNT);
-    }
+    OSSL_PARAM params[4], *p = params;
+    *p++ = OSSL_PARAM_construct_utf8_ptr(
+        KPEP_PROV_PARAM_SEED_RDSEED"."KPEP_PROV_PARAM_SEED_BLOCK_SIZE,
+        (char **) &bsize_str,
+        sizeof(bsize_str));
+    *p++ = OSSL_PARAM_construct_utf8_ptr(
+        KPEP_PROV_PARAM_SEED_RDSEED"."KPEP_PROV_PARAM_SEED_BLOCK_COUNT,
+        (char **) &bcount_str,
+        sizeof(bcount_str));
+    *p++ = OSSL_PARAM_construct_utf8_ptr(
+        KPEP_PROV_PARAM_SEED_RDSEED"."KPEP_PROV_PARAM_SEED_RETRY_COUNT,
+        (char **) &retry_str,
+        sizeof(retry_str));
+    *p = OSSL_PARAM_construct_end();
 
-    // Name
-    sprintf(ctx->name, "%s (%s)", base_name, (ctx->type==CPU_AMD)?"AMD":
-                                             (ctx->type==CPU_INTEL)?"Intel":
-                                             "Unknown");
-    if (valid_str && strncmp(valid_str, "0", 1)) {
-        sprintf(ctx->name+strlen(ctx->name), " [%s]", valid_str);
+    if (!kpep_get_core_params(prov_ctx, params)) {
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_LOOKUP_FAILURE);
+        return KPEP_R_CONFIG_LOOKUP_FAILURE;
     }
-    
+   
     // Block Size
     if (bsize_str) {
         ctx->block_size = atoi(bsize_str);

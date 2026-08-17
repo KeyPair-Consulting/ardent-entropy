@@ -19,7 +19,7 @@
 #include "kpep/kpep_cpuinfo.h"
 #include "kpep/kpep_seed_stub.h"
 #include "rdcpu_toolbox.h"
-#include "seed_context.h"
+#include "seed_sources.h"
 #include "seed_ringbuffer.h"
 
 #include "openssl/params.h"

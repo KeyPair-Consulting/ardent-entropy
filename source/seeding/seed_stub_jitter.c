@@ -17,7 +17,7 @@
 #include "kpep/kpep.h"
 #include "kpep/kpep_names.h"
 #include "kpep/kpep_seed_stub.h"
-#include "seed_context.h"
+#include "seed_sources.h"
 
 #include "openssl/params.h"
 #include "jitterentropy.h"
@@ -72,12 +72,13 @@ void stub_jitter_free(void *ctx)
 }
  
 EXPORT_VISIBILITY_HIDDEN
-void* stub_jitter_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
+void* stub_jitter_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
 {
     JITTER_CTX *ctx;
     KPEP_RESULT result;
     size_t full_entropy_sz;
     int ret;
+    uint32_t len;
 
     #if defined (KPEP_TRACE_SEED)
     TRACE_START;
@@ -121,6 +122,21 @@ void* stub_jitter_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
     ctx->full_entropy = (KPEP_SECURITY_STRENGTH_BITS == full_entropy_sz);
     if (!ctx->full_entropy)
         ctx->entropy_per_bit = (double) KPEP_SECURITY_STRENGTH_BITS / (double) full_entropy_sz;
+
+    // Name
+    len = snprintf(ctx->name,
+                sizeof(ctx->name),
+                "%s",
+                base_name);
+    if (len < 0) {
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Unable to format source name");
+        return NULL;
+    }
+    if ((size_t)len >= sizeof(ctx->name)) {
+        LOG_FORMATTED_ERROR(MODULE_NAME,
+                            "Seed source name '%s' truncated",
+                            base_name);
+    }
 
     // Initialize source
     if ((ret = jent_entropy_init_ex(ctx->osr, JENT_KPEP_FLAGS)) != 0) {
@@ -309,43 +325,28 @@ static KPEP_RESULT load_params(void* prov_ctx, JITTER_CTX *ctx)
     const char *osr_str = NULL;
     const char *bsize_str = NULL;
     const char *bcount_str = NULL;
-    const char *valid_str = NULL;
 
-    if (prov_ctx) {
-        OSSL_PARAM params[5], *p = params;
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_JITTER"."KPEP_PROV_PARAM_SEED_VALIDATED,
-            (char **) &valid_str,
-            sizeof(valid_str));
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_JITTER"."KPEP_PROV_PARAM_SEED_BLOCK_SIZE,
-            (char **) &bsize_str,
-            sizeof(bsize_str));
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_JITTER"."KPEP_PROV_PARAM_SEED_BLOCK_COUNT,
-            (char **) &bcount_str,
-            sizeof(bcount_str));
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_JITTER_OVERSAMPLE,
-            (char **) &osr_str,
-            sizeof(osr_str));
-        *p = OSSL_PARAM_construct_end();
+    if (!prov_ctx)
+        return KPEP_R_NULL_ARG;
 
-        if (!kpep_get_core_params(prov_ctx, params)) {
-            LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_LOOKUP_FAILURE);
-            return KPEP_R_CONFIG_LOOKUP_FAILURE;
-        }
-    }
-    else {
-        osr_str = getenv(ENV_SEED_JITTER_OSR);
-        bsize_str = "256";
-        bcount_str = "1";
-    }
+    OSSL_PARAM params[4], *p = params;
+    *p++ = OSSL_PARAM_construct_utf8_ptr(
+        KPEP_PROV_PARAM_SEED_JITTER"."KPEP_PROV_PARAM_SEED_BLOCK_SIZE,
+        (char **) &bsize_str,
+        sizeof(bsize_str));
+    *p++ = OSSL_PARAM_construct_utf8_ptr(
+        KPEP_PROV_PARAM_SEED_JITTER"."KPEP_PROV_PARAM_SEED_BLOCK_COUNT,
+        (char **) &bcount_str,
+        sizeof(bcount_str));
+    *p++ = OSSL_PARAM_construct_utf8_ptr(
+        KPEP_PROV_PARAM_SEED_JITTER_OVERSAMPLE,
+        (char **) &osr_str,
+        sizeof(osr_str));
+    *p = OSSL_PARAM_construct_end();
 
-    // Name
-    strcpy(ctx->name, base_name);
-    if (valid_str && strncmp(valid_str, "0", 1)) {
-        sprintf(ctx->name+strlen(ctx->name), " [%s]", valid_str);
+    if (!kpep_get_core_params(prov_ctx, params)) {
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_LOOKUP_FAILURE);
+        return KPEP_R_CONFIG_LOOKUP_FAILURE;
     }
 
     // Oversample Rate

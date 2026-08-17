@@ -17,7 +17,7 @@
 #include "kpep/kpep.h"
 #include "kpep/kpep_names.h"
 #include "kpep/kpep_seed_stub.h"
-#include "seed_context.h"
+#include "seed_sources.h"
 
 /*  External libraries can be disabled by compilation flags */
 #ifdef KPEP_DISABLE_EXTERNAL
@@ -46,6 +46,7 @@ const STUB_FUNCTIONS stub_extern = {
  * ***********************************************************************************************/
 
 #define MODULE_NAME "SEED-EXTERN"
+static const char *base_name = "EXTERNAL";
 
 typedef struct {
     COMMON_STUB_INFO  // See seed_context.h
@@ -87,11 +88,12 @@ void stub_extern_free(void *stub_ctx)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-void* stub_extern_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
+void* stub_extern_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
 {
     EXTERNAL_CTX *ctx;
     KPEP_RESULT rv = KPEP_R_SUCCESS;
     size_t full_entropy_sz;
+    size_t len;
 
     #if defined (KPEP_TRACE_SEED)
     TRACE_START;
@@ -161,9 +163,20 @@ void* stub_extern_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
     }
 
     // Set name
-    sprintf(ctx->name, "%s (%s)", ctx->ext_stub->get_name_fn(ctx->ext_ctx), filename_from_pathname(ctx));
-    if (ctx->validated)
-        sprintf(ctx->name+strlen(ctx->name), " [%s]", ctx->validated);
+    len = snprintf(ctx->name,
+        sizeof(ctx->name),
+        "%s (%s)",
+        base_name,
+        ctx->ext_stub->get_name_fn(ctx->ext_ctx));
+    if (len < 0) {
+        LOG_FORMATTED_ERROR(MODULE_NAME, "Unable to format source name for ID#%d", ctx->idx);
+        goto err;
+    }
+    if ((size_t)len >= sizeof(ctx->name)) {
+        LOG_FORMATTED_ERROR(MODULE_NAME,
+                            "Seed source name at ID#%d truncated",
+                            ctx->idx);
+    }
 
     // Start initialized
     kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'external' startup successful");
@@ -316,48 +329,38 @@ static uint32_t load_params(void* prov_ctx, EXTERNAL_CTX *ctx)
     const char *bcount_str = NULL;
     char        bsize_key[32];
     char        bcount_key[32];
-    char        valid_key[32];
     char        filepath_key[32];
     char        symbol_key[32];
 
-    if (prov_ctx) {
-        OSSL_PARAM params[6], *p = params;
-        sprintf(valid_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_EXTERN, ctx->idx, KPEP_PROV_PARAM_SEED_VALIDATED);
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            valid_key,
-            (char **) &ctx->validated,
-            sizeof(ctx->validated));
-        sprintf(bsize_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_EXTERN, ctx->idx, KPEP_PROV_PARAM_SEED_BLOCK_SIZE);
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            bsize_key,
-            (char **) &bsize_str,
-            sizeof(bsize_str));
-        sprintf(bcount_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_EXTERN, ctx->idx, KPEP_PROV_PARAM_SEED_BLOCK_COUNT);
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            bcount_key,
-            (char **) &bcount_str,
-            sizeof(bcount_str));
-        sprintf(filepath_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_EXTERN, ctx->idx, KPEP_PROV_PARAM_SEED_FILEPATH);
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            filepath_key,
-            (char **) &ctx->filepath,
-            sizeof(ctx->filepath));
-        sprintf(symbol_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_EXTERN, ctx->idx, KPEP_PROV_PARAM_SEED_FUNCTIONS);
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            symbol_key,
-            (char **) &ctx->symbol,
-            sizeof(ctx->symbol));
-        *p = OSSL_PARAM_construct_end();
+    if (!prov_ctx)
+        return KPEP_R_NULL_ARG;
 
-        if (!kpep_get_core_params(prov_ctx, params)) {
-            LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_LOOKUP_FAILURE);
-            return KPEP_R_CONFIG_LOOKUP_FAILURE;
-        }
-    }
-    else {
-        bsize_str = getenv(ENV_SEED_EXTERN_BLOCK_SIZE);
-        bcount_str = getenv(ENV_SEED_EXTERN_BLOCK_COUNT);
-        ctx->filepath = getenv(ENV_SEED_EXTERN_FILEPATH);
+    OSSL_PARAM params[5], *p = params;
+    sprintf(bsize_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_EXTERN, ctx->idx, KPEP_PROV_PARAM_SEED_BLOCK_SIZE);
+    *p++ = OSSL_PARAM_construct_utf8_ptr(
+        bsize_key,
+        (char **) &bsize_str,
+        sizeof(bsize_str));
+    sprintf(bcount_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_EXTERN, ctx->idx, KPEP_PROV_PARAM_SEED_BLOCK_COUNT);
+    *p++ = OSSL_PARAM_construct_utf8_ptr(
+        bcount_key,
+        (char **) &bcount_str,
+        sizeof(bcount_str));
+    sprintf(filepath_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_EXTERN, ctx->idx, KPEP_PROV_PARAM_SEED_FILEPATH);
+    *p++ = OSSL_PARAM_construct_utf8_ptr(
+        filepath_key,
+        (char **) &ctx->filepath,
+        sizeof(ctx->filepath));
+    sprintf(symbol_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_EXTERN, ctx->idx, KPEP_PROV_PARAM_SEED_FUNCTIONS);
+    *p++ = OSSL_PARAM_construct_utf8_ptr(
+        symbol_key,
+        (char **) &ctx->symbol,
+        sizeof(ctx->symbol));
+    *p = OSSL_PARAM_construct_end();
+
+    if (!kpep_get_core_params(prov_ctx, params)) {
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_LOOKUP_FAILURE);
+        return KPEP_R_CONFIG_LOOKUP_FAILURE;
     }
 
     // Check required 
