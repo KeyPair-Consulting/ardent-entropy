@@ -24,7 +24,7 @@
 #include "openssl/proverr.h"
 #include "openssl/self_test.h"
 #include "openssl/prov/providercommon.h"
-#include "internal/thread_once.h"
+#include "internal/thread_arch.h"
 
 #include "kpep/kpep_names.h"
 #include "kpep/kpep_seed_stub.h"
@@ -50,17 +50,8 @@ static char             *dummy_hnd = &dummy_char;
 // Static buffer for description to be assembled
 static char seed_description[SEED_CONTROL_DESCRIPTION_MAX] = { 0 };
 
-// Handle to a function in KPFP returning run/error go/no-go status (BOOL 1/0)
-static OSSL_FUNC_interop_fn *interop_fn = NULL;
-
-// Locking mechanism
-static CRYPTO_RWLOCK    *lock = NULL;
-static CRYPTO_ONCE       lock_init = CRYPTO_ONCE_STATIC_INIT;
-DEFINE_RUN_ONCE_STATIC(do_lock_init)
-{
-    lock = CRYPTO_THREAD_lock_new();
-    return lock != NULL;
-}
+// Mutex mechanism
+static CRYPTO_MUTEX     *lock = NULL;
 
 #define RAISE_ERROR(rv) \
     if ((rv) == KPEP_R_SEED_FATAL_ERROR) { \
@@ -80,10 +71,7 @@ static KPEP_RESULT load_params(void* prov_ctx);
 EXPORT_VISIBILITY_HIDDEN
 void kpep_seeding_fini(void)
 {
-    if (lock && !CRYPTO_THREAD_write_lock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seeding_fini)");
-        return;
-    }
+    ossl_crypto_mutex_lock(lock);
     if (drbg_ctx) {
         drbg_uninstantiate(drbg_ctx);
         drbg_free(drbg_ctx);
@@ -93,11 +81,8 @@ void kpep_seeding_fini(void)
         seed_control_free(ctrl_ctx);
         ctrl_ctx = NULL;
     }
-    if (lock && !CRYPTO_THREAD_unlock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seeding_fini)");
-    }
-    CRYPTO_THREAD_lock_free(lock);
-    lock = NULL;  // Prevent teardown race
+    ossl_crypto_mutex_unlock(lock);
+    ossl_crypto_mutex_free(&lock);
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -111,14 +96,12 @@ KPEP_RESULT kpep_seeding_init(void* prov_ctx)
     #endif
 
     // Initialize seed lock mechanism
-    if (!RUN_ONCE(&lock_init, do_lock_init)) {
+    lock = ossl_crypto_mutex_new();
+    if (!lock) {
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_LOCK_ERROR);
         return KPEP_R_LOCK_ERROR;
     }
-    if (lock && !CRYPTO_THREAD_write_lock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seeding_init)");
-        return KPEP_R_LOCK_ERROR;
-    }
+    ossl_crypto_mutex_lock(lock);
 
     // Pull runtime configuration from params
     rv = load_params(prov_ctx);
@@ -151,9 +134,7 @@ KPEP_RESULT kpep_seeding_init(void* prov_ctx)
 
 err:
     // Release the lock
-    if (lock && !CRYPTO_THREAD_unlock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seeding_fini)");
-    }
+    ossl_crypto_mutex_unlock(lock);
 
     if (rv) {
         kpep_seeding_fini();
@@ -170,14 +151,9 @@ err:
 EXPORT_VISIBILITY_HIDDEN
 const char* kpep_seeding_get_description(void)
 {
-    if (lock && !CRYPTO_THREAD_write_lock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seeding_init)");
-        return NULL;
-    }
+    ossl_crypto_mutex_lock(lock);
     seed_control_get_description(ctrl_ctx, seed_description);
-    if (lock && !CRYPTO_THREAD_unlock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seeding_fini)");
-    }
+    ossl_crypto_mutex_unlock(lock);
     return seed_description;
 }
 
@@ -185,14 +161,9 @@ EXPORT_VISIBILITY_HIDDEN
 int kpep_seeding_get_restricted_mode(void)
 {
     int result;
-    if (lock && !CRYPTO_THREAD_write_lock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (get_restricted_mode)");
-        return 0;
-    }
+    ossl_crypto_mutex_lock(lock);
     result = seed_control_get_restricted_mode(ctrl_ctx);
-    if (lock && !CRYPTO_THREAD_unlock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (get_restricted_mode)");
-    }
+    ossl_crypto_mutex_unlock(lock);
     return result;
 }
 
@@ -260,21 +231,14 @@ static int kpep_seed_generate(void *seed_ctx, unsigned char *out, size_t outlen,
     #endif
 
     // Initialize seed lock mechanism
-    if (!RUN_ONCE(&lock_init, do_lock_init)) {
-        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_LOCK_ERROR);
-        return 0;
-    }
+
+    
 
     if (!drbg_instantiated) {
-        if (lock && !CRYPTO_THREAD_write_lock(lock)) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seed_generate)");
-            return 0;
-        }
+        ossl_crypto_mutex_lock(lock);
         rv = drbg_instantiate(drbg_ctx, KPEP_SECURITY_STRENGTH_BITS, 
                             (uint8_t*)perso_string, perso_string?strlen(perso_string):0);
-        if (lock && !CRYPTO_THREAD_unlock(lock)) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seed_generate)");
-        }
+        ossl_crypto_mutex_unlock(lock);
         if (rv) {
             LOG_KPEP_ERROR(MODULE_NAME, rv);
             return 0;
@@ -283,18 +247,13 @@ static int kpep_seed_generate(void *seed_ctx, unsigned char *out, size_t outlen,
     }
 
     // Ensure provider is not in error state
-    if (!ossl_prov_is_running() || (interop_fn && !interop_fn()))
+    if (!ossl_prov_is_running())
         return 0;
 
     // Check seed state
-    if (lock && !CRYPTO_THREAD_write_lock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seed_generate_state)");
-        return 0;
-    }
+    ossl_crypto_mutex_lock(lock);
     state = seed_control_get_state(ctrl_ctx);
-    if (lock && !CRYPTO_THREAD_unlock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seed_generate_state)");
-    }
+    ossl_crypto_mutex_unlock(lock);
     if (state != KPEP_RAND_STATE_READY) {
         RAISE_ERROR(state == KPEP_RAND_STATE_ERROR ? PROV_R_IN_ERROR_STATE
                                                    : PROV_R_NOT_INSTANTIATED);
@@ -302,14 +261,9 @@ static int kpep_seed_generate(void *seed_ctx, unsigned char *out, size_t outlen,
     }
 
     // Generate
-    if (lock && !CRYPTO_THREAD_write_lock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seed_generate_gen)");
-        return 0;
-    }
+    ossl_crypto_mutex_lock(lock);
     rv = drbg_generate(drbg_ctx, out, outlen);
-    if (lock && !CRYPTO_THREAD_unlock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seed_generate_gen)");
-    }
+    ossl_crypto_mutex_unlock(lock);
 
     if (rv) {
         // Error logged in DRBG/Seed-source
@@ -334,24 +288,21 @@ static int kpep_seed_reseed(ossl_unused void *seed_ctx,
     #endif
 
     // Ensure provider is not in error state
-    if (!ossl_prov_is_running() || (interop_fn && !interop_fn()))
+    if (!ossl_prov_is_running())
         return 0;
 
     // Initialize seed lock mechanism
+    #if 0
     if (!RUN_ONCE(&lock_init, do_lock_init)) {
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_LOCK_ERROR);
         return 0;
     }
+    #endif
 
     // Check seed state
-    if (lock && !CRYPTO_THREAD_write_lock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seed_generate_state)");
-        return 0;
-    }
+    ossl_crypto_mutex_lock(lock);
     state = seed_control_get_state(ctrl_ctx);
-    if (lock && !CRYPTO_THREAD_unlock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seed_generate_state)");
-    }
+    ossl_crypto_mutex_unlock(lock);
     if (state != KPEP_RAND_STATE_READY) {
         RAISE_ERROR(state == KPEP_RAND_STATE_ERROR ? PROV_R_IN_ERROR_STATE
                                                    : PROV_R_NOT_INSTANTIATED);
@@ -410,21 +361,18 @@ static int kpep_seed_verify_zeroization(ossl_unused void *seed_ctx)
     #endif
 
     // Initialize seed lock mechanism
+    #if 0
     if (!RUN_ONCE(&lock_init, do_lock_init)) {
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_LOCK_ERROR);
         return 0;
     }
-    
+    #endif
+   
     if (!drbg_ctx)
         return 1;
-    if (lock && !CRYPTO_THREAD_write_lock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seed_verify_zeroization)");
-        return 0;
-    }
+    ossl_crypto_mutex_lock(lock);
     rv = drbg_verify_zeroization(drbg_ctx);
-    if (lock && !CRYPTO_THREAD_unlock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seed_verify_zeroization)");
-    }
+    ossl_crypto_mutex_unlock(lock);
     return rv;
 }
  
@@ -451,22 +399,18 @@ static size_t kpep_seed_get_seed(ossl_unused void *seed_ctx, unsigned char **pou
     if (!entropy)
         return 0;
 
-    // Initialize seed lock mechanism
+    #if 0
     if (!RUN_ONCE(&lock_init, do_lock_init)) {
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_LOCK_ERROR);
         return 0;
     }
+    #endif
 
     if (!drbg_instantiated) {
-        if (lock && !CRYPTO_THREAD_write_lock(lock)) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seed_generate)");
-            return 0;
-        }
+        ossl_crypto_mutex_lock(lock);
         rv = drbg_instantiate(drbg_ctx, KPEP_SECURITY_STRENGTH_BITS, 
                             (uint8_t*)perso_string, perso_string?strlen(perso_string):0);
-        if (lock && !CRYPTO_THREAD_unlock(lock)) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seed_generate)");
-        }
+        ossl_crypto_mutex_unlock(lock);
         if (rv) {
             LOG_KPEP_ERROR(MODULE_NAME, rv);
             return 0;
@@ -475,18 +419,13 @@ static size_t kpep_seed_get_seed(ossl_unused void *seed_ctx, unsigned char **pou
     }
 
     // Ensure provider is not in error state
-    if (!ossl_prov_is_running() || (interop_fn && !interop_fn()))
+    if (!ossl_prov_is_running())
         return 0;
 
     // Check seed state
-    if (lock && !CRYPTO_THREAD_write_lock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seed_generate_state)");
-        return 0;
-    }
+    ossl_crypto_mutex_lock(lock);
     state = seed_control_get_state(ctrl_ctx);
-    if (lock && !CRYPTO_THREAD_unlock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seed_generate_state)");
-    }
+    ossl_crypto_mutex_unlock(lock);
     if (state != KPEP_RAND_STATE_READY) {
         RAISE_ERROR(state == KPEP_RAND_STATE_ERROR ? PROV_R_IN_ERROR_STATE
                                                    : PROV_R_NOT_INSTANTIATED);
@@ -509,14 +448,9 @@ static size_t kpep_seed_get_seed(ossl_unused void *seed_ctx, unsigned char **pou
     }
 
     // Generate
-    if (lock && !CRYPTO_THREAD_write_lock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seed_get_seed)");
-        return 0;
-    }
+    ossl_crypto_mutex_lock(lock);
     rv = drbg_generate(drbg_ctx, buffer, buflen);
-    if (lock && !CRYPTO_THREAD_unlock(lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seed_get_seed)");
-    }
+    ossl_crypto_mutex_unlock(lock);
     
     if (rv) {
         // Error logged in DRBG/Seed-source

@@ -25,12 +25,6 @@ extern "C" {
 #endif
 
 /* ************************************************************************************************
- * Interop Structure and Functions
- * ***********************************************************************************************/
-
-typedef int (OSSL_FUNC_interop_fn)(void);  // OSSL_FUNC prefix for consistency, but NOT from OpenSSL API
-
-/* ************************************************************************************************
  * SEED-SOURCE descriptions and Mode
  * ***********************************************************************************************/
 
@@ -39,9 +33,6 @@ const char* kpep_seeding_get_description(void);
 
 // Get a boolean (0/1) whether entropy restrive counting (Method #1) is enabled
 int kpep_seeding_get_restricted_mode(void);
-
-// Set the KPFP interop function for error detection
-void kpep_set_seeding_interop_fn(OSSL_FUNC_interop_fn *fn);
 
 /* ************************************************************************************************
  * ERROR Reason strings
