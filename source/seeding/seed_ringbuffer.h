@@ -46,21 +46,20 @@ void ring_free(RING_CTX *ctx);
  */
 void ring_flush(RING_CTX *ctx);
 
-#if 0
 /**
  * Returns the number of items in the ring buffer.
  * @param ctx The ring buffer to query.
  * @return The number of items in the ring buffer.
  */
-size_t ring_count(RING_CTX* ctx);
+size_t ring_count(const RING_CTX* ctx);
 
 /**
- * Returns the size of the ring buffer, which can store (size-1) items.
+ * Returns the space available oo the ring buffer.
  * @param ctx The ring buffer the query.
- * @return The number of items in the ring buffer.
+ * @return The number of items that can be stored in the ring buffer.
  */
-size_t ring_size(RING_CTX* ctx);
-#endif
+size_t ring_space(const RING_CTX* ctx);
+
 /**
  * Add bytes to the ring as found in the buffer.
  * @param ctx The ring buffer to which the bytes should be enqueued.

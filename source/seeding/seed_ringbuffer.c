@@ -48,12 +48,12 @@ typedef struct ring_split_st {
  * ***********************************************************************************************
  * ***********************************************************************************************/
 
-static inline size_t ring_count(const RING_CTX *ring)
+size_t ring_count(const RING_CTX *ring) 
 {
     return ring->write_pos - ring->read_pos;
 }
 
-static inline size_t ring_space(const RING_CTX *ring)
+size_t ring_space(const RING_CTX *ring)
 {
     return ring->capacity - ring_count(ring);
 }
