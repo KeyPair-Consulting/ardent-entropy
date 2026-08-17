@@ -57,7 +57,7 @@ void stub_osrand_free(void *stub_ctx)
     OSRAND_CTX *ctx = (OSRAND_CTX *)stub_ctx;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     if (ctx) {
@@ -74,7 +74,7 @@ void* stub_osrand_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
     size_t full_entropy_sz;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
 #ifdef FIPS_OPTEST
@@ -142,7 +142,7 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     size_t  bytes_read;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
 #ifdef FIPS_OPTEST
@@ -178,7 +178,7 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     gather_sz = gather_sz>>3;  // Bits to bytes
     
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s %lu -> %lu\n", MODULE_NAME, out?"byte":"size", nbits, gather_sz<<3);
+    kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_sz<<3);
     #endif
 
     // Return gather size?

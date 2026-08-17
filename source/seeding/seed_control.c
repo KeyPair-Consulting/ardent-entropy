@@ -70,7 +70,7 @@ void seed_control_free(SEED_CONTROL_CTX *ctx)
     SEED_STUB *seed = NULL;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     if (!ctx)
@@ -98,7 +98,7 @@ SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, KPEP_RESULT *errnum)
     SEED_CONTROL_CTX *ctx = NULL;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     // Allocate for source context
@@ -223,7 +223,7 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
     uint32_t       hardware = 0;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     // Validate

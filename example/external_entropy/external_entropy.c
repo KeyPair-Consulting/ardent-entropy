@@ -21,9 +21,6 @@
 #include "openssl/params.h"
 #include "jitterentropy.h"
 
-//KPEP: For Debugging "__func__"
-#include <stdio.h>
-
 /* ***********************************************************************************************
 * ***********************************************************************************************
 * Definitions, declarations, and context structure
@@ -59,7 +56,7 @@ EXPORT_VISIBILITY_HIDDEN
 void stub_example_free(void *ctx)
 {
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     kpep_cleanse(ctx, sizeof(JITTER_CTX));
@@ -74,7 +71,7 @@ void* stub_example_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
     int ret;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
 #ifdef FIPS_OPTEST
@@ -135,7 +132,7 @@ JITTER_CTX* pubapi_jitter_new(size_t osr)
     JITTER_CTX* ctx = NULL;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     ctx = stub_example_new(NULL, 0, &rv);
@@ -156,7 +153,7 @@ KPEP_RESULT stub_example_gather(void *stub_ctx, unsigned char *out, size_t *out_
     size_t num_tries;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
 #ifdef FIPS_OPTEST
@@ -190,7 +187,7 @@ KPEP_RESULT stub_example_gather(void *stub_ctx, unsigned char *out, size_t *out_
     gather_sz = gather_sz>>3;  // Bits to bytes
     
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: req %lu -> %lu\n", MODULE_NAME, nbits, gather_sz<<3);
+    kpep_trace_fmt(MODULE_NAME, "req %lu -> %lu", nbits, gather_sz<<3);
     #endif
 
     // Return gather size?

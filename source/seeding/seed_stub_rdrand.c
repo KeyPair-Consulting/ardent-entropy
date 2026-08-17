@@ -60,7 +60,7 @@ void stub_rdrand_free(void *stub_ctx)
     RDRAND_CTX *ctx = (RDRAND_CTX *)stub_ctx;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     if (ctx) {
@@ -77,7 +77,7 @@ void* stub_rdrand_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
     size_t full_entropy_sz;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
 #ifdef FIPS_OPTEST
@@ -161,7 +161,7 @@ KPEP_RESULT stub_rdrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     size_t gather_sz, gather_ovf;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
 #ifdef FIPS_OPTEST
@@ -197,7 +197,7 @@ KPEP_RESULT stub_rdrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     gather_sz = gather_sz>>3;  // Bits to bytes
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s %lu -> %lu\n", MODULE_NAME, out?"byte":"size", nbits, gather_sz<<3);
+    kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_sz<<3);
     #endif
 
     // Return gather size?

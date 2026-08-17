@@ -75,7 +75,7 @@ void stub_extern_free(void *stub_ctx)
     EXTERNAL_CTX *ctx = (EXTERNAL_CTX *)stub_ctx;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     if (ctx->hnd && dlclose(ctx->hnd)) {
@@ -94,7 +94,7 @@ void* stub_extern_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
     size_t full_entropy_sz;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
 #ifdef FIPS_OPTEST
@@ -183,7 +183,7 @@ KPEP_RESULT stub_extern_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     size_t gather_sz, gather_ovf;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
 #ifdef FIPS_OPTEST
@@ -219,7 +219,7 @@ KPEP_RESULT stub_extern_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     gather_sz = gather_sz>>3;  // Bits to bytes
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s %lu -> %lu\n", MODULE_NAME, out?"byte":"size", nbits, gather_sz<<3);
+    kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_sz<<3);
     #endif
 
     // Return gather size?
@@ -273,7 +273,7 @@ uint32_t stub_extern_get_state(void* stub_ctx)
 {
     EXTERNAL_CTX *ctx = (EXTERNAL_CTX *)stub_ctx;
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
     return ctx->ext_stub->get_state_fn(ctx->ext_ctx);
 }

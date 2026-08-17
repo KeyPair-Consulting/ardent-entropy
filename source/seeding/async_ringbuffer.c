@@ -68,7 +68,7 @@ EXPORT_VISIBILITY_HIDDEN
 void async_ringbuffer_free(ASYNC_CTX *ctx)
 {
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     if (!ctx)
@@ -93,7 +93,7 @@ void* async_ringbuffer_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32
     int len;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
 #ifdef FIPS_OPTEST
@@ -184,7 +184,7 @@ KPEP_RESULT async_ringbuffer_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *
     size_t gather_sz, gather_ovf;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
 #ifdef FIPS_OPTEST
@@ -220,7 +220,7 @@ KPEP_RESULT async_ringbuffer_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *
     gather_sz = gather_sz>>3;  // Bits to bytes
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s %lu -> %lu\n", MODULE_NAME, out?"byte":"size", nbits, gather_sz<<3);
+    kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_sz<<3);
     #endif
 
     // Return gather size?

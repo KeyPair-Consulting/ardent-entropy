@@ -107,7 +107,7 @@ KPEP_RESULT kpep_seeding_init(void* prov_ctx)
     uint32_t state;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: Seed subsystem Init\n", MODULE_NAME);
+    kpep_trace_fmt(MODULE_NAME, "%s", "Seed subsystem Init");
     #endif
 
     // Initialize seed lock mechanism
@@ -170,7 +170,7 @@ err:
     }
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: Seed subsystem Init Complete\n", MODULE_NAME);
+    kpep_trace_fmt(MODULE_NAME, "%s", "Seed subsystem Init Complete");
     #endif
 
     return rv;
@@ -215,7 +215,7 @@ static void *kpep_seed_new(void *provctx, void *parent,
                         const OSSL_DISPATCH *parent_dispatch)
 {
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     if (parent != NULL) {
@@ -229,7 +229,7 @@ static void *kpep_seed_new(void *provctx, void *parent,
 static void kpep_seed_free(void *seed_ctx)
 {
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 }
 
@@ -240,7 +240,7 @@ static int kpep_seed_instantiate(void *seed_ctx, unsigned int strength,
                               ossl_unused const OSSL_PARAM params[])
 {
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     return 1;
@@ -249,7 +249,7 @@ static int kpep_seed_instantiate(void *seed_ctx, unsigned int strength,
 static int kpep_seed_uninstantiate(void *seed_ctx)
 {
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     return 1;
@@ -265,7 +265,7 @@ static int kpep_seed_generate(void *seed_ctx, unsigned char *out, size_t outlen,
     uint32_t state;
     
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s (req %lu)\n", MODULE_NAME, __func__, outlen<<3);
+    kpep_trace_fmt(MODULE_NAME, "%s (req %lu)", __func__, outlen<<3);
     #endif
 
     // Initialize seed lock mechanism
@@ -339,7 +339,7 @@ static int kpep_seed_reseed(ossl_unused void *seed_ctx,
     uint32_t state;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     // Ensure provider is not in error state
@@ -375,7 +375,7 @@ static int kpep_seed_get_ctx_params(ossl_unused void *seed_ctx, OSSL_PARAM param
     OSSL_PARAM *p;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     state = seed_control_get_state(ctrl_ctx);
@@ -405,7 +405,7 @@ static const OSSL_PARAM *kpep_seed_gettable_ctx_params(ossl_unused void *seed_ct
     };
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     return known_gettable_ctx_params;
@@ -415,7 +415,7 @@ static int kpep_seed_verify_zeroization(ossl_unused void *seed_ctx)
 {
     int rv;
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     // Initialize seed lock mechanism
@@ -452,7 +452,7 @@ static size_t kpep_seed_get_seed(ossl_unused void *seed_ctx, unsigned char **pou
     uint32_t       state;
     
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     if (!ctrl_ctx || !drbg_ctx || !pout)
@@ -507,7 +507,7 @@ static size_t kpep_seed_get_seed(ossl_unused void *seed_ctx, unsigned char **pou
              (requested > max_len)?max_len:requested;
 
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: request (%lu<%lu<%lu=%lu)\n", MODULE_NAME, min_len, requested, max_len, buflen);
+    kpep_trace_fmt(MODULE_NAME, "request (%lu<%lu<%lu=%lu)", min_len, requested, max_len, buflen);
     #endif
 
     buffer = kpep_zalloc(buflen);
@@ -542,7 +542,7 @@ static void kpep_seed_clear_seed(ossl_unused void *seed_ctx,
                                unsigned char *out, size_t outlen)
 {
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
 
     OPENSSL_cleanse(out, outlen);
@@ -551,7 +551,7 @@ static void kpep_seed_clear_seed(ossl_unused void *seed_ctx,
 static int kpep_seed_enable_locking(void *seed_ctx)
 {
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
     return 1;
 }
@@ -559,7 +559,7 @@ static int kpep_seed_enable_locking(void *seed_ctx)
 static int kpep_seed_lock(void *seed_ctx)
 {
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
         return 1;
 }
@@ -567,7 +567,7 @@ static int kpep_seed_lock(void *seed_ctx)
 static void kpep_seed_unlock(void *seed_ctx)
 {
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
     return;
 }
@@ -595,7 +595,7 @@ size_t kpep_core_get_entropy(void *provctx, unsigned char **pout,
                              int entropy, size_t min_len, size_t max_len)
 {
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
     return kpep_seed_get_seed(NULL, pout, entropy, min_len, max_len, 0, NULL, 0);
 }
@@ -604,7 +604,7 @@ EXPORT_VISIBILITY_HIDDEN
 void kpep_core_cleanup_entropy(void *provctx, unsigned char *buf, size_t len)
 {
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
     kpep_seed_clear_seed(NULL, buf, len);
 }
@@ -615,7 +615,7 @@ size_t kpep_core_get_nonce(void *provctx, unsigned char **pout,
                            const void *salt, size_t salt_len)
 {
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
     // Salt is ignored; req length 128 satisfies up to strength 256
     return kpep_seed_get_seed(NULL, pout, 128, min_len, max_len, 0, NULL, 0);
@@ -625,7 +625,7 @@ EXPORT_VISIBILITY_HIDDEN
 void kpep_core_cleanup_nonce(void *provctx, unsigned char *buf, size_t len)
 {
     #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
+    TRACE_START;
     #endif
     kpep_seed_clear_seed(NULL, buf, len);
 }
