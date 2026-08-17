@@ -147,7 +147,7 @@ block-count = 192
 # for any source that provides entropy through this common interface (e.g. /dev/hwrand).
 #
 # Up to four (4) distinct OSRand sources can be specified.  The configuration options for
-# each source must be prepended with the number (0..3).  Examples below can be altered
+# each source must be prepended with the number (1..4).  Examples below can be altered
 # as needed.
 #
 # In addition to the standard options, one additional configuration option isrequired by the 
@@ -157,18 +157,18 @@ block-count = 192
 [osrand_sect]
 
 # Linux Kernel x.y.z
-0.activate = 1
-0.validated = "FOR EVAL"
-0.block-size = 256
-0.block-count = 1
-0.filepath = /dev/random
+1.activate = 1
+1.validated = "FOR EVAL"
+1.block-size = 256
+1.block-count = 1
+1.filepath = /dev/random
 
 # HWRAND source
-1.activate = 0
-1.block-size = 64
-1.block-count = 8
-1.filepath = /dev/hw_rng
-1.hardware-source=1
+2.activate = 0
+2.block-size = 64
+2.block-count = 8
+2.filepath = /dev/hw_rng
+2.hardware-source=1
 
 ############################################################################################
 # EXTERNAL seed source
@@ -178,7 +178,7 @@ block-count = 192
 # demonstrated int he KeyPair example external seed source (see examples directory).
 #
 # Up to four (4) distinct external sources can be specified.  The configuration options for
-# each source must be prepended with the number (0..3).  Example below can be altered
+# each source must be prepended with the number (1..4).  Example below can be altered
 # as needed.
 #
 # In addition to the standard options, there are two configuration options are required by the 
@@ -189,8 +189,8 @@ block-count = 192
 [extseed_sect]
 
 # KeyPair JEnt example
-0.activate = 0
-0.block-size = 256
-0.block-count = 1
-0.filepath = /abs/path/to/libextjitter.so
-0.functions = stub_example
+1.activate = 0
+1.block-size = 256
+1.block-count = 1
+1.filepath = /abs/path/to/libextjitter.so
+1.functions = stub_example

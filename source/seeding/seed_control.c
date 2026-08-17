@@ -23,6 +23,7 @@
 #include "kpep/kpep_names.h"
 #include "kpep/kpep_seed_stub.h"
 #include "seed_control.h"
+#include "seed_sources.h"
 #include "async_ringbuffer.h"
 
 /* ************************************************************************************************
@@ -32,13 +33,6 @@
  * ***********************************************************************************************/
 
 #define MODULE_NAME "SEED-CTRL"
-
-// Function collections defined in the stub source files
-extern const STUB_FUNCTIONS stub_jitter;
-extern const STUB_FUNCTIONS stub_rdseed;
-extern const STUB_FUNCTIONS stub_rdrand;
-extern const STUB_FUNCTIONS stub_osrand;
-extern const STUB_FUNCTIONS stub_extern;
 
 // Data struct for stub management
 typedef struct {
@@ -315,131 +309,99 @@ err:
  * ***********************************************************************************************
  * ***********************************************************************************************/
 
+#define LOOKUP_KEY_LENGTH 32
+
 static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
 {
     KPEP_RESULT rv = KPEP_R_SUCCESS;
-    OSSL_PARAM  params[14], *p = params;
+    OSSL_PARAM  params[5], *p = params;
     SEED_STUB  *seed = NULL;
-    uint32_t   *seed_cnt;
-    void       *handle;
-
-    const char *act_jitter = NULL;
-    const char *act_rdseed = NULL;
-    const char *act_rdrand = NULL;
-    const char *val_jitter = NULL;
-    const char *val_rdseed = NULL;
-    const char *val_rdrand = NULL;
-    const char *hard_jitter = NULL;
-    const char *hard_rdseed = NULL;
-    const char *hard_rdrand = NULL;
-    const char *ring_jitter = NULL;
-    const char *ring_rdseed = NULL;
-    const char *ring_rdrand = NULL;
-    const char *counting_mode = NULL;
-    const char *one = "1";
-
-    uint32_t    idx;
+    uint32_t   *seed_cnt = NULL;
+    void       *handle = NULL;
     int32_t     ring_sz;
-    char        act_key[32];
-    char        val_key[32];
-    char        hard_key[32];
-    char        ring_key[32];
-    const char *act_value =  NULL;
-    const char *val_value =  NULL;
+    char        act_key[LOOKUP_KEY_LENGTH];
+    char        val_key[LOOKUP_KEY_LENGTH];
+    char        hard_key[LOOKUP_KEY_LENGTH];
+    char        ring_key[LOOKUP_KEY_LENGTH];
+    const char *act_value = NULL;
+    const char *val_value = NULL;
     const char *hard_value = NULL;
     const char *ring_value = NULL;
+    const SEED_SOURCE_DEF *def = NULL;
 
-    //printf("BOOL: %s : %s\n", key, (kpep_get_core_param_bool(prov_ctx, key, 0))?"TRUE":"FALSE");
-
-    // Is this being loaded outside of the OpenSSL provider init?
-    if (!prov_ctx) {
-        // non-OpenSSL startup; jitter-only
-        act_jitter = one;
-        val_jitter = "YES";  // Needs to be set to something so source will be appended to 'valid' list
+    if (!ctx) {
+        return KPEP_R_NULL_ARG;
     }
-    else {
-        // Configuration items to read
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_RESTRICTIVE_COUNTING,
-            (char **) &counting_mode,
-            sizeof(counting_mode));
 
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_JITTER"."KPEP_PROV_PARAM_SEED_ACTIVATE,
-            (char **) &act_jitter,
-            sizeof(act_jitter));
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_RDSEED"."KPEP_PROV_PARAM_SEED_ACTIVATE,
-            (char **) &act_rdseed,
-            sizeof(act_rdseed));
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_RDRAND"."KPEP_PROV_PARAM_SEED_ACTIVATE,
-            (char **) &act_rdrand,
-            sizeof(act_rdrand));
+    // Non-provider startup keeps existing jitter-only behavior.
+    if (!prov_ctx) {
+        seed_cnt = &ctx->v_count;
+        seed = &ctx->valid[*seed_cnt];
+        handle = async_ringbuffer_new(NULL, &stub_jitter, 1024, 0, &rv);
+        if (!handle || rv) {
+            if (handle && stub_jitter.free_fn) {
+                stub_jitter.free_fn(handle);
+            }
+            return rv ? rv : KPEP_R_SEED_NOT_INSTANTIATED;
+        }
+        seed->seed_ctx = handle;
+        *seed_cnt += 1;
+        return KPEP_R_SUCCESS;
+    }
 
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_JITTER"."KPEP_PROV_PARAM_SEED_VALIDATED,
-            (char **) &val_jitter,
-            sizeof(val_jitter));
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_RDSEED"."KPEP_PROV_PARAM_SEED_VALIDATED,
-            (char **) &val_rdseed,
-            sizeof(val_rdseed));
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_RDRAND"."KPEP_PROV_PARAM_SEED_VALIDATED,
-            (char **) &val_rdrand,
-            sizeof(val_rdrand));
+    ctx->restricted_counting =
+        kpep_get_core_param_bool(prov_ctx, KPEP_PROV_PARAM_RESTRICTIVE_COUNTING, 0);
 
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_JITTER"."KPEP_PROV_PARAM_SEED_HARDWARE,
-            (char **) &hard_jitter,
-            sizeof(hard_jitter));
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_RDSEED"."KPEP_PROV_PARAM_SEED_HARDWARE,
-            (char **) &hard_rdseed,
-            sizeof(hard_rdseed));
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_RDRAND"."KPEP_PROV_PARAM_SEED_HARDWARE,
-            (char **) &hard_rdrand,
-            sizeof(hard_rdrand));
+    for (def = seed_source_defs; def->desc; ++def) {
+        act_value = NULL;
+        val_value = NULL;
+        hard_value = NULL;
+        ring_value = NULL;
+        p = params;
 
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_JITTER"."KPEP_PROV_PARAM_SEED_RING_SIZE,
-            (char **) &ring_jitter,
-            sizeof(ring_jitter));
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_RDSEED"."KPEP_PROV_PARAM_SEED_RING_SIZE,
-            (char **) &ring_rdseed,
-            sizeof(ring_rdseed));
-        *p++ = OSSL_PARAM_construct_utf8_ptr(
-            KPEP_PROV_PARAM_SEED_RDRAND"."KPEP_PROV_PARAM_SEED_RING_SIZE,
-            (char **) &ring_rdrand,
-            sizeof(ring_rdrand));
+        if (def->idx > 0)
+            sprintf(act_key, "%s.%u.%s", def->prefix, def->idx, KPEP_PROV_PARAM_SEED_ACTIVATE);
+        else
+            sprintf(act_key, "%s.%s", def->prefix, KPEP_PROV_PARAM_SEED_ACTIVATE);
+        *p++ = OSSL_PARAM_construct_utf8_ptr(act_key, (char **) &act_value, sizeof(act_value));
 
+        if (def->idx > 0)
+            sprintf(val_key, "%s.%u.%s", def->prefix, def->idx, KPEP_PROV_PARAM_SEED_VALIDATED);
+        else
+            sprintf(val_key, "%s.%s", def->prefix, KPEP_PROV_PARAM_SEED_VALIDATED);
+        *p++ = OSSL_PARAM_construct_utf8_ptr(val_key, (char **) &val_value, sizeof(val_value));
+
+        if (def->idx > 0)
+            sprintf(hard_key, "%s.%u.%s", def->prefix, def->idx, KPEP_PROV_PARAM_SEED_HARDWARE);
+        else
+            sprintf(hard_key, "%s.%s", def->prefix, KPEP_PROV_PARAM_SEED_HARDWARE);
+        *p++ = OSSL_PARAM_construct_utf8_ptr(hard_key, (char **) &hard_value, sizeof(hard_value));
+
+        if (def->idx > 0)
+            sprintf(ring_key, "%s.%u.%s", def->prefix, def->idx, KPEP_PROV_PARAM_SEED_RING_SIZE);
+        else
+            sprintf(ring_key, "%s.%s", def->prefix, KPEP_PROV_PARAM_SEED_RING_SIZE);
+        *p++ = OSSL_PARAM_construct_utf8_ptr(ring_key, (char **) &ring_value, sizeof(ring_value));
         *p = OSSL_PARAM_construct_end();
 
-        // Load from OpenSSL Core
         if (!kpep_get_core_params(prov_ctx, params)) {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_LOOKUP_FAILURE);
             return KPEP_R_CONFIG_LOOKUP_FAILURE;
         }
-    }
 
-    // RESTRICTIVE ENTROPY COUNTING
-    if (counting_mode && !strncmp(counting_mode, "1", 1)) {
-        ctx->restricted_counting = 1;
-    }
+        if (!act_value || strncmp(act_value, "1", 1)) {
+            continue;
+        }
 
-    // JITTER
-    if (act_jitter && !strncmp(act_jitter, "1", 1)) {
-        if (val_jitter && strncmp(val_jitter, "0", 1)) { // Set and not "0"
-            if (!strncmp(val_jitter, "1", 1)) {
-                kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'jitter' marked validated '1', should be identifier");
+        if (val_value && strncmp(val_value, "0", 1)) {
+            if (!strncmp(val_value, "1", 1)) {
+                kpep_log(LOG_LVL_INFO, MODULE_NAME,
+                         "Seed source '%s' marked validated '1', should be identifier",
+                         def->desc);
             }
             seed_cnt = &ctx->v_count;
             seed = &ctx->valid[*seed_cnt];
-            // Hardware source?
-            if (hard_jitter && strncmp(hard_jitter, "0", 1)) { // Set and not "0"
+            if (def->force_hardware || (hard_value && strncmp(hard_value, "0", 1))) {
                 seed->hardware_source = 1;
             }
         }
@@ -448,9 +410,8 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
             seed = &ctx->addl[*seed_cnt];
         }
 
-        // Get ring size
-        if (ring_jitter) {
-            ring_sz = strtol(ring_jitter, NULL, 10);
+        if (ring_value) {
+            ring_sz = strtol(ring_value, NULL, 10);
             if (ring_sz <= 0 || ring_sz > INT32_MAX) {
                 LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_RING_INVALID_SIZE);
                 return KPEP_R_RING_INVALID_SIZE;
@@ -460,297 +421,29 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
             ring_sz = 1024;
         }
 
-        // Create new async with stub
-        handle = async_ringbuffer_new(prov_ctx, &stub_jitter, (uint32_t) ring_sz, 0, &rv);
+        handle = async_ringbuffer_new(prov_ctx,
+                                      def->stub_fn,
+                                      (uint32_t) ring_sz,
+                                      (uint8_t) def->idx,
+                                      &rv);
         if (!handle) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to initialize seed source 'jitter'.");
+            LOG_FORMATTED_ERROR(MODULE_NAME, "Failed to initialize seed source '%s'.", def->desc);
             LOG_KPEP_ERROR(MODULE_NAME, rv);
-            // Continue without this source
-            rv = KPEP_R_SUCCESS;  // Reset
+            rv = KPEP_R_SUCCESS;
+            continue;
         }
-        else if (rv) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Error initializing seed source 'jitter'.");
+        if (rv) {
+            LOG_FORMATTED_ERROR(MODULE_NAME, "Error initializing seed source '%s'.", def->desc);
             LOG_KPEP_ERROR(MODULE_NAME, rv);
-            stub_jitter.free_fn(handle);
+            def->stub_fn->free_fn(handle);
             goto err;
         }
-        else {
-            // Assign this source to slot
-            seed->seed_ctx = handle;
-            *seed_cnt += 1;
-        }
+
+        seed->seed_ctx = handle;
+        *seed_cnt += 1;
     }
 
-    // RDSEED
-    if (act_rdseed && !strncmp(act_rdseed, "1", 1)) {
-        if (val_rdseed && strncmp(val_rdseed, "0", 1)) {
-            if (!strncmp(val_rdseed, "1", 1)) {
-                kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'rdseed' marked validated '1', should be identifier");
-            }
-            seed_cnt = &ctx->v_count;
-            seed = &ctx->valid[*seed_cnt];
-            // Hardware source?
-            if (hard_rdseed && strncmp(hard_rdseed, "0", 1)) { // Set and not "0"
-                seed->hardware_source = 1;
-            }
-        }
-        else {
-            seed_cnt = &ctx->a_count;
-            seed = &ctx->addl[*seed_cnt];
-        }
-
-        // Get ring size
-        if (ring_rdseed) {
-            ring_sz = (uint32_t) strtoul(ring_rdseed, NULL, 10);
-            if (ring_sz <= 0 || ring_sz > INT32_MAX) {
-                LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_RING_INVALID_SIZE);
-                return KPEP_R_RING_INVALID_SIZE;
-            }
-        }
-        else {
-            ring_sz = 1024;
-        }
-
-        // Create new async with stub
-        handle = async_ringbuffer_new(prov_ctx, &stub_rdseed, (uint32_t) ring_sz, 0, &rv);
-        if (!handle) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to initialize seed source 'rdseed'.");
-            LOG_KPEP_ERROR(MODULE_NAME, rv);
-            // Continue without this source
-            rv = KPEP_R_SUCCESS;  // Reset
-        }
-        else if (rv) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Error initializing seed source 'rdseed'.");
-            LOG_KPEP_ERROR(MODULE_NAME, rv);
-            stub_rdseed.free_fn(handle);
-            goto err;
-        }
-        else {
-            // Assign this source to slot
-            seed->seed_ctx = handle;
-            seed->hardware_source = 1;  // Force this flag
-            *seed_cnt += 1;
-        }
-    }
-
-    // RDRAND
-    if (act_rdrand && !strncmp(act_rdrand, "1", 1)) {
-        // Disallow as a validated source!
-        if (val_rdrand && strncmp(val_rdrand, "0", 1)) {
-            kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'rdrand' can never be a validated source; adding as add'l");
-        }
-        seed_cnt = &ctx->a_count;
-        seed = &ctx->addl[*seed_cnt];
-
-        // Get ring size
-        if (ring_rdrand) {
-            ring_sz = (uint32_t) strtoul(ring_rdrand, NULL, 10);
-            if (ring_sz <= 0 || ring_sz > INT32_MAX) {
-                LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_RING_INVALID_SIZE);
-                return KPEP_R_RING_INVALID_SIZE;
-            }
-        }
-        else {
-            ring_sz = 1024;
-        }
-
-        // Create new async with stub
-        handle = async_ringbuffer_new(prov_ctx, &stub_rdrand, (uint32_t) ring_sz, 0, &rv);
-        if (!handle) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to initialize seed source 'rdrand'.");
-            LOG_KPEP_ERROR(MODULE_NAME, rv);
-            // Continue without this source    
-            rv = KPEP_R_SUCCESS;  // Reset
-        }
-        else if (rv) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Error initializing seed source 'rdrand'.");
-            LOG_KPEP_ERROR(MODULE_NAME, rv);
-            stub_rdrand.free_fn(handle);
-            goto err;
-        }
-        else {
-            // Assign this source to slot
-            seed->seed_ctx = handle;
-            *seed_cnt += 1;
-        }
-    }
-
-    // Only if OpenSSL is invoked
-    if (prov_ctx) {
-        // OSRAND
-        for (idx=0; idx<4; ++idx) {
-            // Reset values
-            act_value = val_value = NULL;
-
-            // Setup new params array with numerical index
-            sprintf(act_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_OSRAND, idx, KPEP_PROV_PARAM_SEED_ACTIVATE);
-            p = params;
-            *p++ = OSSL_PARAM_construct_utf8_ptr(
-                act_key,
-                (char **) &act_value,
-                sizeof(act_value));
-            sprintf(val_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_OSRAND, idx, KPEP_PROV_PARAM_SEED_VALIDATED);
-            *p++ = OSSL_PARAM_construct_utf8_ptr(
-                val_key,
-                (char **) &val_value,
-                sizeof(val_value));
-            sprintf(hard_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_OSRAND, idx, KPEP_PROV_PARAM_SEED_HARDWARE);
-            *p++ = OSSL_PARAM_construct_utf8_ptr(
-                hard_key,
-                (char **) &hard_value,
-                sizeof(hard_value));
-            sprintf(ring_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_OSRAND, idx, KPEP_PROV_PARAM_SEED_RING_SIZE);
-            *p++ = OSSL_PARAM_construct_utf8_ptr(
-                hard_key,
-                (char **) &ring_value,
-                sizeof(ring_value));
-            *p = OSSL_PARAM_construct_end();
-
-            // Load from OpenSSL Core
-            if (!kpep_get_core_params(prov_ctx, params)) {
-                LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_LOOKUP_FAILURE);
-                return KPEP_R_CONFIG_LOOKUP_FAILURE;
-            }
-
-            // Activate this index?
-            if (act_value && !strncmp(act_value, "1", 1)) {
-                if (val_value && strncmp(val_value, "0", 1)) { // Set and not "0"
-                    if (!strncmp(val_value, "1", 1)) {
-                        kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'osrand(%d)' marked validated '1', should be identifier", idx);
-                    }
-                    seed_cnt = &ctx->v_count;
-                    seed = &ctx->valid[*seed_cnt];
-                    // Hardware source?
-                    if (hard_value && strncmp(hard_value, "0", 1)) { // Set and not "0"
-                        seed->hardware_source = 1;
-                    }
-                }
-                else {
-                    seed_cnt = &ctx->a_count;
-                    seed = &ctx->addl[*seed_cnt];
-                }
-
-                // Get ring size
-                if (ring_value) {
-                    ring_sz = (uint32_t) strtoul(ring_value, NULL, 10);
-                    if (ring_sz <= 0 || ring_sz > INT32_MAX) {
-                        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_RING_INVALID_SIZE);
-                        return KPEP_R_RING_INVALID_SIZE;
-                    }
-                }
-                else {
-                    ring_sz = 1024;
-                }
-
-                // Create new async with stub
-                handle = async_ringbuffer_new(prov_ctx, &stub_osrand, (uint32_t) ring_sz, idx, &rv);
-                if (!handle) {
-                    LOG_FORMATTED_ERROR(MODULE_NAME, "Failed to initialize seed source 'osrand(%d)'.", idx);
-                    LOG_KPEP_ERROR(MODULE_NAME, rv);
-                    // Continue without this source
-                    rv = KPEP_R_SUCCESS;  // Reset
-                }
-                else if (rv) {
-                    LOG_FORMATTED_ERROR(MODULE_NAME, "Error initializing seed source 'osrand(%d)'.", idx);
-                    LOG_KPEP_ERROR(MODULE_NAME, rv);
-                    stub_osrand.free_fn(handle);
-                    goto err;
-                }
-                else {
-                    // Assign this source to slot
-                    seed->seed_ctx = handle;
-                    *seed_cnt += 1;
-                }
-            }
-        }
-
-#ifndef KPEP_DISABLE_EXTERNAL
-        // EXTERNAL
-        for (idx=0; idx<4; ++idx) {
-            // Reset values
-            act_value = val_value = NULL;
-
-            // Setup new params array with numerical index
-            sprintf(act_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_EXTERN, idx, KPEP_PROV_PARAM_SEED_ACTIVATE);
-            p = params;
-            *p++ = OSSL_PARAM_construct_utf8_ptr(
-                act_key,
-                (char **) &act_value,
-                sizeof(act_value));
-            sprintf(val_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_EXTERN, idx, KPEP_PROV_PARAM_SEED_VALIDATED);
-            *p++ = OSSL_PARAM_construct_utf8_ptr(
-                val_key,
-                (char **) &val_value,
-                sizeof(val_value));
-            sprintf(hard_key, "%s.%d.%s", KPEP_PROV_PARAM_SEED_EXTERN, idx, KPEP_PROV_PARAM_SEED_HARDWARE);
-            *p++ = OSSL_PARAM_construct_utf8_ptr(
-                hard_key,
-                (char **) &hard_value,
-                sizeof(hard_value));
-            *p = OSSL_PARAM_construct_end();
-
-            // Load from OpenSSL Core
-            if (!kpep_get_core_params(prov_ctx, params)) {
-                LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_LOOKUP_FAILURE);
-                return KPEP_R_CONFIG_LOOKUP_FAILURE;
-            }
-
-            // Activate this index?
-            if (act_value && !strncmp(act_value, "1", 1)) {
-                if (val_value && strncmp(val_value, "0", 1)) { // Set and not "0"
-                    if (!strncmp(val_value, "1", 1)) {
-                        kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'extern(%d)' marked validated '1', should be identifier", idx);
-                    }
-                    seed_cnt = &ctx->v_count;
-                    seed = &ctx->valid[*seed_cnt];
-                    // Hardware source?
-                    if (hard_value && strncmp(hard_value, "0", 1)) { // Set and not "0"
-                        seed->hardware_source = 1;
-                    }
-                }
-                else {
-                    seed_cnt = &ctx->a_count;
-                    seed = &ctx->addl[*seed_cnt];
-                }
-
-                // Get ring size
-                if (ring_value) {
-                    ring_sz = (uint32_t) strtoul(ring_value, NULL, 10);
-                    if (ring_sz <= 0 || ring_sz > INT32_MAX) {
-                        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_RING_INVALID_SIZE);
-                        return KPEP_R_RING_INVALID_SIZE;
-                    }
-                }
-                else {
-                    ring_sz = 1024;
-                }
-
-                // Create new async with stub
-                handle = async_ringbuffer_new(prov_ctx, &stub_extern, (uint32_t) ring_sz, idx, &rv);
-                if (!handle) {
-                    LOG_FORMATTED_ERROR(MODULE_NAME, "Failed to initialize seed source 'extern(%d)'.", idx);
-                    LOG_KPEP_ERROR(MODULE_NAME, rv);
-                    // Continue without this source
-                    rv = KPEP_R_SUCCESS;  // Reset
-                }
-                else if (rv) {
-                    LOG_FORMATTED_ERROR(MODULE_NAME, "Error initializing seed source 'extern(%d)'.", idx);
-                    LOG_KPEP_ERROR(MODULE_NAME, rv);
-                    stub_extern.free_fn(handle);
-                    goto err;
-                }
-                else {
-                    // Assign this source to slot
-                    seed->seed_ctx = handle;
-                    *seed_cnt += 1;
-                }
-            }
-        }
-#endif
-    }
-    /* Success! */
     rv = KPEP_R_SUCCESS;
-
 err:
     return rv;
 }
