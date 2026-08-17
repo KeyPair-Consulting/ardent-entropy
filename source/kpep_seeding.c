@@ -39,8 +39,8 @@ static KPEP_DRBG_CTX    *drbg_ctx = NULL;
 
 static const char       *perso_string = NULL;
 
-// Lazy start; defer DRBG instantiation until first use
-static int               lazy_start = 0;
+// Flag to denote DRBG instantiation (delayed until first use, in one of two places)
+static int               drbg_instantiated = 0;
 
 //  uses one global context, but OpenSSL requires a context handle.
 // Create a dummy handle to pass back to OpenSSL; ignore when passed to us
@@ -107,7 +107,7 @@ KPEP_RESULT kpep_seeding_init(void* prov_ctx)
     uint32_t state;
 
     #if defined (KPEP_TRACE_SEED)
-    kpep_trace_fmt(MODULE_NAME, "%s", "Seed subsystem Init");
+    kpep_trace(MODULE_NAME, "Seed subsystem Init");
     #endif
 
     // Initialize seed lock mechanism
@@ -148,15 +148,6 @@ KPEP_RESULT kpep_seeding_init(void* prov_ctx)
         LOG_KPEP_ERROR(MODULE_NAME, rv);
         goto err;
     }
-    if (!lazy_start) {
-        size_t len = perso_string?strlen(perso_string):0;
-    	rv = drbg_instantiate(drbg_ctx, KPEP_SECURITY_STRENGTH_BITS, 
-                          (uint8_t*)perso_string, len);
-		if (rv) {
-		    LOG_KPEP_ERROR(MODULE_NAME, rv);
-		    goto err;
-		}
-	}
 
 err:
     // Release the lock
@@ -170,7 +161,7 @@ err:
     }
 
     #if defined (KPEP_TRACE_SEED)
-    kpep_trace_fmt(MODULE_NAME, "%s", "Seed subsystem Init Complete");
+    kpep_trace(MODULE_NAME, "Seed subsystem Init Complete");
     #endif
 
     return rv;
@@ -274,21 +265,21 @@ static int kpep_seed_generate(void *seed_ctx, unsigned char *out, size_t outlen,
         return 0;
     }
 
-    if (lazy_start) {
+    if (!drbg_instantiated) {
         if (lock && !CRYPTO_THREAD_write_lock(lock)) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seed_generate_lazy_start)");
+            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seed_generate)");
             return 0;
         }
         rv = drbg_instantiate(drbg_ctx, KPEP_SECURITY_STRENGTH_BITS, 
                             (uint8_t*)perso_string, perso_string?strlen(perso_string):0);
         if (lock && !CRYPTO_THREAD_unlock(lock)) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seed_generate_lazy_start)");
+            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seed_generate)");
         }
         if (rv) {
             LOG_KPEP_ERROR(MODULE_NAME, rv);
             return 0;
         }
-        lazy_start = 0;  // Only once
+        drbg_instantiated = 1;  // Only once
     }
 
     // Ensure provider is not in error state
@@ -466,21 +457,21 @@ static size_t kpep_seed_get_seed(ossl_unused void *seed_ctx, unsigned char **pou
         return 0;
     }
 
-    if (lazy_start) {
+    if (!drbg_instantiated) {
         if (lock && !CRYPTO_THREAD_write_lock(lock)) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seed_generate_lazy_start)");
+            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (seed_generate)");
             return 0;
         }
         rv = drbg_instantiate(drbg_ctx, KPEP_SECURITY_STRENGTH_BITS, 
                             (uint8_t*)perso_string, perso_string?strlen(perso_string):0);
         if (lock && !CRYPTO_THREAD_unlock(lock)) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seed_generate_lazy_start)");
+            LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (seed_generate)");
         }
         if (rv) {
             LOG_KPEP_ERROR(MODULE_NAME, rv);
             return 0;
         }
-        lazy_start = 0;  // Only once
+        drbg_instantiated = 1;  // Only once
     }
 
     // Ensure provider is not in error state
@@ -657,9 +648,6 @@ static KPEP_RESULT load_params(void* prov_ctx)
         (char **) &perso_string,
         sizeof(perso_string));
     *p = OSSL_PARAM_construct_end();
-
-    // Get lazy start BOOL setting
-    lazy_start = kpep_get_core_param_bool(prov_ctx, KPEP_PROV_PARAM_LAZY_START, 0);
 
     // Load from OpenSSL Core
     if (!kpep_get_core_params(prov_ctx, params)) {
