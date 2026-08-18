@@ -84,6 +84,8 @@ typedef struct {
     COMMON_STUB_INFO
 } SEED_STUB_INFO;
 
+uint32_t seed_get_gather_sz(const SEED_STUB_INFO *info, size_t nbits);
+
 #ifdef __cplusplus
 }
 #endif

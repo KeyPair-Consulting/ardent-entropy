@@ -152,7 +152,7 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
 {
     OSRAND_CTX *ctx = (OSRAND_CTX *)stub_ctx;
     KPEP_RESULT rv = KPEP_R_SUCCESS;
-    size_t gather_sz, gather_ovf;
+    size_t gather_bits, gather_bytes;
 
     FILE* fp = NULL;
     size_t  bytes_read;
@@ -181,30 +181,21 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
         return KPEP_R_SUCCESS;
 
     // Validate context
-    if (!ctx || !out_len) {
+    if (!ctx || !out || !out_len) {
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_NULL_ARG);
         return KPEP_R_NULL_ARG;
     }
 
-    // Calculate gather size and Quantize to block size
-    gather_sz = (ctx->full_entropy)?nbits:(size_t) (nbits / ctx->entropy_per_bit);
-    gather_ovf = (gather_sz % ctx->block_size);
-    if (gather_ovf)
-        gather_sz += (ctx->block_size - gather_ovf);
-    gather_sz = gather_sz>>3;  // Bits to bytes
-    
+    // Calculate gather size
+    gather_bits = seed_get_gather_sz((SEED_STUB_INFO*)ctx, nbits);
+    gather_bytes = (gather_bits + 7) >> 3;
+
     #if defined (KPEP_TRACE_SEED)
-    kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_sz<<3);
+    kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bits);
     #endif
 
-    // Return gather size?
-    if (!out) {
-        *out_len = gather_sz;
-        return KPEP_R_SUCCESS;
-    }
-
     // Check for adequate size
-    if (*out_len < gather_sz) {
+    if (*out_len < gather_bytes) {
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_SEED_BUFFER_TOO_SMALL);
         return KPEP_R_SEED_BUFFER_TOO_SMALL;
     }
@@ -223,8 +214,8 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
         LOG_KPEP_ERROR(MODULE_NAME, rv);
         goto err;
     }
-    bytes_read = fread(out, 1, gather_sz, fp);
-    if (bytes_read != gather_sz) {
+    bytes_read = fread(out, 1, gather_bytes, fp);
+    if (bytes_read != gather_bytes) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'osrand' gather failed");
         if (feof(fp)) {
             rv = KPEP_R_SEED_FILE_EOF;
@@ -238,7 +229,7 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
         }
         else {
             rv = KPEP_R_SEED_FILE_ERROR;
-            LOG_FORMATTED_ERROR(MODULE_NAME, "Unknown error (gathered %d, expected %d)", bytes_read, gather_sz);
+            LOG_FORMATTED_ERROR(MODULE_NAME, "Unknown error (gathered %d, expected %d)", bytes_read, gather_bytes);
             LOG_KPEP_ERROR(MODULE_NAME, rv);
         }
         goto err;

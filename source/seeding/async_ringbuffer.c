@@ -87,14 +87,18 @@ void async_ringbuffer_free(ASYNC_CTX *ctx)
     if (!ctx)
         return;
 
+    if (ctx->mutex)
+        ossl_crypto_mutex_lock(ctx->mutex);
     if (ctx->ring_ctx)
         ring_free(ctx->ring_ctx);                 // Free the ring
     if (ctx->source_ctx && ctx->source_fn && ctx->source_fn->free_fn)  
         ctx->source_fn->free_fn(ctx->source_ctx); // Free the source
-    if (ctx->mutex)
-        ossl_crypto_mutex_free(&ctx->mutex);              // Free the mutex
     if (ctx->cond)
-        ossl_crypto_condvar_free(&ctx->cond);             // Free the condition variable
+        ossl_crypto_condvar_free(&ctx->cond);     // Free the condition variable
+    if (ctx->mutex) {
+        ossl_crypto_mutex_unlock(ctx->mutex);
+        ossl_crypto_mutex_free(&ctx->mutex);      // Free the mutex
+    }
     kpep_free(ctx);
 
     kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async' shutdown successful");
@@ -150,7 +154,6 @@ void* async_ringbuffer_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32
         LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (create condition variable)");
         goto err;
     }
-    ossl_crypto_mutex_lock(ctx->mutex);
 
     // Create the new seed source
     ctx->source_fn = stub_fn;
@@ -188,17 +191,13 @@ void* async_ringbuffer_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32
     // Start initialized
     if (ctx->source_info->full_entropy)
         kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async (%s)' startup successful (full entropy)", ctx->name);
-    else
+    else 
         kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async (%s)' startup successful (%.6f ent-per-bit)", ctx->name, ctx->source_info->entropy_per_bit);
 
-    ossl_crypto_mutex_unlock(ctx->mutex);
     return ctx;
 
 err:
     async_ringbuffer_free(ctx);
-    ossl_crypto_mutex_unlock(ctx->mutex);
-    ossl_crypto_condvar_free(&ctx->cond);
-    ossl_crypto_mutex_free(&ctx->mutex);
     return NULL;
 }
 
@@ -206,7 +205,7 @@ EXPORT_VISIBILITY_HIDDEN
 KPEP_RESULT async_ringbuffer_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_len, size_t nbits)
 {
     KPEP_RESULT rv = KPEP_R_SUCCESS;
-    size_t gather_sz, gather_ovf;
+    uint32_t gather_bits, gather_bytes;
 
     #if defined (KPEP_TRACE_SEED)
     TRACE_START;
@@ -237,25 +236,22 @@ KPEP_RESULT async_ringbuffer_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *
         return KPEP_R_NULL_ARG;
     }
 
-    // Calculate gather size and Quantize to block size
-    gather_sz = (ctx->source_info->full_entropy)?nbits:(size_t) (nbits / ctx->source_info->entropy_per_bit);
-    gather_ovf = (gather_sz % ctx->source_info->block_size);
-    if (gather_ovf)
-        gather_sz += (ctx->source_info->block_size - gather_ovf);
-    gather_sz = gather_sz>>3;  // Bits to bytes
+    // Calculate gather size
+    gather_bits = seed_get_gather_sz(ctx->source_info, nbits);
+    gather_bytes = (gather_bits + 7) >> 3;
 
     #if defined (KPEP_TRACE_SEED)
-    kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_sz<<3);
+    kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bytes<<3);
     #endif
 
     // Return gather size?
     if (!out) {
-        *out_len = gather_sz;
+        *out_len = gather_bytes;
         return KPEP_R_SUCCESS;
     }
 
     // Check for adequate size
-    if (*out_len < gather_sz) {
+    if (*out_len < gather_bytes) {
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_SEED_BUFFER_TOO_SMALL);
         return KPEP_R_SEED_BUFFER_TOO_SMALL;
     }
@@ -270,29 +266,32 @@ KPEP_RESULT async_ringbuffer_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *
     ossl_crypto_mutex_lock(ctx->mutex);
 
     { // This will go in the async thread
-        size_t buflen = gather_sz;
+        size_t buflen = gather_bytes;
         uint8_t *buf = NULL;
-        buf = kpep_zalloc(gather_sz);
+        buf = kpep_zalloc(gather_bytes);
         if (!buf) {
             LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' gather malloc failed", ctx->source_info->name);
+            ossl_crypto_mutex_unlock(ctx->mutex);  // Need better handling
             goto err;
         }
         rv = ctx->source_fn->gather_fn(ctx->source_ctx, buf, &buflen, nbits);
         if (rv) {
             LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' gather operation failed", ctx->source_info->name);
+            ossl_crypto_mutex_unlock(ctx->mutex);  // Need better handling
             kpep_free(buf);
             goto err;
         }
         rv = ring_enqueue(ctx->ring_ctx, buf, buflen);
         if (rv) {
             LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' write-to-ring failed", ctx->source_info->name);
+            ossl_crypto_mutex_unlock(ctx->mutex);  // Need better handling
             kpep_free(buf);
             goto err;
         }
         kpep_free(buf);
     }
 
-    rv = ring_dequeue(ctx->ring_ctx, out, gather_sz);
+    rv = ring_dequeue(ctx->ring_ctx, out, gather_bytes);
     ossl_crypto_mutex_unlock(ctx->mutex);
     if (rv) {
         LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' gather failed", ctx->source_info->name);
@@ -300,7 +299,7 @@ KPEP_RESULT async_ringbuffer_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *
     }
 
     // Success
-    *out_len = gather_sz;
+    *out_len = gather_bytes;
     return KPEP_R_SUCCESS;
 
 err:
@@ -319,7 +318,7 @@ err:
 }
 
 EXPORT_VISIBILITY_HIDDEN
-uint32_t  async_ringbuffer_get_state(ASYNC_CTX *ctx)
+uint32_t async_ringbuffer_get_state(ASYNC_CTX *ctx)
 {
     if (!ctx)
         return KPEP_RAND_STATE_UNINITIALISED; // Value 0
