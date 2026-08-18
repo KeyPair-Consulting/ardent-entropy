@@ -84,7 +84,16 @@ typedef struct {
     COMMON_STUB_INFO
 } SEED_STUB_INFO;
 
-uint32_t seed_get_gather_sz(const SEED_STUB_INFO *info, size_t nbits);
+static inline
+uint32_t seed_get_gather_sz(const SEED_STUB_INFO *info, size_t nbits)
+{
+    // Calculate gather size and floor to block size
+    size_t gather_sz;
+    gather_sz = (info->full_entropy)?nbits:(size_t) (nbits / info->entropy_per_bit);
+    if (gather_sz < info->block_size)
+        gather_sz = info->block_size;
+    return (uint32_t) gather_sz;
+}
 
 #ifdef __cplusplus
 }

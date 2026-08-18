@@ -57,6 +57,10 @@ KPEP_RESULT kpep_seeding_init(void* prov_ctx);
 // Finalize the "singleton"; called once during provider close; source in kpep_seeding.c
 void kpep_seeding_fini(void);
 
+KPEP_RESULT kpep_trace_init(void* prov_ctx);
+
+void kpep_trace_fini(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -13,7 +13,7 @@
  * 
  * Author: Randall Steck
  * ***********************************************************************************************
- * Simple producer/consumer stress test for seed_ringbuffer.c
+ * Simple producer/consumer stress test for ringbuffer.c
  *
  * Usage:
  *
@@ -35,7 +35,7 @@
  #include <openssl/rand.h>
  
  #include "kpep/kpep.h"
- #include "../source/seeding/seed_ringbuffer.h"
+ #include "../source/seeding/ringbuffer.h"
  
  #define BLOCK_SIZE          32
  #define PREFILL_BLOCKS      8

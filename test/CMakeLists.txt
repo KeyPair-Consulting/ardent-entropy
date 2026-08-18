@@ -21,7 +21,7 @@
 if (tests)
     # Set project source files
     SET  (APP_test_ringbuffer_sources test_ringbuffer.c)
-    LIST (APPEND APP_test_ringbuffer_sources ../source/seeding/seed_ringbuffer.c)
+    LIST (APPEND APP_test_ringbuffer_sources ../source/seeding/ringbuffer.c)
     LIST (APPEND APP_test_ringbuffer_sources ../source/kpep_internal.c)
 
     ADD_EXECUTABLE         (APP_test_ringbuffer ${APP_test_ringbuffer_sources})

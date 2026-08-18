@@ -14,8 +14,8 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPEP_ASYNC_RINGBUFFER_H
-#define KPEP_ASYNC_RINGBUFFER_H
+#ifndef KPEP_ASYNC_SEED_H
+#define KPEP_ASYNC_SEED_H
 #pragma once
 
 #include "kpep/kpep.h"
@@ -24,24 +24,36 @@
 extern "C" {
 #endif
 
+typedef enum {
+    WORKER_UNINITIALIZED = 0,
+    WORKER_INITIALIZED,
+    WORKER_RUNNING,
+    WORKER_STOPPING,
+    WORKER_STOPPED,
+    WORKER_ERROR
+} ASYNC_WORKER_STATE;
+
 typedef struct async_ctx_st ASYNC_CTX;
 
 EXPORT_VISIBILITY_HIDDEN
-ASYNC_CTX* async_ringbuffer_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32_t ring_sz, uint8_t idx, KPEP_RESULT *errnum);
+ASYNC_CTX* async_seed_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32_t ring_sz, uint8_t idx, KPEP_RESULT *errnum);
 
 EXPORT_VISIBILITY_HIDDEN
-void async_ringbuffer_free(ASYNC_CTX *async_ctx);
+void async_seed_free(ASYNC_CTX *async_ctx);
 
 EXPORT_VISIBILITY_HIDDEN
-KPEP_RESULT async_ringbuffer_gather(ASYNC_CTX *async_ctx, unsigned char *out, size_t *out_len, size_t nbits);
+KPEP_RESULT async_seed_gather(ASYNC_CTX *async_ctx, unsigned char *out, size_t *out_len, size_t nbits);
 
 EXPORT_VISIBILITY_HIDDEN
-uint32_t  async_ringbuffer_get_state(ASYNC_CTX* async_ctx);
+uint32_t  async_seed_get_state(ASYNC_CTX* async_ctx);
 
 EXPORT_VISIBILITY_HIDDEN
-const char* async_ringbuffer_get_name(ASYNC_CTX* async_ctx);
+const char* async_seed_get_name(ASYNC_CTX* async_ctx);
+
+EXPORT_VISIBILITY_HIDDEN
+KPEP_RESULT async_seed_start_thread(ASYNC_CTX *async_ctx);
 
 #ifdef __cplusplus
 }
 #endif
-#endif /* KPEP_ASYNC_RINGBUFFER_H */
+#endif /* KPEP_ASYNC_SEED_H */

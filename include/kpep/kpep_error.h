@@ -86,9 +86,9 @@ extern int ERR_LIB_KPEP;           // Handle for accessing OpenSSL error functio
 #define KPEP_R_RING_EMPTY                139
 #define KPEP_R_RESERVED_140              140
 
-#define KPEP_R_THREAD_FAIL_START         141
-#define KPEP_R_RESERVED_142              142
-#define KPEP_R_RESERVED_143              143
+#define KPEP_R_THREAD_NOT_READY          141
+#define KPEP_R_THREAD_FAIL_START         142
+#define KPEP_R_MUTEX_FAIL_START          143
 #define KPEP_R_RESERVED_144              144
 #define KPEP_R_RESERVED_145              145
 

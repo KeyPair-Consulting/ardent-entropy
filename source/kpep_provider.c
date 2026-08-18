@@ -509,6 +509,11 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
         ERR_raise(ERR_LIB_KPEP, rv);
         goto err;
     }
+    rv = kpep_trace_init(newctx);
+    if (rv) {
+        ERR_raise(ERR_LIB_KPEP, rv);
+        goto err;
+    }
 
     // Signal success
     *out = kpep_dispatch_table;

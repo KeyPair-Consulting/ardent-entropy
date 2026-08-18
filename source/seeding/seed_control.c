@@ -24,7 +24,7 @@
 #include "kpep/kpep_seed_stub.h"
 #include "seed_control.h"
 #include "seed_sources.h"
-#include "async_ringbuffer.h"
+#include "async_seed.h"
 
 /* ************************************************************************************************
  * ***********************************************************************************************
@@ -67,7 +67,7 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx);
 EXPORT_VISIBILITY_HIDDEN
 void seed_control_free(SEED_CONTROL_CTX *ctx)
 {
-    SEED_STUB *seed = NULL;
+    uint32_t i;
 
     #if defined (KPEP_TRACE_SEED)
     TRACE_START;
@@ -76,17 +76,18 @@ void seed_control_free(SEED_CONTROL_CTX *ctx)
     if (!ctx)
         return;
 
-    seed = ctx->valid;
-    while (seed->seed_ctx) {
-        async_ringbuffer_free(seed->seed_ctx);
-        seed->seed_ctx = NULL;
-        seed++;
+    // Free contexts
+    for (i = 0; i < ctx->v_count; ++i) {
+        if (ctx->valid[i].seed_ctx) {
+            async_seed_free(ctx->valid[i].seed_ctx);
+            ctx->valid[i].seed_ctx = NULL;
+        }
     }
-    seed = ctx->addl;
-    while (seed->seed_ctx) {
-        async_ringbuffer_free(seed->seed_ctx);
-        seed->seed_ctx = NULL;
-        seed++;
+    for (i = 0; i < ctx->a_count; ++i) {
+        if (ctx->addl[i].seed_ctx) {
+            async_seed_free(ctx->addl[i].seed_ctx);
+            ctx->addl[i].seed_ctx = NULL;
+        }
     }
     kpep_cleanse(ctx, sizeof(SEED_CONTROL_CTX));
 }
@@ -96,6 +97,7 @@ SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, KPEP_RESULT *errnum)
 {
     KPEP_RESULT rv = KPEP_R_SUCCESS;
     SEED_CONTROL_CTX *ctx = NULL;
+    uint32_t i;
 
     #if defined (KPEP_TRACE_SEED)
     TRACE_START;
@@ -124,13 +126,34 @@ SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, KPEP_RESULT *errnum)
 
     // If restrictive mode, check for a hardware source
     if (ctx->restricted_counting) {
-        uint32_t i, found;
+        uint32_t found;
         for (found=0, i=0; i < ctx->v_count; ++i)
             found |= ctx->valid[i].hardware_source;
         if (!found) {
             rv = KPEP_R_CONFIG_PARAMETER_MISSING;
             LOG_SIMPLE_ERROR(MODULE_NAME, "No hardware source specified with 'restrictive entropy counting' enabled; one is required");
             goto err;
+        }
+    }
+
+    // Loop through all validated sources and start their threads
+    for (i = 0; i < ctx->v_count; ++i) {
+        if (ctx->valid[i].seed_ctx) {
+            KPEP_RESULT rv = async_seed_start_thread(ctx->valid[i].seed_ctx);
+            if (rv) {
+                LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to start thread for validated source");
+                goto err;
+            }
+        }
+    }
+    // Loop through all additional sources and start their threads
+    for (i = 0; i < ctx->a_count; ++i) {
+        if (ctx->addl[i].seed_ctx) {
+            KPEP_RESULT rv = async_seed_start_thread(ctx->addl[i].seed_ctx);
+            if (rv) {
+                LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to start thread for additional source");
+                goto err;
+            }
         }
     }
 
@@ -160,7 +183,7 @@ uint32_t seed_control_get_state(SEED_CONTROL_CTX* ctx)
     seed = ctx->valid;
     while (seed->seed_ctx) {    
         if ((!ctx->restricted_counting || seed->hardware_source) && 
-            async_ringbuffer_get_state(seed->seed_ctx) == KPEP_RAND_STATE_READY) {
+            async_seed_get_state(seed->seed_ctx) == KPEP_RAND_STATE_READY) {
             return KPEP_RAND_STATE_READY;
         }
         seed++;
@@ -180,7 +203,7 @@ void seed_control_get_description(SEED_CONTROL_CTX* ctx, char *buffer)
         if (ctx->valid[0].seed_ctx) {
             seed = ctx->valid;
             while (seed->seed_ctx) {
-                sprintf(buffer+strlen(buffer), "%s%s\n", async_ringbuffer_get_name(seed->seed_ctx),
+                sprintf(buffer+strlen(buffer), "%s%s\n", async_seed_get_name(seed->seed_ctx),
                 (ctx->restricted_counting && seed->hardware_source)?" [H]":"");
                 seed++;
             }
@@ -194,7 +217,7 @@ void seed_control_get_description(SEED_CONTROL_CTX* ctx, char *buffer)
         if (ctx->addl[0].seed_ctx) {
             seed = ctx->addl;
             while (seed->seed_ctx) {
-                sprintf(buffer+strlen(buffer), "%s\n", async_ringbuffer_get_name(seed->seed_ctx));
+                sprintf(buffer+strlen(buffer), "%s\n", async_seed_get_name(seed->seed_ctx));
                 seed++;
             }
         }
@@ -242,7 +265,7 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
     // Get total size
     seed = (validated)?ctx->valid:ctx->addl;
     while (seed->seed_ctx) {
-        rv = async_ringbuffer_gather(seed->seed_ctx, NULL, &buf_len[idx], nbits);
+        rv = async_seed_gather(seed->seed_ctx, NULL, &buf_len[idx], nbits);
         if (!rv)
             buf_total += buf_len[idx];
         idx++;
@@ -266,7 +289,7 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
     idx = 0;
     seed = (validated)?ctx->valid:ctx->addl;
     while (seed->seed_ctx) {
-        rv = async_ringbuffer_gather(seed->seed_ctx, buffer+accum, &buf_len[idx], nbits);
+        rv = async_seed_gather(seed->seed_ctx, buffer+accum, &buf_len[idx], nbits);
         if (!rv) {
             accum += buf_len[idx];
             if (ctx->restricted_counting && validated && seed->hardware_source)
@@ -337,7 +360,7 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
     if (!prov_ctx) {
         seed_cnt = &ctx->v_count;
         seed = &ctx->valid[*seed_cnt];
-        handle = async_ringbuffer_new(NULL, &stub_jitter, 1024, 0, &rv);
+        handle = async_seed_new(NULL, &stub_jitter, 1024, 0, &rv);
         if (!handle || rv) {
             if (handle && stub_jitter.free_fn) {
                 stub_jitter.free_fn(handle);
@@ -421,7 +444,7 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
             ring_sz = 1024;
         }
 
-        handle = async_ringbuffer_new(prov_ctx,
+        handle = async_seed_new(prov_ctx,
                                       def->stub_fn,
                                       (uint32_t) ring_sz,
                                       (uint8_t) def->idx,

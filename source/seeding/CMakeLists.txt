@@ -19,11 +19,11 @@
 # ##################################################################################################
 
 # Set project source files
-SET  (KPEP_seeding_sources seed_control.c seed_utility.c)
-LIST (APPEND KPEP_seeding_sources seed_ringbuffer.c async_ringbuffer.c)
+SET  (KPEP_seeding_sources seed_control.c async_seed.c ringbuffer.c)
 LIST (APPEND KPEP_seeding_sources seed_stub_jitter.c)
 LIST (APPEND KPEP_seeding_sources seed_stub_rdseed.c seed_stub_rdrand.c rdcpu_toolbox.c)
-LIST (APPEND KPEP_seeding_sources seed_stub_osrand.c seed_stub_extern.c)
+LIST (APPEND KPEP_seeding_sources seed_stub_osrand.c)
+LIST (APPEND KPEP_seeding_sources seed_stub_extern.c)
 
 # ##################################################################################################
 # STATIC Compilation for linking
