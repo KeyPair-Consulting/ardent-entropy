@@ -23,7 +23,7 @@
 #include "seed_ringbuffer.h"
 
 #include "openssl/params.h"
-#include "internal/thread_once.h"
+#include "internal/thread_arch.h"
 
 #include <string.h>
 
@@ -35,6 +35,15 @@
 
 #define MODULE_NAME "SEED-ASYNC"
 
+typedef enum {
+    WORKER_UNINITIALIZED = 0,
+    WORKER_INITIALIZED,
+    WORKER_RUNNING,
+    WORKER_STOPPING,
+    WORKER_STOPPED,
+    WORKER_ERROR
+} WORKER_STATE;
+
 typedef struct async_ctx_st {
     char name[64];
 
@@ -44,7 +53,11 @@ typedef struct async_ctx_st {
 
     RING_CTX             *ring_ctx;
 
-    CRYPTO_RWLOCK        *lock;
+    WORKER_STATE          state;
+    CRYPTO_THREAD        *thread;
+    CRYPTO_MUTEX         *mutex;
+    CRYPTO_CONDVAR       *cond;
+
 } ASYNC_CTX;
 
 static const char *base_name = "ASYNC";
@@ -78,8 +91,10 @@ void async_ringbuffer_free(ASYNC_CTX *ctx)
         ring_free(ctx->ring_ctx);                 // Free the ring
     if (ctx->source_ctx && ctx->source_fn && ctx->source_fn->free_fn)  
         ctx->source_fn->free_fn(ctx->source_ctx); // Free the source
-    if (ctx->lock)
-        CRYPTO_THREAD_lock_free(ctx->lock);       // Free the lock
+    if (ctx->mutex)
+        ossl_crypto_mutex_free(&ctx->mutex);              // Free the mutex
+    if (ctx->cond)
+        ossl_crypto_condvar_free(&ctx->cond);             // Free the condition variable
     kpep_free(ctx);
 
     kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async' shutdown successful");
@@ -125,11 +140,17 @@ void* async_ringbuffer_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32
     }
 
     // Initialize locks
-    ctx->lock = CRYPTO_THREAD_lock_new();
-    if (!ctx->lock) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (create lock)");
+    ctx->mutex = ossl_crypto_mutex_new();
+    if (!ctx->mutex) {
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (create mutex)");
         goto err;
     }
+    ctx->cond = ossl_crypto_condvar_new();
+    if (!ctx->cond) {
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (create condition variable)");
+        goto err;
+    }
+    ossl_crypto_mutex_lock(ctx->mutex);
 
     // Create the new seed source
     ctx->source_fn = stub_fn;
@@ -170,10 +191,14 @@ void* async_ringbuffer_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32
     else
         kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async (%s)' startup successful (%.6f ent-per-bit)", ctx->name, ctx->source_info->entropy_per_bit);
 
+    ossl_crypto_mutex_unlock(ctx->mutex);
     return ctx;
 
 err:
     async_ringbuffer_free(ctx);
+    ossl_crypto_mutex_unlock(ctx->mutex);
+    ossl_crypto_condvar_free(&ctx->cond);
+    ossl_crypto_mutex_free(&ctx->mutex);
     return NULL;
 }
 
@@ -242,10 +267,7 @@ KPEP_RESULT async_ringbuffer_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *
     }
 
     // Get the entropy from the source
-    if (ctx->lock && !CRYPTO_THREAD_write_lock(ctx->lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to obtain lock (async_generate)");
-        goto err;
-    }
+    ossl_crypto_mutex_lock(ctx->mutex);
 
     { // This will go in the async thread
         size_t buflen = gather_sz;
@@ -271,9 +293,7 @@ KPEP_RESULT async_ringbuffer_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *
     }
 
     rv = ring_dequeue(ctx->ring_ctx, out, gather_sz);
-    if (ctx->lock && !CRYPTO_THREAD_unlock(ctx->lock)) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to release lock (async_generate)");
-    }
+    ossl_crypto_mutex_unlock(ctx->mutex);
     if (rv) {
         LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' gather failed", ctx->source_info->name);
         goto err;
