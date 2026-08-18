@@ -40,7 +40,7 @@ static KPEP_DRBG_CTX    *drbg_ctx = NULL;
 static const char       *perso_string = NULL;
 
 // Flag to denote DRBG instantiation (delayed until first use, in one of two places)
-static int               drbg_instantiated = 0;
+static uint32_t          drbg_instantiated = 0;
 
 //  uses one global context, but OpenSSL requires a context handle.
 // Create a dummy handle to pass back to OpenSSL; ignore when passed to us
@@ -58,7 +58,7 @@ static CRYPTO_MUTEX     *lock = NULL;
         ossl_set_error_state(OSSL_SELF_TEST_TYPE_CRNG); \
         ERR_raise(ERR_LIB_PROV, PROV_R_ENTROPY_SOURCE_FAILED_CONTINUOUS_TESTS); \
     } \
-    else { ERR_raise(ERR_LIB_, rv); }
+    else { ERR_raise(ERR_LIB_KPEP, rv); }
 
 /* ***********************************************************************************************
  * ***********************************************************************************************

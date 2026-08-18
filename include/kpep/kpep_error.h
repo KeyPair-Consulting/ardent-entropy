@@ -32,7 +32,7 @@ extern "C" {
 
 typedef uint32_t KPEP_RESULT;      // A global return type
 
-extern int ERR_LIB_;           // Handle for accessing OpenSSL error functions
+extern int ERR_LIB_KPEP;           // Handle for accessing OpenSSL error functions
 
 #define KPEP_R_SUCCESS                     0
 #define KPEP_R_START                     101   /* MUST BE SAME AS FIRST INDEX */

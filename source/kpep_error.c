@@ -91,7 +91,7 @@ static ERR_STRING_DATA reasons[] = {
 
 /* Library ID assigned by OpenSSL at runtime for error handling/lookup */
 EXPORT_VISIBILITY_HIDDEN
-int ERR_LIB_ = 0;
+int ERR_LIB_KPEP = 0;
 
 EXPORT_VISIBILITY_HIDDEN
 int kpep_set_openssl_reason_strings(void)
@@ -99,19 +99,19 @@ int kpep_set_openssl_reason_strings(void)
 	int idx;
 
 	// Get our library ID
-	ERR_LIB_ = ERR_get_next_error_library();
-	if (!ERR_LIB_) {
+	ERR_LIB_KPEP = ERR_get_next_error_library();
+	if (!ERR_LIB_KPEP) {
 		printf("Failed to secure a library ID for error handling\n");
 		return 0;
 	}
 
 	// Fill in our packed identifier based on the assigned Library ID
 	for (idx=0; idx<KPEP_R_COUNT; ++idx) {
-		reasons[idx].error = ERR_PACK(ERR_LIB_, 0, KPEP_R_START+idx);
+		reasons[idx].error = ERR_PACK(ERR_LIB_KPEP, 0, KPEP_R_START+idx);
 	}
 
 	// Load the reasopn strings into libcrypto
-	if (!ERR_load_strings(ERR_LIB_, reasons)) {
+	if (!ERR_load_strings(ERR_LIB_KPEP, reasons)) {
 		printf("Failed to load the error reason strings into OpenSSL\n");
 		return 0;
 	}

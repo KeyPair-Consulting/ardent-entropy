@@ -23,7 +23,7 @@ SET  (KPEP_sources kpep_provider.c kpep_self_test.c)
 
 # Core functionality
 LIST (APPEND KPEP_sources kpep_internal.c kpep_integrity.c kpep_error.c)
-LIST (APPEND KPEP_sources kpep_seeding.c kpep_cpuinfo.c)
+LIST (APPEND KPEP_sources kpep_seeding.c kpep_cpuinfo.c kpep_bio.c)
 
 # Subsystems added by 'objects' instead of static libraries
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_crypto>)
