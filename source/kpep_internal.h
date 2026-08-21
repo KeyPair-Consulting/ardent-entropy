@@ -59,7 +59,7 @@ void kpep_seeding_fini(void);
 
 KPEP_RESULT kpep_trace_init(void* prov_ctx);
 
-void kpep_trace_fini(void);
+void kpep_trace_fini(void* prov_ctx);
 
 #ifdef __cplusplus
 }

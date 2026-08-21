@@ -395,15 +395,18 @@ static CRYPTO_THREAD_RETVAL async_worker(void *arg)
         return 0;
     }
 
+    // Hold the lock for startup
     ossl_crypto_mutex_lock(ctx->mutex);
 
+    // Get starting state and update
     if (ctx->state != WORKER_INITIALIZED) {
-        printf("Thread started with invalid state\n");
+        printf("Thread started with invalid state (got %d)\n", ctx->state);
+        ossl_crypto_mutex_unlock(ctx->mutex);
         return 0;
     }
-
     ctx->state = WORKER_RUNNING;    
 
+    // We start with the mutex LOCKED
     for (;;) {
         ossl_crypto_condvar_wait(ctx->cond, ctx->mutex); /* atomically releases mutex */
         local_state = ctx->state;
@@ -418,10 +421,16 @@ static CRYPTO_THREAD_RETVAL async_worker(void *arg)
     }
     
     ossl_crypto_mutex_lock(ctx->mutex);
-    ctx->state = WORKER_STOPPED;
+    if (ctx->state == WORKER_STOPPING)
+        ctx->state = WORKER_STOPPED;
     ossl_crypto_mutex_unlock(ctx->mutex);
 
-    printf("Thread (%p) stopped\n", (void*)ctx->thread);
+    printf("Thread (%p) stopped (%d: %s)\n", 
+            (void*)ctx->thread, 
+            (ctx->state), 
+            (ctx->state == WORKER_ERROR) ?"error" :
+            (ctx->state == WORKER_STOPPED) ? "clean" : 
+            "unknown");
     return 0;
 }
 
@@ -449,7 +458,7 @@ KPEP_RESULT async_seed_start_thread(ASYNC_CTX *ctx)
         goto err;
     }
 
-    // Start the thread.  IMPORTANT: The thread needs the lock to operate, so DO NOT wait
+    // Start the thread.  IMPORTANT: The thread needs the lock to startup, so DO NOT wait
     // on the thread's behavior or some change in the thread state to release the lock.  
     // Release it ASAP after starting the thread!
     ctx->state = WORKER_INITIALIZED;  // "Initialized" state tells the thread to go

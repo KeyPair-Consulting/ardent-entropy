@@ -83,13 +83,24 @@ size_t kpep_trimwhitespace(char *out, size_t len, const char *str);
 // Hash size (32B == 256b) for global usage (could be SHA2 or SHA3)
 #define KPEP_GLOBAL_DIGEST_SIZE 32
 
+// Fallback definition for PATH_MAX if not defined by the system headers
+#ifndef PATH_MAX
+# if defined(_WIN32) || defined(_WIN64)
+#  define PATH_MAX 260
+# else
+#  define PATH_MAX 4096
+# endif
+#endif
+
 /* ************************************************************************************************
  * LOGGER
  * ***********************************************************************************************/
 
-#if defined (KPEP_TRACE_SEED) || defined (KPEP_TRACE_SINK) || defined (KPEP_TRACE_THREAD)
-#define TRACE_ENABLED
-#endif
+
+extern int kpep_trace_seed_enabled;
+extern int kpep_trace_sink_enabled;
+extern int kpep_trace_thread_enabled;
+extern int kpep_trace_strict_mode;
 
 typedef enum { 
     LOG_LVL_FATAL = 0,	/* 0 == (FATAL) system is unusable and cannot be used */
@@ -136,7 +147,7 @@ void kpep_log(LogLevel level, const char* module, const char *fmt, ...);
 void kpep_log_data(LogLevel level, const char* module, const char* label, 
                     unsigned char *bytes, size_t bytes_len);
 
-#ifdef TRACE_ENABLED
+#ifndef KPEP_TRACE_DISABLED
 // Write a trace entry to the active trace target (stdout or trace file)
 void kpep_trace(const char* module, const char* msg);
 void kpep_trace_sub(const char* module, const char* submodule, const char* msg);
