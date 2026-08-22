@@ -300,7 +300,9 @@ KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_le
     // Get the entropy from the source
     ossl_crypto_mutex_lock(ctx->mutex);
 
-    { // This will go in the async thread
+    // In synchronous mode?
+    if (!kpep_seed_async_mode) { 
+        // DEV NOTE: This will go in the async thread as well, but currently executed synchronously for simplicity
         size_t buflen = gather_bytes;
         uint8_t *buf = NULL;
         uint32_t start_us, elapsed_us;

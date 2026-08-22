@@ -26,6 +26,10 @@
 #include "openssl/prov/providercommon.h"
 #include "internal/thread_arch.h"
 
+#if defined(OPENSSL_THREADS_NONE)
+#error "KPEP requires OpenSSL thread support; OPENSSL_THREADS_NONE is unsupported"
+#endif
+
 #include "kpep/kpep_names.h"
 #include "kpep/kpep_seed_stub.h"
 #include "seeding/seed_control.h"

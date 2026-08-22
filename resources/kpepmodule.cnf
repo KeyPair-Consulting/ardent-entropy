@@ -89,6 +89,13 @@ extseed = extseed_sect
 # entropy usage (notably, activated at startup and providing material for each gather).
 #restricted-entropy-counting = 1
 
+# KPEP can use either a synchronous or asychronous mode.  In asynchronous mode, a seed
+# request is services immedately from a ring buffer, and background worker threads, 
+# one per seed source, refill the ring buffer.  
+# If this option is zero (0) or missing, KPEP will operate in synchronous mode with a 
+# single thread and will block while gathering entropy.
+async-mode = 1
+
 ############################################################################################
 # JITTER ENTROPY seed source
 # Built-in 'libjitterentropy' that complies with all technical/compilation requirements

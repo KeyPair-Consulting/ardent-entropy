@@ -41,6 +41,9 @@ extern const STUB_FUNCTIONS stub_rdrand;
 extern const STUB_FUNCTIONS stub_osrand;
 extern const STUB_FUNCTIONS stub_extern;
 
+// Runtime execution mode for seed gathering. 0 = synchronous, 1 = asynchronous worker mode.
+extern int kpep_seed_async_mode;
+
 // Package of information for each seed source
 typedef struct seed_source_def_st {
     const char *desc;

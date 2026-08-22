@@ -53,16 +53,16 @@ extern "C" {
 #define KPEP_PROV_PARAM_SEED_PERSO  "seed.perso"
 
 /*
- * Type: OSSL_PARAM_UTF8_STRING
- * Purpose: BOOL whether to defer DRBG instantiation until first-use.  Default: No/Off
- */
-#define KPEP_PROV_PARAM_LAZY_START  "seed.lazy-start"
-
-/*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: Whether to use the more restrictive entropy counting "Method 1"
  */
 #define KPEP_PROV_PARAM_RESTRICTIVE_COUNTING  "seed.restricted-entropy-counting"
+
+/*
+ * Type: OSSL_PARAM_UNSIGNED_INTEGER
+ * Purpose: Whether to run the seed pipeline in async mode. Default: 0 (sync mode)
+ */
+#define KPEP_PROV_PARAM_SEED_ASYNC_MODE       "seed.async-mode"
 
 /* **************************************************************************************** */
 /* **************************************************************************************** */

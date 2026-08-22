@@ -58,6 +58,8 @@ struct seed_control_ctx_st {
 
 static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx);
 
+int kpep_seed_async_mode = 0;
+
 /* ************************************************************************************************
  * ***********************************************************************************************
  * Definitions, declarations, and context structure
@@ -136,23 +138,24 @@ SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, KPEP_RESULT *errnum)
         }
     }
 
-    // Loop through all validated sources and start their threads
-    for (i = 0; i < ctx->v_count; ++i) {
-        if (ctx->valid[i].seed_ctx) {
-            KPEP_RESULT rv = async_seed_start_thread(ctx->valid[i].seed_ctx);
-            if (rv) {
-                LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to start thread for validated source");
-                goto err;
+    // Loop through all sources and start their threads
+    if (kpep_seed_async_mode) {
+        for (i = 0; i < ctx->v_count; ++i) {
+            if (ctx->valid[i].seed_ctx) {
+                KPEP_RESULT rv = async_seed_start_thread(ctx->valid[i].seed_ctx);
+                if (rv) {
+                    LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to start thread for validated source");
+                    goto err;
+                }
             }
         }
-    }
-    // Loop through all additional sources and start their threads
-    for (i = 0; i < ctx->a_count; ++i) {
-        if (ctx->addl[i].seed_ctx) {
-            KPEP_RESULT rv = async_seed_start_thread(ctx->addl[i].seed_ctx);
-            if (rv) {
-                LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to start thread for additional source");
-                goto err;
+        for (i = 0; i < ctx->a_count; ++i) {
+            if (ctx->addl[i].seed_ctx) {
+                KPEP_RESULT rv = async_seed_start_thread(ctx->addl[i].seed_ctx);
+                if (rv) {
+                    LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to start thread for additional source");
+                    goto err;
+                }
             }
         }
     }
@@ -352,25 +355,15 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
     const char *ring_value = NULL;
     const SEED_SOURCE_DEF *def = NULL;
 
+    if (!prov_ctx) {
+        return KPEP_R_NULL_ARG;
+    }
     if (!ctx) {
         return KPEP_R_NULL_ARG;
     }
 
-    // Non-provider startup keeps existing jitter-only behavior.
-    if (!prov_ctx) {
-        seed_cnt = &ctx->v_count;
-        seed = &ctx->valid[*seed_cnt];
-        handle = async_seed_new(NULL, &stub_jitter, 1024, 0, &rv);
-        if (!handle || rv) {
-            if (handle && stub_jitter.free_fn) {
-                stub_jitter.free_fn(handle);
-            }
-            return rv ? rv : KPEP_R_SEED_NOT_INSTANTIATED;
-        }
-        seed->seed_ctx = handle;
-        *seed_cnt += 1;
-        return KPEP_R_SUCCESS;
-    }
+    kpep_seed_async_mode = 
+        kpep_get_core_param_bool(prov_ctx, KPEP_PROV_PARAM_SEED_ASYNC_MODE, 0);
 
     ctx->restricted_counting =
         kpep_get_core_param_bool(prov_ctx, KPEP_PROV_PARAM_RESTRICTIVE_COUNTING, 0);
