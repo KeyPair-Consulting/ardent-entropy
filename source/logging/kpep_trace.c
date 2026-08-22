@@ -22,16 +22,16 @@
 #if defined(KPEP_TRACE_DISABLED)
 
 EXPORT_VISIBILITY_HIDDEN
-KPEP_RESULT kpep_trace_init(void* prov_ctx) { (void)prov_ctx; return KPEP_R_SUCCESS; }
+void kpep_trace_init(void) {}
 
 EXPORT_VISIBILITY_HIDDEN
-void        kpep_trace_fini(void) {}
+void kpep_trace_fini(void) {}
 
 #if 0
-void        kpep_trace(const char* module, const char* msg) { (void)module; (void)msg; }
-void        kpep_trace_sub(const char* module, const char* submodule, const char* msg) { (void)module; (void)submodule; (void)msg; }
-void        kpep_trace_fmt(const char* module, const char* fmt, ...) { (void)module; (void)fmt; }
-void        kpep_trace_sub_fmt(const char* module, const char* submodule, const char* fmt, ...) { (void)module; (void)submodule; (void)fmt; }
+void kpep_trace(const char* module, const char* msg) { (void)module; (void)msg; }
+void kpep_trace_sub(const char* module, const char* submodule, const char* msg) { (void)module; (void)submodule; (void)msg; }
+void kpep_trace_fmt(const char* module, const char* fmt, ...) { (void)module; (void)fmt; }
+void kpep_trace_sub_fmt(const char* module, const char* submodule, const char* fmt, ...) { (void)module; (void)submodule; (void)fmt; }
 #endif
 
 #else
@@ -52,6 +52,7 @@ void        kpep_trace_sub_fmt(const char* module, const char* submodule, const 
 #include "internal/e_os.h"
 #include "internal/thread_arch.h"
 
+#include "logging_utility.h"
 #include "kpep/kpep_names.h"
 
 /* ************************************************************************************************
@@ -67,67 +68,36 @@ int kpep_trace_strict_mode = 0;
 
 static CRYPTO_MUTEX *trace_mutex = NULL;
 
-static FILE *trace_stream = NULL;
 static int trace_enabled = 0;
-static int trace_file_mode = 0;
+static FILE *trace_stream = NULL;
 static uint64_t trace_start_us = 0;
 
 static uint64_t kpep_trace_monotonic_us(void)
 {
-#if defined(OPENSSL_SYS_WINDOWS) || defined(WINDOWS)
-	LARGE_INTEGER freq;
-	LARGE_INTEGER count;
-	uint64_t elapsed_us;
-
-	if (QueryPerformanceFrequency(&freq) && QueryPerformanceCounter(&count)) {
-		elapsed_us = (uint64_t)((count.QuadPart * 1000000ULL) / freq.QuadPart);
-		return elapsed_us;
-	}
-
-	{
-		FILETIME ft;
-		ULONGLONG value;
-		GetSystemTimeAsFileTime(&ft);
-		value = ((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
-		value -= 116444736000000000ULL;
-		return (uint64_t)(value / 10ULL);
-	}
-#else
-	struct timespec ts;
-
-	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0)
-		return ((uint64_t)ts.tv_sec * 1000000ULL) + ((uint64_t)ts.tv_nsec / 1000ULL);
-
-	{
-		struct timeval tv;
-		if (gettimeofday(&tv, NULL) == 0)
-			return ((uint64_t)tv.tv_sec * 1000000ULL) + ((uint64_t)tv.tv_usec);
-	}
-	return 0;
-#endif
+    return kpep_log_monotonic_us();
 }
 
 static void kpep_trace_report_error_once(KPEP_RESULT kpep_errnum, const char *fmt, ...)
 {
-	static KPEP_RESULT last_reported = 0;
-	va_list args;
-	char buf[512];
-	int n;
+    static KPEP_RESULT last_reported = 0;
+    va_list args;
+    char buf[512];
+    int n;
 
-	if (last_reported == kpep_errnum)
-		return;
-	last_reported = kpep_errnum;
+    if (last_reported == kpep_errnum)
+        return;
+    last_reported = kpep_errnum;
 
-	va_start(args, fmt);
-	n = vsnprintf(buf, sizeof(buf), fmt, args);
-	va_end(args);
-	if (n < 0)
-		return;
+    va_start(args, fmt);
+    n = vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    if (n < 0)
+        return;
 
-	if (n >= (int)sizeof(buf))
-		buf[sizeof(buf) - 1] = '\0';
+    if (n >= (int)sizeof(buf))
+        buf[sizeof(buf) - 1] = '\0';
 
-	kpep_log(LOG_LVL_ERR, "TRACE", "%s", buf);
+    kpep_log_report_error_once("TRACE ERROR", "%s", buf);
 }
 
 static void kpep_trace_lock(void)
@@ -146,30 +116,12 @@ static void kpep_trace_unlock(void)
 
 static int kpep_trace_validate_filename(const char *path)
 {
-	struct stat st;
-	const char *p;
-
-	if (!path || path[0] == '\0')
-		return 0;
-
-	for (p = path; *p != '\0'; ++p) {
-		if (*p == '\n' || *p == '\r' || *p == '\t')
-			return 0;
-	}
-
-	if (strcmp(path, ".") == 0 || strcmp(path, "..") == 0)
-		return 0;
-
-	if (stat(path, &st) == 0 && S_ISDIR(st.st_mode))
-		return 0;
-
-	return 1;
+    return kpep_log_validate_filename(path);
 }
 
 static int kpep_trace_is_enabled_flag(const char *name)
 {
-	const char *value = getenv(name);
-	return value != NULL && value[0] != '\0' && strcmp(value, "0") != 0 && strcmp(value, "false") != 0 && strcmp(value, "FALSE") != 0;
+    return kpep_log_is_enabled_flag(name);
 }
 
 static int kpep_trace_get_strict_mode(void)
@@ -223,82 +175,55 @@ static int kpep_trace_get_realtime_timespec(struct timespec *ts)
 
 static int kpep_trace_touch_file(const char *path, FILE **out_stream)
 {
-	FILE *fp;
-	char stamp[64] = {0};
-	time_t now;
-	struct tm t;
-	int rc;
-
-	if (!kpep_trace_validate_filename(path))
-		return 0;
-
-	fp = fopen(path, "a");
-	if (!fp)
-		return 0;
-
-	now = time(NULL);
-#if defined(OPENSSL_SYS_WINDOWS) || defined(WINDOWS)
-	if (localtime_s(&t, &now) != 0) {
-		fclose(fp);
-		return 0;
-	}
-#else
-	if (localtime_r(&now, &t) == NULL) {
-		fclose(fp);
-		return 0;
-	}
-#endif
-
-	if (strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &t) == 0) {
-		fclose(fp);
-		return 0;
-	}
-
-	rc = fprintf(fp, "\n=== KPEP trace start %s ===\n", stamp);
-	if (rc < 0 || fflush(fp) != 0) {
-		fclose(fp);
-		return 0;
-	}
-
-	*out_stream = fp;
-	return 1;
+    return kpep_log_touch_file(path, out_stream, "KPEP trace start");
 }
 
 EXPORT_VISIBILITY_HIDDEN
-KPEP_RESULT kpep_trace_init(void* prov_ctx) 
+void kpep_trace_fini(void)
+{
+    if (trace_enabled && trace_stream) {
+        fclose(trace_stream);
+        trace_stream = NULL;
+    }
+    trace_enabled = 0;
+}
+
+EXPORT_VISIBILITY_HIDDEN
+void kpep_trace_init(void) 
 {
 	const char *trace_env;
 	char filename[PATH_MAX] = {0};
 	FILE *opened_trace = NULL;
-	int any_enabled = 0;
 
-	(void)prov_ctx;
-
+	// Flush last state; initialize new
+	kpep_trace_fini();
 	trace_stream = NULL;
 	trace_enabled = 0;
-	trace_file_mode = 0;
 	trace_start_us = kpep_trace_monotonic_us();
 
+	// Read Environment Variables for trace flags
 	kpep_trace_seed_enabled = kpep_trace_is_enabled_flag("KPEP_TRACE_SEED");
 	kpep_trace_sink_enabled = kpep_trace_is_enabled_flag("KPEP_TRACE_SINK");
 	kpep_trace_thread_enabled = kpep_trace_is_enabled_flag("KPEP_TRACE_THREAD");
 	kpep_trace_strict_mode = kpep_trace_get_strict_mode();
-	any_enabled = kpep_trace_seed_enabled || kpep_trace_sink_enabled || kpep_trace_thread_enabled;
-	if (!any_enabled) {
-		return KPEP_R_SUCCESS;
+	if (!kpep_trace_seed_enabled && !kpep_trace_sink_enabled && !kpep_trace_thread_enabled) {
+		return;
 	}
 
+	// Process trace file name and validate it as best we can
 	trace_env = getenv("KPEP_TRACE_FILE");
 	if (!trace_env || trace_env[0] == '\0') {
 		kpep_trace_report_error_once(KPEP_R_FILE_UNEXPECTED,
-			"TRACE ERROR: KPEP_TRACE_FILE is required when tracing is enabled");
-		return KPEP_R_SUCCESS;
+			"KPEP_TRACE_FILE is required to enable tracing; tracing disabled");
+		kpep_trace_fini();
+		return;
 	}
 
 	if (strlen(trace_env) >= sizeof(filename)) {
 		kpep_trace_report_error_once(KPEP_R_FILE_UNEXPECTED,
-			"TRACE ERROR: KPEP_TRACE_FILE is too long; tracing disabled");
-		return KPEP_R_SUCCESS;
+			"KPEP_TRACE_FILE is too long; tracing disabled");
+		kpep_trace_fini();
+		return;
 	}
 
 	strncpy(filename, trace_env, sizeof(filename) - 1);
@@ -306,26 +231,19 @@ KPEP_RESULT kpep_trace_init(void* prov_ctx)
 
 	if (!kpep_trace_touch_file(filename, &opened_trace)) {
 		kpep_trace_report_error_once(KPEP_R_FILE_UNEXPECTED,
-			"TRACE ERROR: KPEP_TRACE_FILE '%s' is invalid or not writable; tracing disabled",
+			"KPEP_TRACE_FILE '%s' is invalid or not writable; tracing disabled",
 			filename);
-		return KPEP_R_SUCCESS;
+		if (opened_trace) {
+			fclose(opened_trace);
+			opened_trace = NULL;
+		}
+		kpep_trace_fini();
+		return;
 	}
 
+	// If we got here, we're open and ready for tracing
 	trace_stream = opened_trace;
 	trace_enabled = 1;
-	trace_file_mode = 1;
-	return KPEP_R_SUCCESS;
-}
-
-EXPORT_VISIBILITY_HIDDEN
-void kpep_trace_fini(void)
-{
-	if (trace_file_mode && trace_stream) {
-		fclose(trace_stream);
-		trace_stream = NULL;
-	}
-	trace_enabled = 0;
-	trace_file_mode = 0;
 }
 
 static void kpep_trace_write_v(const char *module,
@@ -335,7 +253,6 @@ static void kpep_trace_write_v(const char *module,
 {
 	va_list copy;
 	char *msg = NULL;
-	FILE *out;
 	char ts[32];
 	uint64_t now_us;
 
@@ -356,30 +273,25 @@ static void kpep_trace_write_v(const char *module,
 		return;
 	}
 
+	kpep_trace_lock();
+
 	now_us = kpep_trace_monotonic_us();
 	if (now_us < trace_start_us)
 		now_us = trace_start_us;
 	snprintf(ts, sizeof(ts), "[%13llu]", (unsigned long long)(now_us - trace_start_us));
 
-	kpep_trace_lock();
-	out = trace_stream;
+	if (submodule && submodule[0] != '\0')
+		fprintf(trace_stream, "%s %-12s : %s : %s\n", ts, module ? module : "", submodule, msg);
+	else
+		fprintf(trace_stream, "%s %-12s : %s\n", ts, module ? module : "", msg);
 	if (kpep_trace_strict_mode) {
-		if (submodule && submodule[0] != '\0')
-			fprintf(out, "%s %-12s : %s : %s\n", ts, module ? module : "", submodule, msg);
-		else
-			fprintf(out, "%s %-12s : %s\n", ts, module ? module : "", msg);
-		fflush(out);
-		if (ferror(out)) {
-			clearerr(out);
+		fflush(trace_stream);
+		if (ferror(trace_stream)) {
+			clearerr(trace_stream);
 			trace_enabled = 0;
 			kpep_trace_report_error_once(KPEP_R_FILE_UNEXPECTED,
 				"TRACE ERROR: failed to write trace output");
 		}
-	} else {
-		if (submodule && submodule[0] != '\0')
-			fprintf(out, "%s %-12s : %s : %s\n", ts, module ? module : "", submodule, msg);
-		else
-			fprintf(out, "%s %-12s : %s\n", ts, module ? module : "", msg);
 	}
 	kpep_trace_unlock();
 	free(msg);

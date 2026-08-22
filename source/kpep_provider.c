@@ -227,9 +227,9 @@ static int kpep_random_bytes(void *vprov, int which,
     const OSSL_DISPATCH *disp = kpep_seeding_functions;
     static OSSL_FUNC_rand_generate_fn *generate_fn = NULL;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     // Ensure provider is not in error state
     if (!ossl_prov_is_running())
@@ -395,8 +395,10 @@ static void kpep_teardown(void *provctx)
 {
     KPEP_PROVIDER_CTX *ctx = (KPEP_PROVIDER_CTX*)provctx;
 
-    kpep_seeding_fini();
-	kpep_logging_fini();
+    kpep_profile_fini(); // Turn of profiling for seeds
+    kpep_seeding_fini(); // Teardown all the seeds
+    kpep_trace_fini();   // Must be 2nd last so seed exits can be traced
+	kpep_logging_fini(); // Must be last so all messages are flushed
     if (ctx->libctx) {
         OSSL_LIB_CTX_free(ctx->libctx);
         ctx->libctx = NULL;
@@ -430,9 +432,12 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
     OSSL_LIB_CTX *libctx = NULL;
     int result = 0;
 
-    #if defined (KPEP_TRACE_SEED)
-    kpep_trace(MODULE_NAME, "Provider Init Start");
-    #endif
+    // Trace should be active for provider startup, and it must reflect the current env state.
+    kpep_trace_init();
+
+    if (kpep_trace_seed_enabled) {
+        kpep_trace(MODULE_NAME, "Provider Init Start");
+    }
 
     // Load our error strings into OpenSSL
     rv = kpep_set_openssl_reason_strings();  // Init with OpenSSL
@@ -509,11 +514,6 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
         ERR_raise(ERR_LIB_KPEP, rv);
         goto err;
     }
-    rv = kpep_trace_init(newctx);
-    if (rv) {
-        ERR_raise(ERR_LIB_KPEP, rv);
-        goto err;
-    }
 
     // Signal success
     *out = kpep_dispatch_table;
@@ -529,9 +529,9 @@ err:
     kpep_log(LOG_LVL_INFO, MODULE_NAME, "Provider startup complete (%s)", result?"PASS":"FAIL");
 
 ret:
-    #if defined (KPEP_TRACE_SEED)
-    kpep_trace(MODULE_NAME, "Provider Init Complete");
-    #endif
+    if (kpep_trace_seed_enabled) {
+        kpep_trace(MODULE_NAME, "Provider Init Complete");
+    }
 
     return result;
 }

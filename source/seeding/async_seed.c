@@ -74,9 +74,9 @@ void async_seed_free(ASYNC_CTX *ctx)
 {
     CRYPTO_THREAD_RETVAL retval;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     if (!ctx)
         return;
@@ -132,9 +132,9 @@ ASYNC_CTX *async_seed_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32_
     KPEP_RESULT rv;
     int len;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
 #ifdef FIPS_OPTEST
     {
@@ -242,9 +242,9 @@ KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_le
     KPEP_RESULT rv = KPEP_R_SUCCESS;
     uint32_t gather_bits, gather_bytes;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
 #ifdef FIPS_OPTEST
     {
@@ -275,9 +275,9 @@ KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_le
     gather_bits = seed_get_gather_sz(ctx->source_info, nbits);
     gather_bytes = (gather_bits + 7) >> 3;
 
-    #if defined (KPEP_TRACE_SEED)
-    kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bytes<<3);
-    #endif
+    if (kpep_trace_seed_enabled) {
+        kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bytes<<3);
+    }
 
     // Return gather size?
     if (!out) {
@@ -303,13 +303,19 @@ KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_le
     { // This will go in the async thread
         size_t buflen = gather_bytes;
         uint8_t *buf = NULL;
+        uint32_t start_us, elapsed_us;
+
         buf = kpep_zalloc(gather_bytes);
         if (!buf) {
             LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' gather malloc failed", ctx->source_info->name);
             ossl_crypto_mutex_unlock(ctx->mutex);  // Need better handling
             goto err;
         }
+        // Gather with profiling
+        start_us = seed_stub_profile_now_us();
         rv = ctx->source_fn->gather_fn(ctx->source_ctx, buf, &buflen, nbits);
+        elapsed_us = seed_stub_profile_now_us() - start_us;
+        seed_stub_profile_update((SEED_STUB_INFO *)ctx->source_ctx, elapsed_us);
         if (rv) {
             LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' gather operation failed", ctx->source_info->name);
             ossl_crypto_mutex_unlock(ctx->mutex);  // Need better handling
@@ -386,12 +392,15 @@ static CRYPTO_THREAD_RETVAL async_worker(void *arg)
     ASYNC_CTX *ctx = (ASYNC_CTX *)arg;
     ASYNC_WORKER_STATE local_state;
 
-    printf("Thread (%p) started for %s\n", 
-            (void*)(ctx?ctx->thread:NULL),
-            ctx?ctx->name:"unknown");
+    if (kpep_trace_thread_enabled) {
+        kpep_trace_fmt(MODULE_NAME, 
+                "THREAD (%p) started for %s", 
+                (void*)(ctx?ctx->thread:NULL),
+                ctx?ctx->name:"unknown");
+    }
 
     if (!ctx) {
-        printf("Thread started with NULL context\n");
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Thread started with NULL context");
         return 0;
     }
 
@@ -400,7 +409,7 @@ static CRYPTO_THREAD_RETVAL async_worker(void *arg)
 
     // Get starting state and update
     if (ctx->state != WORKER_INITIALIZED) {
-        printf("Thread started with invalid state (got %d)\n", ctx->state);
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Thread started with invalid state"); 
         ossl_crypto_mutex_unlock(ctx->mutex);
         return 0;
     }
@@ -413,7 +422,9 @@ static CRYPTO_THREAD_RETVAL async_worker(void *arg)
         ossl_crypto_mutex_unlock(ctx->mutex);
 
         if (local_state == WORKER_RUNNING) {
-            printf("Thread (%p) gathering...\n", (void*)ctx->thread);
+            if (kpep_trace_thread_enabled) {
+                kpep_trace_fmt(MODULE_NAME, "THREAD (%p) gathering...", (void*)ctx->thread);
+            }
             ossl_crypto_mutex_lock(ctx->mutex);
             continue;
         }
@@ -425,12 +436,15 @@ static CRYPTO_THREAD_RETVAL async_worker(void *arg)
         ctx->state = WORKER_STOPPED;
     ossl_crypto_mutex_unlock(ctx->mutex);
 
-    printf("Thread (%p) stopped (%d: %s)\n", 
-            (void*)ctx->thread, 
-            (ctx->state), 
-            (ctx->state == WORKER_ERROR) ?"error" :
-            (ctx->state == WORKER_STOPPED) ? "clean" : 
-            "unknown");
+    if (kpep_trace_thread_enabled) {
+        kpep_trace_fmt(MODULE_NAME, 
+                "THREAD (%p) stopped (%d: %s)", 
+                (void*)ctx->thread, 
+                (ctx->state), 
+                (ctx->state == WORKER_ERROR) ?"error" :
+                (ctx->state == WORKER_STOPPED) ? "clean" : 
+                "unknown");
+    }
     return 0;
 }
 
@@ -458,16 +472,35 @@ KPEP_RESULT async_seed_start_thread(ASYNC_CTX *ctx)
         goto err;
     }
 
-    // Start the thread.  IMPORTANT: The thread needs the lock to startup, so DO NOT wait
-    // on the thread's behavior or some change in the thread state to release the lock.  
-    // Release it ASAP after starting the thread!
+    if (kpep_trace_thread_enabled) {
+        kpep_trace_fmt(MODULE_NAME, 
+                "THREAD starting for %s...", 
+                ctx?ctx->name:"unknown");
+    }
+
+    // Start the thread.  IMPORTANT: The thread needs the lock to startup, so 
+    // release it ASAP after starting the thread!  DO NOT wait on the thread's 
+    // behavior or some change in the thread state  to release the lock.  
     ctx->state = WORKER_INITIALIZED;  // "Initialized" state tells the thread to go
     ctx->thread = ossl_crypto_thread_native_start(async_worker, ctx, 1);
     if (!ctx->thread) {
+        if (kpep_trace_thread_enabled) {
+            kpep_trace_fmt(MODULE_NAME, 
+                    "THREAD failed to start for %s...", 
+                    (void*)(ctx?ctx->thread:NULL),
+                    ctx?ctx->name:"unknown");
+        }        
         LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to start thread");
         rv = KPEP_R_THREAD_NOT_READY;
         goto err;
     }
+
+    if (kpep_trace_thread_enabled) {
+        kpep_trace_fmt(MODULE_NAME, 
+                "THREAD (%p) started for %s...", 
+                (void*)(ctx?ctx->thread:NULL),
+                ctx?ctx->name:"unknown");
+    }        
 
 err:
     ossl_crypto_mutex_unlock(ctx->mutex);

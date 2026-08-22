@@ -85,9 +85,9 @@ static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
 
 static KPEP_RESULT init_log_syslog(void* prov_ctx)
 {
-	#if defined (KPEP_TRACE_SINK)
-	kpep_trace("KPEP-SINK", __func__);
-    #endif
+	if (kpep_trace_sink_enabled) {
+		kpep_trace("KPEP-SINK", __func__);
+	}
 	return prov_ctx?load_params_from_openssl(prov_ctx)
 	               :load_params_from_environment();
 }

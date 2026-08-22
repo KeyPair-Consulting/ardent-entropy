@@ -96,12 +96,6 @@ size_t kpep_trimwhitespace(char *out, size_t len, const char *str);
  * LOGGER
  * ***********************************************************************************************/
 
-
-extern int kpep_trace_seed_enabled;
-extern int kpep_trace_sink_enabled;
-extern int kpep_trace_thread_enabled;
-extern int kpep_trace_strict_mode;
-
 typedef enum { 
     LOG_LVL_FATAL = 0,	/* 0 == (FATAL) system is unusable and cannot be used */
     LOG_LVL_ALERT,      /* 1 == (NOT USED) action must be taken immediately */
@@ -147,7 +141,29 @@ void kpep_log(LogLevel level, const char* module, const char *fmt, ...);
 void kpep_log_data(LogLevel level, const char* module, const char* label, 
                     unsigned char *bytes, size_t bytes_len);
 
+#define LOG_KPEP_ERROR(module, errnum) \
+    kpep_log(LOG_LVL_ERR, (module), "[%s:%d] %s", __FILE__, __LINE__, kpep_get_reason_string((errnum)));
+
+#define LOG_SIMPLE_ERROR(module, msg) \
+    kpep_log(LOG_LVL_ERR, (module), "[%s:%d] %s", __FILE__, __LINE__, (msg));
+
+#define LOG_FORMATTED_ERROR(module, fmt, ...) \
+    kpep_log(LOG_LVL_ERR, (module), "[%s:%d] "fmt, __FILE__, __LINE__, __VA_ARGS__);
+
+/* ************************************************************************************************
+ * TRACING
+ * ***********************************************************************************************/
+
 #ifndef KPEP_TRACE_DISABLED
+
+// Runtime tracing enabled through environment vars read in kpep_trace_init().  These cache
+// those values between calls for quick access.  Apps/Users must call "kpep_trace_init()"
+// each time the runtime config is changed for these values to be refreshed.
+extern int kpep_trace_seed_enabled;
+extern int kpep_trace_sink_enabled;
+extern int kpep_trace_thread_enabled;
+extern int kpep_trace_strict_mode;
+
 // Write a trace entry to the active trace target (stdout or trace file)
 void kpep_trace(const char* module, const char* msg);
 void kpep_trace_sub(const char* module, const char* submodule, const char* msg);
@@ -168,14 +184,12 @@ void kpep_trace_sub_fmt(const char* module, const char* submodule, const char* f
 
 #endif
 
-#define LOG_KPEP_ERROR(module, errnum) \
-    kpep_log(LOG_LVL_ERR, (module), "[%s:%d] %s", __FILE__, __LINE__, kpep_get_reason_string((errnum)));
+/* ************************************************************************************************
+ * PROFILING
+ * ***********************************************************************************************/
 
-#define LOG_SIMPLE_ERROR(module, msg) \
-    kpep_log(LOG_LVL_ERR, (module), "[%s:%d] %s", __FILE__, __LINE__, (msg));
+extern int kpep_profile_enabled;
 
-#define LOG_FORMATTED_ERROR(module, fmt, ...) \
-    kpep_log(LOG_LVL_ERR, (module), "[%s:%d] "fmt, __FILE__, __LINE__, __VA_ARGS__);
 
 /* ************************************************************************************************
  * CONFIGURATION (optional, uses OpenSSL)

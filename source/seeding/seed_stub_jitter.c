@@ -63,9 +63,9 @@ static const char *base_name = "Jitter Entropy (v" \
 EXPORT_VISIBILITY_HIDDEN
 void stub_jitter_free(void *ctx)
 {
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     kpep_cleanse(ctx, sizeof(JITTER_CTX));
     kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'jitter' shutdown successful");
@@ -80,9 +80,9 @@ void* stub_jitter_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
     int ret;
     uint32_t len;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
 #ifdef FIPS_OPTEST
     {
@@ -162,9 +162,9 @@ JITTER_CTX* pubapi_jitter_new(size_t osr)
     KPEP_RESULT rv = KPEP_R_SUCCESS;
     JITTER_CTX* ctx = NULL;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     ctx = stub_jitter_new(NULL, 0, &rv);
     if (ctx)
@@ -182,10 +182,11 @@ KPEP_RESULT stub_jitter_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     struct rand_data *jitter_ec = NULL;
     ssize_t result = 0;
     size_t num_tries;
+    uint32_t start_us;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
 #ifdef FIPS_OPTEST
     {
@@ -214,9 +215,9 @@ KPEP_RESULT stub_jitter_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     gather_bits = seed_get_gather_sz((SEED_STUB_INFO*)ctx, nbits);
     gather_bytes = (gather_bits + 7) >> 3;
     
-    #if defined (KPEP_TRACE_SEED)
-    kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bits);
-    #endif
+    if (kpep_trace_seed_enabled) {
+        kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bits);
+    }
 
     // Check for adequate size
     if (*out_len < gather_bytes) {
@@ -231,6 +232,9 @@ KPEP_RESULT stub_jitter_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     }
 
     // Retry intermittent failures, then give up
+    if (kpep_profile_enabled) {
+        start_us = seed_stub_profile_now_us();
+    }
     for (num_tries = 0; num_tries < JITTER_MAX_NUM_TRIES; num_tries++) {
         /* Allocate a fresh collector */
         jitter_ec = jent_entropy_collector_alloc(ctx->osr, JENT_KPEP_FLAGS);
@@ -252,9 +256,18 @@ KPEP_RESULT stub_jitter_gather(void *stub_ctx, unsigned char *out, size_t *out_l
 
         // Success
         if (result >= 0 && (size_t)result == gather_bytes)  {
+            if (kpep_profile_enabled) {
+                seed_stub_profile_update((SEED_STUB_INFO *)ctx, seed_stub_profile_now_us() - start_us);
+            }
             *out_len = gather_bytes;
             return KPEP_R_SUCCESS;
         }
+    }
+    
+    // We are going to be entering a permanent error state, but it's probaby a good idea to still 
+    // grab the profiling information.
+    if (kpep_profile_enabled) {
+        seed_stub_profile_update((SEED_STUB_INFO *)ctx, seed_stub_profile_now_us() - start_us);
     }
 
     // If no error already set, assume a general error

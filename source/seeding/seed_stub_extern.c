@@ -75,9 +75,9 @@ void stub_extern_free(void *stub_ctx)
 {
     EXTERNAL_CTX *ctx = (EXTERNAL_CTX *)stub_ctx;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     if (ctx->hnd && dlclose(ctx->hnd)) {
         printf("DLCLOSE error: %s\n", dlerror());
@@ -95,9 +95,9 @@ void* stub_extern_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
     size_t full_entropy_sz;
     size_t len;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
 #ifdef FIPS_OPTEST
     {
@@ -194,10 +194,11 @@ KPEP_RESULT stub_extern_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     EXTERNAL_CTX *ctx = (EXTERNAL_CTX *)stub_ctx;
     KPEP_RESULT rv = KPEP_R_SUCCESS;
     size_t gather_bits, gather_bytes;
+    uint32_t start_us;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
 #ifdef FIPS_OPTEST
     {
@@ -228,9 +229,9 @@ KPEP_RESULT stub_extern_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     gather_bits = seed_get_gather_sz((SEED_STUB_INFO*)ctx, nbits);
     gather_bytes = (gather_bits + 7) >> 3;
 
-    #if defined (KPEP_TRACE_SEED)
-    kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bits);
-    #endif
+    if (kpep_trace_seed_enabled) {
+        kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bits);
+    }
 
     // Check for adequate size
     if (*out_len < gather_bytes) {
@@ -244,8 +245,14 @@ KPEP_RESULT stub_extern_gather(void *stub_ctx, unsigned char *out, size_t *out_l
         return KPEP_R_SEED_NOT_READY;
     }
 
-    // Get the entropy from the external source
+    // Get the entropy from the external source (with profiling)
+    if (kpep_profile_enabled) {
+        start_us = seed_stub_profile_now_us();
+    }
     rv = ctx->ext_stub->gather_fn(ctx->ext_ctx, out, out_len, nbits);
+    if (kpep_profile_enabled) {
+        seed_stub_profile_update((SEED_STUB_INFO *)ctx, seed_stub_profile_now_us() - start_us);
+    }
     if (rv) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'external' gather failed");
         LOG_KPEP_ERROR(MODULE_NAME, rv);
@@ -276,9 +283,9 @@ EXPORT_VISIBILITY_HIDDEN
 uint32_t stub_extern_get_state(void* stub_ctx)
 {
     EXTERNAL_CTX *ctx = (EXTERNAL_CTX *)stub_ctx;
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
     return ctx->ext_stub->get_state_fn(ctx->ext_ctx);
 }
 

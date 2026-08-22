@@ -76,9 +76,9 @@ void* drbg_new(void *vctx, KPEP_RESULT *errnum)
 {
 	KPEP_DRBG_CTX* ctx = NULL;
 
-#ifdef KPEP_TRACE_SEED
-	TRACE_START;
-#endif
+	if (kpep_trace_seed_enabled) {
+		TRACE_START;
+	}
 
 	// Allocate for DRBG context
 	ctx = (KPEP_DRBG_CTX*) kpep_zalloc(sizeof(KPEP_DRBG_CTX));
@@ -113,9 +113,9 @@ EXPORT_VISIBILITY_HIDDEN
 #endif
 void drbg_free(KPEP_DRBG_CTX* ctx) 
 {
-#ifdef KPEP_TRACE_SEED
-	TRACE_START;
-#endif
+	if (kpep_trace_seed_enabled) {
+		TRACE_START;
+	}
 	if (ctx) {
 		sha2_ctx_free(ctx->hash_ctx);              // NULL check inside
 		kpep_cleanse(ctx, sizeof(KPEP_DRBG_CTX));  // Zeroize before Free
@@ -310,9 +310,9 @@ EXPORT_VISIBILITY_HIDDEN
 #endif
 void drbg_uninstantiate(KPEP_DRBG_CTX* ctx)
 {
-#ifdef KPEP_TRACE_SEED
-	TRACE_START;
-#endif
+	if (kpep_trace_seed_enabled) {
+		TRACE_START;
+	}
 	if (ctx) {
 		ctx->running = 0;
 		/* ZEROIZE */
@@ -353,9 +353,9 @@ KPEP_RESULT drbg_reseed_ex(KPEP_DRBG_CTX* ctx,
 	uint32_t buffer_len;
 	uint8_t *p, *buffer = NULL;
 
-#ifdef KPEP_TRACE_SEED
-	TRACE_START;
-#endif
+	if (kpep_trace_seed_enabled) {
+		TRACE_START;
+	}
 
 	if (!ctx || (addl_len > MAX_ADDL_LEN)) {
 		return KPEP_R_INVALID_ARG;
@@ -555,9 +555,9 @@ KPEP_RESULT drbg_generate_ex(KPEP_DRBG_CTX* ctx,
 	uint8_t *buffer = NULL;
 	uint8_t H[64] = { 0 };
 
-	#ifdef KPEP_TRACE_SEED
-	TRACE_START;
-	#endif
+	if (kpep_trace_seed_enabled) {
+		TRACE_START;
+	}
 
 	if (!ctx)
 		return KPEP_R_NULL_ARG;
@@ -639,9 +639,9 @@ KPEP_RESULT drbg_instantiate(KPEP_DRBG_CTX* ctx, int strength_bits, const uint8_
 	uint8_t *nonce = NULL;
 	size_t ent_len = 0, nonce_len = 0;
 
-#ifdef KPEP_TRACE_SEED
-	TRACE_START;
-#endif
+	if (kpep_trace_seed_enabled) {
+		TRACE_START;
+	}
 
 	if (!ctx)
 		return KPEP_R_NULL_ARG;
@@ -686,9 +686,9 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 	size_t  cur_len = 0;
 	uint8_t drbg_out[KPEP_SECURITY_STRENGTH_BYTES];
 
-#ifdef KPEP_TRACE_SEED
-	kpep_trace_fmt(MODULE_NAME, "%s (req %u)", __func__, rand_len<<3);
-#endif
+	if (kpep_trace_seed_enabled) {
+		kpep_trace_fmt(MODULE_NAME, "%s (req %u)", __func__, rand_len<<3);
+	}
 
 	// Validate
 	if (!ctx) {

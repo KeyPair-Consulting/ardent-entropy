@@ -85,18 +85,18 @@ static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
  
 static KPEP_RESULT init_log_stderr(void* prov_ctx)
 {
-	#if defined (KPEP_TRACE_SINK)
-	kpep_trace("KPEP-SINK", __func__);
-    #endif
+	if (kpep_trace_sink_enabled) {
+		kpep_trace("KPEP-SINK", __func__);
+	}
 	return prov_ctx?load_params_from_openssl(prov_ctx)
 	               :load_params_from_environment();
 }
 
 static void fini_log_stderr(void)
 {
-	#if defined (KPEP_TRACE_SINK)
-	kpep_trace("KPEP-SINK", __func__);
-    #endif
+	if (kpep_trace_sink_enabled) {
+		kpep_trace("KPEP-SINK", __func__);
+	}
 	return; // Nothing to do
 }
 
@@ -114,9 +114,9 @@ static void write_log_stderr(LogLevel level, const char* module, const char* fmt
 {
 	char *msg;
 
-	#if defined (KPEP_TRACE_SINK)
-	kpep_trace("KPEP-SINK", __func__);
-    #endif
+	if (kpep_trace_sink_enabled) {
+		kpep_trace("KPEP-SINK", __func__);
+	}
 	if (level > current_log_level)
         return;
 	if (vasprintf(&msg, fmt, args) < 0)

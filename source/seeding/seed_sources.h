@@ -20,6 +20,13 @@
 
 #include <stdint.h>
 
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+#else
+#include <sys/time.h>
+#include <time.h>
+#endif
+
 #include "kpep/kpep_names.h"
 #include "kpep/kpep_seed_stub.h"
 
@@ -73,7 +80,14 @@ static SEED_SOURCE_DEF seed_source_defs[] = {
     uint32_t full_entropy;           \
     uint32_t block_size;             \
     uint32_t block_count;            \
-    double   entropy_per_bit;
+    double   entropy_per_bit;        \
+    uint32_t prof_last;              \
+    uint32_t prof_min;               \
+    uint32_t prof_max;               \
+    uint32_t prof_avg_g;             \
+    uint32_t prof_avg_w;             \
+    uint32_t prof_count;             \
+    uint64_t prof_total;             \
 
 /*
  * This structure is used to cast each opaque seed-source context structure so the 
@@ -84,16 +98,26 @@ typedef struct {
     COMMON_STUB_INFO
 } SEED_STUB_INFO;
 
+// Calculate the gather size for a given number of bits based on the seed stub context
 static inline
 uint32_t seed_get_gather_sz(const SEED_STUB_INFO *info, size_t nbits)
 {
-    // Calculate gather size and floor to block size
+    // Calculate gather size and with bounds checking (block-size .. UINT32_MAX)
     size_t gather_sz;
     gather_sz = (info->full_entropy)?nbits:(size_t) (nbits / info->entropy_per_bit);
     if (gather_sz < info->block_size)
         gather_sz = info->block_size;
+    if (gather_sz > UINT32_MAX)
+        return 0;  // Too many 
     return (uint32_t) gather_sz;
 }
+
+// Get a timestamp in microseconds for profiling purposes
+uint32_t seed_stub_profile_now_us(void);
+
+// Update the profiling information for a seed stub context
+void seed_stub_profile_update(SEED_STUB_INFO *info, uint32_t last_us);
+
 
 #ifdef __cplusplus
 }

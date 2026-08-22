@@ -91,9 +91,9 @@ KPEP_RESULT kpep_seeding_init(void* prov_ctx)
     KPEP_RESULT rv = KPEP_R_SUCCESS;
     uint32_t state;
 
-    #if defined (KPEP_TRACE_SEED)
-    kpep_trace(MODULE_NAME, "Seed subsystem Init");
-    #endif
+    if (kpep_trace_seed_enabled) {
+        kpep_trace(MODULE_NAME, "Seed subsystem Init Start");
+    }
 
     // Initialize seed lock mechanism
     lock = ossl_crypto_mutex_new();
@@ -141,9 +141,9 @@ err:
         RAISE_ERROR(rv);
     }
 
-    #if defined (KPEP_TRACE_SEED)
-    kpep_trace(MODULE_NAME, "Seed subsystem Init Complete");
-    #endif
+    if (kpep_trace_seed_enabled) {
+        kpep_trace(MODULE_NAME, "Seed subsystem Init Complete");
+    }
 
     return rv;
 }
@@ -176,9 +176,9 @@ int kpep_seeding_get_restricted_mode(void)
 static void *kpep_seed_new(void *provctx, void *parent,
                         const OSSL_DISPATCH *parent_dispatch)
 {
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     if (parent != NULL) {
         RAISE_ERROR(PROV_R_SEED_SOURCES_MUST_NOT_HAVE_A_PARENT);
@@ -190,9 +190,9 @@ static void *kpep_seed_new(void *provctx, void *parent,
 
 static void kpep_seed_free(void *seed_ctx)
 {
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 }
 
 static int kpep_seed_instantiate(void *seed_ctx, unsigned int strength,
@@ -201,18 +201,18 @@ static int kpep_seed_instantiate(void *seed_ctx, unsigned int strength,
                               size_t pstr_len,
                               ossl_unused const OSSL_PARAM params[])
 {
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     return 1;
 }
 
 static int kpep_seed_uninstantiate(void *seed_ctx)
 {
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     return 1;
 }
@@ -226,9 +226,9 @@ static int kpep_seed_generate(void *seed_ctx, unsigned char *out, size_t outlen,
     KPEP_RESULT rv = KPEP_R_SUCCESS;
     uint32_t state;
     
-    #if defined (KPEP_TRACE_SEED)
-    kpep_trace_fmt(MODULE_NAME, "%s (req %lu)", __func__, outlen<<3);
-    #endif
+    if (kpep_trace_seed_enabled) {
+        kpep_trace_fmt(MODULE_NAME, "%s (req %lu)", __func__, outlen<<3);
+    }
 
     // Initialize seed lock mechanism
 
@@ -283,9 +283,9 @@ static int kpep_seed_reseed(ossl_unused void *seed_ctx,
 {
     uint32_t state;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     // Ensure provider is not in error state
     if (!ossl_prov_is_running())
@@ -316,9 +316,9 @@ static int kpep_seed_get_ctx_params(ossl_unused void *seed_ctx, OSSL_PARAM param
     uint32_t state;
     OSSL_PARAM *p;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     state = seed_control_get_state(ctrl_ctx);
 
@@ -346,9 +346,9 @@ static const OSSL_PARAM *kpep_seed_gettable_ctx_params(ossl_unused void *seed_ct
         OSSL_PARAM_END
     };
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     return known_gettable_ctx_params;
 }
@@ -356,9 +356,9 @@ static const OSSL_PARAM *kpep_seed_gettable_ctx_params(ossl_unused void *seed_ct
 static int kpep_seed_verify_zeroization(ossl_unused void *seed_ctx)
 {
     int rv;
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     // Initialize seed lock mechanism
     #if 0
@@ -390,9 +390,9 @@ static size_t kpep_seed_get_seed(ossl_unused void *seed_ctx, unsigned char **pou
     size_t         requested = (size_t) entropy;
     uint32_t       state;
     
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     if (!ctrl_ctx || !drbg_ctx || !pout)
         return 0;
@@ -436,9 +436,9 @@ static size_t kpep_seed_get_seed(ossl_unused void *seed_ctx, unsigned char **pou
     buflen = (requested < min_len)?min_len:
              (requested > max_len)?max_len:requested;
 
-    #if defined (KPEP_TRACE_SEED)
-    kpep_trace_fmt(MODULE_NAME, "request (%lu<%lu<%lu=%lu)", min_len, requested, max_len, buflen);
-    #endif
+    if (kpep_trace_seed_enabled) {
+        kpep_trace_fmt(MODULE_NAME, "request (%lu<%lu<%lu=%lu)", min_len, requested, max_len, buflen);
+    }
 
     buffer = kpep_zalloc(buflen);
     if (!buffer) {
@@ -466,34 +466,34 @@ static size_t kpep_seed_get_seed(ossl_unused void *seed_ctx, unsigned char **pou
 static void kpep_seed_clear_seed(ossl_unused void *seed_ctx,
                                unsigned char *out, size_t outlen)
 {
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     OPENSSL_cleanse(out, outlen);
 }
  
 static int kpep_seed_enable_locking(void *seed_ctx)
 {
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
     return 1;
 }
 
 static int kpep_seed_lock(void *seed_ctx)
 {
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
         return 1;
 }
 
 static void kpep_seed_unlock(void *seed_ctx)
 {
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
     return;
 }
 
@@ -519,18 +519,18 @@ EXPORT_VISIBILITY_HIDDEN
 size_t kpep_core_get_entropy(void *provctx, unsigned char **pout,
                              int entropy, size_t min_len, size_t max_len)
 {
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
     return kpep_seed_get_seed(NULL, pout, entropy, min_len, max_len, 0, NULL, 0);
 }
 
 EXPORT_VISIBILITY_HIDDEN
 void kpep_core_cleanup_entropy(void *provctx, unsigned char *buf, size_t len)
 {
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
     kpep_seed_clear_seed(NULL, buf, len);
 }
 
@@ -539,9 +539,9 @@ size_t kpep_core_get_nonce(void *provctx, unsigned char **pout,
                            size_t min_len, size_t max_len,
                            const void *salt, size_t salt_len)
 {
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
     // Salt is ignored; req length 128 satisfies up to strength 256
     return kpep_seed_get_seed(NULL, pout, 128, min_len, max_len, 0, NULL, 0);
 }
@@ -549,9 +549,9 @@ size_t kpep_core_get_nonce(void *provctx, unsigned char **pout,
 EXPORT_VISIBILITY_HIDDEN
 void kpep_core_cleanup_nonce(void *provctx, unsigned char *buf, size_t len)
 {
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
     kpep_seed_clear_seed(NULL, buf, len);
 }
 

@@ -182,25 +182,6 @@ IF ((NOT external) AND (example-external-jitter OR example-external-logging))
 ENDIF ()
 
 # ##################################################
-# Tracing option
-SET(TRACE_SEED OFF CACHE BOOL "Enable additional output for SEED processing (default: OFF)")
-SET(TRACE_SINK OFF CACHE BOOL "Enable additional output for SINK processing (default: OFF)")
-SET(TRACE_THREAD OFF CACHE BOOL "Enable additional output for threading subsystem (default: OFF)")
-
-IF (TRACE_SEED)
-    MESSAGE("-- Detected 'TRACE_SEED' flag; Adding debug statements to seeding subsystem")
-    ADD_DEFINITIONS(-DKPEP_TRACE_SEED)
-ENDIF ()
-IF (TRACE_SINK)
-    MESSAGE("-- Detected 'TRACE_SINK' flag; Adding debug statements to logging subsystem")
-    ADD_DEFINITIONS(-DKPEP_TRACE_SINK)
-ENDIF ()
-IF (TRACE_THREAD)
-    MESSAGE("-- Detected 'TRACE_THREAD' flag; Adding debug statements to threading subsystem")
-    ADD_DEFINITIONS(-DKPEP_TRACE_THREAD)
-ENDIF ()
-
-# ##################################################
 # Debugging options
 SET(DEBUG_DRBG OFF CACHE BOOL "Add code to output additional debug data (default: OFF)")
 SET(DEBUG_CAST OFF CACHE BOOL "Enable additional output for debugging the 'Cryptographic Algorithm Self Tests (CASTs)' (default: OFF)")

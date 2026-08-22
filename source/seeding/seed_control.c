@@ -69,9 +69,9 @@ void seed_control_free(SEED_CONTROL_CTX *ctx)
 {
     uint32_t i;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     if (!ctx)
         return;
@@ -99,9 +99,9 @@ SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, KPEP_RESULT *errnum)
     SEED_CONTROL_CTX *ctx = NULL;
     uint32_t i;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     // Allocate for source context
     ctx = kpep_zalloc(sizeof(SEED_CONTROL_CTX));
@@ -245,9 +245,9 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
     uint32_t       idx = 0;
     uint32_t       hardware = 0;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     // Validate
     if (!ctx || !out) {

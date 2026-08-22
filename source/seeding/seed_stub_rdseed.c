@@ -58,9 +58,9 @@ void stub_rdseed_free(void *stub_ctx)
 {
     RDSEED_CTX *ctx = (RDSEED_CTX *)stub_ctx;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     if (ctx) {
         kpep_free(ctx);
@@ -76,9 +76,9 @@ void* stub_rdseed_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
     size_t full_entropy_sz;
     uint32_t len;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
 #ifdef FIPS_OPTEST
     {
@@ -177,10 +177,12 @@ KPEP_RESULT stub_rdseed_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     RDSEED_CTX *ctx = (RDSEED_CTX *)stub_ctx;
     KPEP_RESULT rv = KPEP_R_SUCCESS;
     size_t gather_bits, gather_bytes;
+    uint32_t start_us;
+    int result;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
 #ifdef FIPS_OPTEST
     {
@@ -211,9 +213,9 @@ KPEP_RESULT stub_rdseed_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     gather_bits = seed_get_gather_sz((SEED_STUB_INFO*)ctx, nbits);
     gather_bytes = (gather_bits + 7) >> 3;
 
-    #if defined (KPEP_TRACE_SEED)
-    kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bits);
-    #endif
+    if (kpep_trace_seed_enabled) {
+        kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bits);
+    }
 
     // Check for adequate size
     if (*out_len < gather_bytes) {
@@ -227,8 +229,15 @@ KPEP_RESULT stub_rdseed_gather(void *stub_ctx, unsigned char *out, size_t *out_l
         return KPEP_R_SEED_NOT_READY;
     }
 
-    // Get the entropy from CPU
-    if (!rdseed_get_bytes_step(gather_bytes, out, ctx->retry_count)) {
+    // Get the entropy from CPU (with profiling)
+    if (kpep_profile_enabled) {
+        start_us = seed_stub_profile_now_us();
+    }
+    result = rdseed_get_bytes_step(gather_bytes, out, ctx->retry_count);
+    if (kpep_profile_enabled) {
+        seed_stub_profile_update((SEED_STUB_INFO *)ctx, seed_stub_profile_now_us() - start_us);
+    }
+    if (!result) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'rdseed' gather failed (rdseed)");
         goto err;
     }

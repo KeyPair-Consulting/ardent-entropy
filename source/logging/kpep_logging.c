@@ -90,9 +90,9 @@ KPEP_RESULT kpep_log_add_sink(const SINK_FUNCTIONS *funcs)
 {
 	size_t idx;
 
-	#if defined (KPEP_TRACE_SINK)
-	kpep_trace("KPEP-SINK", __func__);
-    #endif
+	if (kpep_trace_sink_enabled) {
+		kpep_trace("KPEP-SINK", __func__);
+	}
 
 	if (!funcs || 
 		!funcs->init_fn ||
@@ -106,9 +106,9 @@ KPEP_RESULT kpep_log_add_sink(const SINK_FUNCTIONS *funcs)
 
 	for (idx=0; idx<MAX_SINK_COUNT; ++idx) {
 		if (sinks[idx].fn == NULL) {
-			#if defined (KPEP_TRACE_SINK)
-			kpep_trace_fmt("KPEP-SINK", "Adding log sink '%s' to slot #%d", funcs->name_fn(), (int)idx);
-			#endif
+			if (kpep_trace_sink_enabled) {
+				kpep_trace_fmt("KPEP-SINK", "Adding log sink '%s' to slot #%d", funcs->name_fn(), (int)idx);
+			}
 			sinks[idx].fn = funcs;
 			sinks[idx].name = funcs->name_fn();
 			break;
@@ -171,9 +171,9 @@ KPEP_RESULT kpep_logging_init(void* prov_ctx)
 	KPEP_RESULT rv = KPEP_R_SUCCESS;
 	FILE* devnull = NULL;
 
-	#if defined (KPEP_TRACE_SINK)
-	kpep_trace("KPEP-SINK", __func__);
-    #endif
+	if (kpep_trace_sink_enabled) {
+		kpep_trace("KPEP-SINK", __func__);
+	}
 
 	if (log_mutex == NULL)
 		log_mutex = ossl_crypto_mutex_new();
@@ -244,9 +244,9 @@ void kpep_logging_fini(void)
 {
 	size_t idx;
 
-	#if defined (KPEP_TRACE_SINK)
-	kpep_trace("KPEP-SINK", __func__);
-    #endif
+	if (kpep_trace_sink_enabled) {
+		kpep_trace("KPEP-SINK", __func__);
+	}
 
 	for (idx=0; idx<MAX_SINK_COUNT; ++idx) {
 		if (sinks[idx].fn && sinks[idx].fn->fini_fn)
@@ -348,9 +348,9 @@ void kpep_log(LogLevel level, const char* module, const char *fmt, ...)
 	kpep_log_lock();
 	for (idx=0; idx<MAX_SINK_COUNT; ++idx) {
 		if (sinks[idx].fn && sinks[idx].fn->write_fn) {
-			#if defined (KPEP_TRACE_SINK)
-			kpep_trace_fmt("KPEP-SINK", "Writing msg to sink '%s'.", sinks[idx].name);
-			#endif
+			if (kpep_trace_sink_enabled) {
+				kpep_trace_fmt("KPEP-SINK", "Writing msg to sink '%s'.", sinks[idx].name);
+			}
 			va_start(args, fmt);
 			sinks[idx].fn->write_fn(level, module, fmt, args);
 			va_end(args);
@@ -367,9 +367,9 @@ void kpep_log_data(LogLevel level, const char* module, const char* label,
 	kpep_log_lock();
 	for (idx=0; idx<MAX_SINK_COUNT; ++idx) {
 		if (sinks[idx].fn && sinks[idx].fn->write_data_fn) {
-			#if defined (KPEP_TRACE_SINK)
-			kpep_trace_fmt("KPEP-SINK", "Writing data to sink '%s'.", sinks[idx].name);
-			#endif
+			if (kpep_trace_sink_enabled) {
+				kpep_trace_fmt("KPEP-SINK", "Writing data to sink '%s'.", sinks[idx].name);
+			}
 			sinks[idx].fn->write_data_fn(level, module, label, bytes, bytes_len);
 		}
 	}

@@ -452,13 +452,13 @@ int ossl_prov_is_running(void)
 EXPORT_VISIBILITY_HIDDEN
 int SELF_TEST_post(SELF_TEST_PARAMS *st, int on_demand_test)
 {
-    int ok = 0;
+    KPEP_RESULT rv;
     OSSL_SELF_TEST *ev = NULL;
-    int loclstate;
+    int loclstate, ok = 0;
 
-    #if defined (KPEP_TRACE_SEED)
-    kpep_trace("KPEP-CAST", "START");
-    #endif
+    if (kpep_trace_seed_enabled) {
+        kpep_trace("KPEP-CAST", "START");
+    }
 
     if (!RUN_ONCE(&fips_self_test_init, do_fips_self_test_init)) {
         goto err;
@@ -520,11 +520,20 @@ int SELF_TEST_post(SELF_TEST_PARAMS *st, int on_demand_test)
     }
     CRYPTO_THREAD_unlock(self_test_lock);
 
+    // These are initialized in self-test so they can be easily triggered
+    // externally to force an update after runtime settings changes via
+    // env-vars.  However, tracing is enabled at the start of provider
+    // init, so we don't want to re-initialize it (and re-print the header)
+    // on the first (and only non-on-demand) run.
+    if (on_demand_test)
+        kpep_trace_init();
+    kpep_profile_init();
+
 err:
 
-    #if defined (KPEP_TRACE_SEED)
-    kpep_trace("KPEP-CAST", "END");
-    #endif
+    if (kpep_trace_seed_enabled) {
+        kpep_trace("KPEP-CAST", "END");
+    }
 
     return ok;
 }

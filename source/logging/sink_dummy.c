@@ -39,17 +39,17 @@
  
 static KPEP_RESULT init_log_dummy(void* prov_ctx)
 {
-	#if defined (KPEP_TRACE_SINK)
-	kpep_trace("KPEP-SINK", __func__);
-    #endif
+	if (kpep_trace_sink_enabled) {
+		kpep_trace("KPEP-SINK", __func__);
+	}
 	return KPEP_R_SUCCESS;
 }
 
 static void fini_log_dummy(void)
 {
-	#if defined (KPEP_TRACE_SINK)
-	kpep_trace("KPEP-SINK", __func__);
-    #endif
+	if (kpep_trace_sink_enabled) {
+		kpep_trace("KPEP-SINK", __func__);
+	}
 	return; // Nothing to do
 }
 
@@ -65,17 +65,17 @@ static LogLevel get_level_dummy(void)
 
 static void write_log_dummy(LogLevel level, const char* module, const char* fmt, va_list args)
 {
-	#if defined (KPEP_TRACE_SINK)
-	kpep_trace("KPEP-SINK", __func__);
-    #endif
+	if (kpep_trace_sink_enabled) {
+		kpep_trace("KPEP-SINK", __func__);
+	}
 	return;
 }
 
 static void write_log_data_dummy(LogLevel level, const char* module, const char* label, unsigned char *bytes, size_t bytes_len)
 {
-	#if defined (KPEP_TRACE_SINK)
-	kpep_trace("KPEP-SINK", __func__);
-    #endif
+	if (kpep_trace_sink_enabled) {
+		kpep_trace("KPEP-SINK", __func__);
+	}
     return;
 }
 

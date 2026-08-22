@@ -55,9 +55,9 @@ void stub_osrand_free(void *stub_ctx)
 {
     OSRAND_CTX *ctx = (OSRAND_CTX *)stub_ctx;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
     if (ctx) {
         kpep_free(ctx);
@@ -73,9 +73,9 @@ void* stub_osrand_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
     size_t full_entropy_sz;
     uint32_t len;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
 #ifdef FIPS_OPTEST
     {
@@ -153,13 +153,14 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     OSRAND_CTX *ctx = (OSRAND_CTX *)stub_ctx;
     KPEP_RESULT rv = KPEP_R_SUCCESS;
     size_t gather_bits, gather_bytes;
-
+    uint32_t start_us, elapsed_us;
+    
     FILE* fp = NULL;
     size_t  bytes_read;
 
-    #if defined (KPEP_TRACE_SEED)
-    TRACE_START;
-    #endif
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
 
 #ifdef FIPS_OPTEST
     {
@@ -190,9 +191,9 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     gather_bits = seed_get_gather_sz((SEED_STUB_INFO*)ctx, nbits);
     gather_bytes = (gather_bits + 7) >> 3;
 
-    #if defined (KPEP_TRACE_SEED)
-    kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bits);
-    #endif
+    if (kpep_trace_seed_enabled) {
+        kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bits);
+    }
 
     // Check for adequate size
     if (*out_len < gather_bytes) {
@@ -214,7 +215,14 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
         LOG_KPEP_ERROR(MODULE_NAME, rv);
         goto err;
     }
+
+    if (kpep_profile_enabled) {
+        start_us = seed_stub_profile_now_us();
+    }
     bytes_read = fread(out, 1, gather_bytes, fp);
+    if ((kpep_profile_enabled)) {
+        seed_stub_profile_update((SEED_STUB_INFO *)ctx, seed_stub_profile_now_us() - start_us);
+    }
     if (bytes_read != gather_bytes) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'osrand' gather failed");
         if (feof(fp)) {

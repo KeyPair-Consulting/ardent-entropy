@@ -58,9 +58,9 @@ typedef struct {
 EXPORT_VISIBILITY_HIDDEN
 void stub_example_free(void *ctx)
 {
-    #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
-    #endif
+    if (kpep_trace_seed_enabled) {
+        printf("*** %s: %s\n", MODULE_NAME, __func__);
+    }
 
     kpep_cleanse(ctx, sizeof(JITTER_CTX));
     kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'sample-jitter' shutdown successful");
@@ -73,9 +73,9 @@ void* stub_example_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
     size_t full_entropy_sz;
     int ret;
 
-    #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
-    #endif
+    if (kpep_trace_seed_enabled) {
+        printf("*** %s: %s\n", MODULE_NAME, __func__);
+    }
 
 #ifdef FIPS_OPTEST
     {
@@ -134,9 +134,9 @@ JITTER_CTX* pubapi_jitter_new(size_t osr)
     KPEP_RESULT rv = KPEP_R_SUCCESS;
     JITTER_CTX* ctx = NULL;
 
-    #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
-    #endif
+    if (kpep_trace_seed_enabled) {
+        printf("*** %s: %s\n", MODULE_NAME, __func__);
+    }
 
     ctx = stub_example_new(NULL, 0, &rv);
     if (ctx)
@@ -155,9 +155,9 @@ KPEP_RESULT stub_example_gather(void *stub_ctx, unsigned char *out, size_t *out_
     ssize_t result = 0;
     size_t num_tries;
 
-    #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: %s\n", MODULE_NAME, __func__);
-    #endif
+    if (kpep_trace_seed_enabled) {
+        printf("*** %s: %s\n", MODULE_NAME, __func__);
+    }
 
 #ifdef FIPS_OPTEST
     {
@@ -189,9 +189,9 @@ KPEP_RESULT stub_example_gather(void *stub_ctx, unsigned char *out, size_t *out_
         gather_sz += (ctx->block_size - gather_ovf);
     gather_sz = gather_sz>>3;  // Bits to bytes
     
-    #if defined (KPEP_TRACE_SEED)
-    printf("*** %s: req %lu -> %lu\n", MODULE_NAME, nbits, gather_sz<<3);
-    #endif
+    if (kpep_trace_seed_enabled) {
+        printf("*** %s: req %lu -> %lu\n", MODULE_NAME, nbits, gather_sz<<3);
+    }
 
     // Return gather size?
     if (!out) {
