@@ -17,7 +17,7 @@
     * Granularity: log individual samples?
     * Create API for external access
     * Watchdog/worker to implement interval?
-
+9) Add KPEP_PROFILE_EACH_SAMPLE env-var
 
 ## Finalization
 
