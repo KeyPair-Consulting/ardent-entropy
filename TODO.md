@@ -7,6 +7,17 @@
 3) Implement RBG2 vs RBG3 mode
 4) Implement all seeds or some seed policy
 5) Implement async gather in all async_seed.c
+6) Log message about async mode at startup
+7) Better state handling from bottom to top
+    * Implement ready vs not-ready vs error
+    * Ignore sources in error state
+    * Handle source degradation (e.g. max gather retry)
+8) Improve profiling
+    * implement logging profile data
+    * Granularity: log individual samples?
+    * Create API for external access
+    * Watchdog/worker to implement interval?
+
 
 ## Finalization
 
