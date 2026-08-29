@@ -460,6 +460,11 @@ KPEP_RESULT async_seed_start_thread(ASYNC_CTX *ctx)
         return KPEP_R_NULL_ARG;
     }
 
+    if (!kpep_seed_async_mode) {
+        ctx->state = WORKER_INITIALIZED; 
+        return KPEP_R_SUCCESS;
+    }
+
     if (!ctx->mutex || !ctx->cond) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Thread start called with NULL mutex");
         return KPEP_R_NULL_ARG;

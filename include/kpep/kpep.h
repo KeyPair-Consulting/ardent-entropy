@@ -212,8 +212,10 @@ static KPEP_RESULT load_params(void* prov_ctx, MY_SOURCE_CTX *ctx)
     const char *local_str1 = NULL;
     const char *local_str2 = NULL;
     OSSL_PARAM params[3], *p = params;
+
     if (!prov_ctx)
         return KPEP_R_SUCCESS;
+        
     *p++ = OSSL_PARAM_construct_utf8_ptr(
         "my-key-added-to-kpepmodule-file",
         (char **) &local_str1,
