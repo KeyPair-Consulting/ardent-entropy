@@ -395,9 +395,8 @@ static void kpep_teardown(void *provctx)
 {
     KPEP_PROVIDER_CTX *ctx = (KPEP_PROVIDER_CTX*)provctx;
 
-    kpep_profile_fini(); // Turn of profiling for seeds
     kpep_seeding_fini(); // Teardown all the seeds
-    kpep_trace_fini();   // Must be 2nd last so seed exits can be traced
+	kpep_debug_fini();  // Trace teardown stays after seeding; core cleanup happens here
 	kpep_logging_fini(); // Must be last so all messages are flushed
     if (ctx->libctx) {
         OSSL_LIB_CTX_free(ctx->libctx);
@@ -432,8 +431,8 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
     OSSL_LIB_CTX *libctx = NULL;
     int result = 0;
 
-    // Trace should be active for provider startup, and it must reflect the current env state.
-    kpep_trace_init();
+    // Debug should be active for provider startup, and it must reflect the current env state.
+    kpep_debug_init();
 
     if (kpep_trace_seed_enabled) {
         kpep_trace(MODULE_NAME, "Provider Init Start");
@@ -514,6 +513,9 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
         ERR_raise(ERR_LIB_KPEP, rv);
         goto err;
     }
+
+    // Start the immutable-configured runtime debug listener after provider startup.
+    kpep_debug_control_init(newctx);
 
     // Signal success
     *out = kpep_dispatch_table;

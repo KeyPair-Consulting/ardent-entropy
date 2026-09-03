@@ -42,4 +42,14 @@ IF (rand)
     TARGET_LINK_LIBRARIES  (APP_rand PRIVATE ${OPENSSL_LIB})
 ENDIF (rand)
 
+IF (debug)
+    # Set project source files
+    SET  (APP_debug_sources keypair_debug.c)
+
+    ADD_EXECUTABLE         (APP_debug ${APP_debug_sources})
+    SET_TARGET_PROPERTIES  (APP_debug PROPERTIES OUTPUT_NAME "keypair_debug")
+
+    TARGET_LINK_LIBRARIES  (APP_debug PRIVATE ${OPENSSL_LIB})
+ENDIF (debug)
+
 

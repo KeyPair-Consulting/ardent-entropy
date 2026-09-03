@@ -57,17 +57,14 @@ KPEP_RESULT kpep_seeding_init(void* prov_ctx);
 // Finalize the "singleton"; called once during provider close; source in kpep_seeding.c
 void kpep_seeding_fini(void);
 
-// Initialize the tracing subsystem; source in logging/kpep_trace.c
-void kpep_trace_init(void);
+// Initialize the debug subsystem; source in debug/kpep_debug_core.c
+void kpep_debug_init(void);
 
-// Finalize the tracing subsystem; source in logging/kpep_trace.c
-void kpep_trace_fini(void);
+// Initialize immutable debug control; source in debug/debug_core.c
+void kpep_debug_control_init(void *prov_ctx);
 
-// Initialize the profiling subsystem; source in logging/kpep_profile.c
-void kpep_profile_init(void);
-
-// Finalize the profiling subsystem; source in logging/kpep_profile.c
-void kpep_profile_fini(void);
+// Finalize the debug subsystem; source in debug/kpep_debug_core.c
+void kpep_debug_fini(void);
 
 #ifdef __cplusplus
 }

@@ -34,6 +34,16 @@ extern "C" {
 #define KPEP_PROV_PARAM_MODULE_MAC    "module-mac"
 
 /* **************************************************************************************** */
+/* DEBUG CONTROL */
+/* **************************************************************************************** */
+
+/* Type: OSSL_PARAM_UTF8_STRING; local debug control endpoint path. */
+#define KPEP_PROV_PARAM_DEBUG_IPC_PATH  "debug-ipc-path"
+
+/* Type: OSSL_PARAM_UTF8_STRING; local control security mode: "none" or "peer". */
+#define KPEP_PROV_PARAM_DEBUG_SECURITY  "debug-security"
+
+/* **************************************************************************************** */
 /* **************************************************************************************** */
 /* SEED SOURCE CONTROL/MANAGEMENT */
 /* **************************************************************************************** */

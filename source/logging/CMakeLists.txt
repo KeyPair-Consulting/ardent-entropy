@@ -19,7 +19,7 @@
 # ##################################################################################################
 
 # Set project source files
-SET  (KPEP_logging_sources logging_utility.c kpep_logging.c kpep_trace.c kpep_profile.c)
+SET  (KPEP_logging_sources kpep_logging.c)
 LIST (APPEND KPEP_logging_sources sink_dummy.c)
 LIST (APPEND KPEP_logging_sources sink_syslog.c)
 LIST (APPEND KPEP_logging_sources sink_stderr.c)

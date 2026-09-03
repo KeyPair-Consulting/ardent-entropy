@@ -155,6 +155,13 @@ IF (NOT rand)
 ENDIF (NOT rand)
 
 # ##################################################
+# Should we build KPEP 'debug' application?
+SET(debug ON CACHE BOOL "Specify to build 'debug' application (default: ON)")
+IF (NOT debug)
+    MESSAGE("-- Application 'debug' is DISABLED and will not be built")
+ENDIF (NOT debug)
+
+# ##################################################
 # Should we build KPEP test applications?
 SET(tests OFF CACHE BOOL  "Specify to build unit test and stress test applications (default: OFF)")
 IF (tests)
@@ -327,6 +334,7 @@ ADD_SUBDIRECTORY ("source/crypto")
 ADD_SUBDIRECTORY ("source/thread")
 ADD_SUBDIRECTORY ("source/seeding")
 ADD_SUBDIRECTORY ("source/logging")
+ADD_SUBDIRECTORY ("source/debug")
 ADD_SUBDIRECTORY ("source/jitterentropy")
 
 # Subdirectories containing  support applications
@@ -382,6 +390,15 @@ IF (rand)
             GROUP_READ GROUP_EXECUTE
             WORLD_READ WORLD_EXECUTE)
 ENDIF (rand)
+
+#  Debug
+IF (debug)
+    INSTALL(TARGETS APP_debug DESTINATION ${OPENSSL_ROOT}/bin
+        PERMISSIONS 
+            OWNER_READ OWNER_EXECUTE OWNER_WRITE
+            GROUP_READ GROUP_EXECUTE
+            WORLD_READ WORLD_EXECUTE)
+ENDIF (debug)
 
 # KPEP Test Applications
 IF (tests)

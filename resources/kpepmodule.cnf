@@ -12,6 +12,9 @@ logging = logging_sect
 # Sources for seed entropy
 seed = seed_sect
 
+# Local IPC control endpoint (see DEBUGGING.md for full information).  
+debug-ipc-path = /home/dev/code/KeyPair/TEMP/interop.file
+
 ############################################################################################
 ############################################################################################
 # DETAIL: LOGGING
@@ -94,7 +97,7 @@ extseed = extseed_sect
 # one per seed source, refill the ring buffer.  
 # If this option is zero (0) or missing, KPEP will operate in synchronous mode with a 
 # single thread and will block while gathering entropy.
-async-mode = 1
+async-mode = 0
 
 ############################################################################################
 # JITTER ENTROPY seed source

@@ -16,6 +16,10 @@
     * Granularity: log individual samples?
     * Create API for external access
     * Watchdog/worker to implement interval?
+8) Validate and harden Windows debug IPC support
+    * Build and runtime-test keypair_debug against named pipes
+    * Verify OPENSSL_CONF representation of named-pipe paths
+    * Add busy-pipe retry and improve Windows error reporting
 
 ## Finalization
 

@@ -14,10 +14,11 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPEP_LOGGING_UTILITY_H
-#define KPEP_LOGGING_UTILITY_H
+#ifndef KPEP_DEBUG_UTILITY_H
+#define KPEP_DEBUG_UTILITY_H
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -25,15 +26,24 @@
 extern "C" {
 #endif
 
-int kpep_log_validate_filename(const char *path);
-int kpep_log_is_enabled_flag(const char *name);
-uint32_t kpep_log_parse_u32_env(const char *value);
-void kpep_log_report_error_once(const char *tag, const char *fmt, ...);
-uint64_t kpep_log_monotonic_us(void);
-int kpep_log_touch_file(const char *path, FILE **out_stream, const char *banner);
+int kpep_debug_validate_filename(const char *path);
+/* Return 1 only when the named environment variable is exactly "1". */
+int kpep_debug_is_enabled_flag(const char *name);
+int kpep_debug_is_stream_name(const char *name, FILE **out_stream);
+int kpep_debug_parse_bool(const char *value, int *out);
+uint32_t kpep_debug_parse_u32_env(const char *value);
+int kpep_debug_parse_interval(const char *value, uint32_t *out);
+void kpep_debug_report_error_once(const char *tag, const char *fmt, ...);
+uint64_t kpep_debug_monotonic_us(void);
+int kpep_debug_open_output(const char *name,
+						   const char *banner,
+						   FILE **out_stream,
+						   int *out_owned,
+						   char *errbuf,
+						   size_t errbuf_len);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* KPEP_LOGGING_UTILITY_H */
+#endif /* KPEP_DEBUG_UTILITY_H */

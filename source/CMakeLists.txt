@@ -29,6 +29,7 @@ LIST (APPEND KPEP_sources kpep_seeding.c kpep_cpuinfo.c kpep_bio.c)
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_crypto>)
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_thread>)
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_jitter>)
+LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_debug>)
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_logging>)
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_seeding>)
 
