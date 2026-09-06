@@ -11,15 +11,20 @@
     * Implement ready vs not-ready vs error
     * Ignore sources in error state
     * Handle source degradation (e.g. max gather retry)
-7) Improve profiling
-    * implement logging profile data
-    * Granularity: log individual samples?
-    * Create API for external access
-    * Watchdog/worker to implement interval?
-8) Validate and harden Windows debug IPC support
+7) Validate and harden Windows debug IPC support
     * Build and runtime-test keypair_debug against named pipes
     * Verify OPENSSL_CONF representation of named-pipe paths
     * Add busy-pipe retry and improve Windows error reporting
+8) DONE; Reserve index
+9) Implement Profiling runtime communications
+    * Create a thin abstration layer for POSIX/WINDOWS (kpep_shm.c and kpep_event.c)
+    * SHM for data plane
+    * Signaling for wakeup
+    * Shared Object for client-side
+      * Accept callback pointers
+      * Start profiling with config
+      * Monitor events, signal callback with data
+    * Example application that uses the Shared Object
 
 ## Finalization
 

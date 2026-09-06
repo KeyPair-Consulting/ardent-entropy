@@ -29,7 +29,7 @@ typedef struct kpep_debug_trace_config_st {
     int seed;
     int sink;
     int thread;
-    int strict;
+    int lazy_write;
 } KPEP_DEBUG_TRACE_CONFIG;
 
 typedef struct kpep_debug_profile_config_st {

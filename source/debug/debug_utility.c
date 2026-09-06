@@ -112,7 +112,9 @@ static int kpep_debug_write_banner(FILE *stream,
         return 0;
     }
 
-    rc = fprintf(stream, "\n=== %s %s UTC ===\n", banner ? banner : "KPEP Debug Output", stamp);
+    rc = fprintf(stream, "\n=== %s === %s UTC ===\n",
+                 banner ? banner : "KPEP Debug Output",
+                 stamp);
     if (rc < 0 || fflush(stream) != 0) {
         kpep_debug_get_os_error(errbuf, errbuf_len);
         return 0;

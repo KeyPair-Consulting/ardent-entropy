@@ -131,8 +131,8 @@ static int read_config_file(const char *filename, char *config, size_t config_le
     }
     fclose(file);
 
-    if (read_len == 0 || read_len > config_len) {
-        fprintf(stderr, "Configuration file '%s' must contain 1 to %zu bytes.\n", filename, config_len);
+    if (read_len > config_len) {
+        fprintf(stderr, "Configuration file '%s' must not exceed %zu bytes.\n", filename, config_len);
         return 0;
     }
 
@@ -146,14 +146,15 @@ static int write_template(void)
         "# Debug template for KPEP debugging (tracing and profiling).  This \n"
         "# template provides all the configuration fields with default settings.\n"
         "# Rename and modify as needed.\n"
-        "# NOTE: All fields in [trace] and [profile] must be present.\n"
+        "# NOTE: Sections ([trace], [profile]) are optional. Omitted sections default to\n"
+        "# off; included sections require all of their fields to be present.\n"
         "\n"
         "[trace]\n"
         "file = stdout\n"
         "seed = 0\n"
         "sink = 0\n"
         "thread = 0\n"
-        "strict = 0\n"
+        "lazy-write = 0\n"
         "\n"
         "[profile]\n"
         "file = stdout\n"

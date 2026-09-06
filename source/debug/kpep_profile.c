@@ -45,23 +45,7 @@ static KPEP_DEBUG_SINK *profile_sink = NULL;
 
 // Reset period used by the profile subsystem, in the same style as trace startup
 static uint32_t reset_interval = 0;
-
-static void kpep_profile_report_error_once(const char *fmt, ...)
-{
-    va_list args;
-    char buf[512];
-    int n;
-
-    va_start(args, fmt);
-    n = vsnprintf(buf, sizeof(buf), fmt, args);
-    va_end(args);
-    if (n < 0)
-        return;
-    if (n >= (int)sizeof(buf))
-        buf[sizeof(buf) - 1] = '\0';
-
-    kpep_debug_report_error_once("PROFILE ERROR", "%s", buf);
-}
+static uint64_t last_reset_us = 0;
 
 static void kpep_profile_close_stream(void)
 {
@@ -69,6 +53,7 @@ static void kpep_profile_close_stream(void)
     kpep_profile_enabled = 0;
     kpep_profile_each_sample = 0;
     reset_interval = 0;
+    last_reset_us = 0;
 }
 
 /* ************************************************************************************************
@@ -98,6 +83,7 @@ void kpep_profile_init(const KPEP_DEBUG_PROFILE_CONFIG *config)
 
     // Set the profiling state
     reset_interval = config->interval;
+    last_reset_us = kpep_debug_monotonic_us();
     kpep_profile_enabled = 1;
 }
 
@@ -126,6 +112,19 @@ uint32_t seed_stub_profile_now_us(void)
 #endif
 }
 
+static void kpep_profile_write_line(const char *label, const SEED_STUB_INFO *info, uint32_t avg_us)
+{
+    char line[256];
+
+    if (!profile_sink || !info)
+        return;
+
+    snprintf(line, sizeof(line),
+        "%-12s: %-24s | last: %6u us | avg: %6u us | min: %6u us | max: %6u us | count: %u\n",
+        label, info->name, info->prof_last, avg_us, info->prof_min, info->prof_max, info->prof_count);
+    kpep_debug_sink_write(profile_sink, line, 1);
+}
+
 void seed_stub_profile_update(SEED_STUB_INFO *info, uint32_t last_us)
 {
     if (!info)
@@ -140,14 +139,32 @@ void seed_stub_profile_update(SEED_STUB_INFO *info, uint32_t last_us)
         info->prof_max = last_us;
         info->prof_avg_g = last_us;
         info->prof_avg_w = last_us;
-        return;
+    } else {
+        if (last_us < info->prof_min)
+            info->prof_min = last_us;
+        if (last_us > info->prof_max)
+            info->prof_max = last_us;
+
+        info->prof_avg_g = info->prof_total / info->prof_count;
+        info->prof_avg_w = ((info->prof_avg_w * 3U) + last_us) / 4U;
     }
 
-    if (last_us < info->prof_min)
-        info->prof_min = last_us;
-    if (last_us > info->prof_max)
-        info->prof_max = last_us;
+    if (kpep_profile_enabled && kpep_profile_each_sample && profile_sink) {
+        kpep_profile_write_line("PROF-SAMPLE ", info, info->prof_avg_w);
+    }
 
-    info->prof_avg_g = info->prof_total / info->prof_count;
-    info->prof_avg_w = ((info->prof_avg_w * 3U) + last_us) / 4U;
+    if (kpep_profile_enabled && reset_interval > 0 && profile_sink) {
+        uint64_t now_us = kpep_debug_monotonic_us();
+        if ((now_us - last_reset_us) >= ((uint64_t)reset_interval * 1000000ULL)) {
+            kpep_profile_write_line("PROF-SUMMARY", info, info->prof_avg_g);
+
+            info->prof_count = 0;
+            info->prof_total = 0;
+            info->prof_min = 0;
+            info->prof_max = 0;
+            info->prof_avg_g = 0;
+            info->prof_avg_w = 0;
+            last_reset_us = now_us;
+        }
+    }
 }

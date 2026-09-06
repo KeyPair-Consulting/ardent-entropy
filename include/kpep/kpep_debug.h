@@ -22,7 +22,7 @@
  * IPC limits and configuration
  * ***********************************************************************************************/
 
-#define KPEP_DEBUG_CONFIG_MAX 2048
+#define KPEP_DEBUG_CONFIG_MAX 1024
 #define KPEP_DEBUG_ACK_FAILURE 0
 #define KPEP_DEBUG_ACK_SUCCESS 1
 
@@ -53,8 +53,8 @@
 /* Enable thread trace messages (enabled if "1"). */
 #define KPEP_ENV_TRACE_THREAD         "KPEP_TRACE_THREAD"
 
-/* Strict trace write mode (enabled if "1"). */
-#define KPEP_ENV_TRACE_STRICT         "KPEP_TRACE_STRICT"
+/* Lazy trace write mode (buffers writes without immediate flush if "1"). */
+#define KPEP_ENV_TRACE_LAZY_WRITE     "KPEP_TRACE_LAZY_WRITE"
 
 /* ************************************************************************************************
  * PROFILE feature env-vars

@@ -1,0 +1,573 @@
+/* ************************************************************************************************
+ * Copyright (C) 2022-2026 Symbiotic Systems Research, LLC
+ * All Rights Reserved * Proprietary and confidential
+ * 
+ * The methods and techniques described herein are considered 
+ * trade secrets and/or confidential. Reproduction or distribution, 
+ * in whole or in part, is forbidden except by express written 
+ * permission of Symbiotic Systems Research, LLC.
+ * Please contact <info@symsysresearch.com> for licensing information.
+ * 
+ * NO WARRANTY, EXPLICIT OR IMPLICIT, IS PROVIDED.
+ * In no event shall the author be liable for any claim or damages.
+ * 
+ * Author: Randall Steck
+ * ***********************************************************************************************/
+
+#include <errno.h>
+#include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "openssl/e_os2.h"
+
+#if defined(OPENSSL_SYS_UNIX)
+# include <sys/socket.h>
+# include <sys/un.h>
+# include <unistd.h>
+#elif defined(OPENSSL_SYS_WINDOWS)
+# include <windows.h>
+# include <direct.h>
+#endif
+
+#include "openssl/conf.h"
+#include "openssl/err.h"
+
+#define KPEP_CONFIG_SECTION "kpep_sect"
+#define KPEP_DEBUG_IPC_PATH_KEY "debug-ipc-path"
+#define KPEP_DEBUG_IPC_PATH_MAX 256
+#define KPEP_DEBUG_CONFIG_MAX 1024
+
+#define TEST_FILE_TRACE            "test_trace.log"
+#define TEST_FILE_PROFILE_SAMPLE   "test_profile_sample.log"
+#define TEST_FILE_PROFILE_INTERVAL "test_profile_interval.log"
+#define TEST_FILE_BOTH             "test_both.log"
+
+static char abs_trace_file[KPEP_DEBUG_IPC_PATH_MAX] = {0};
+static char abs_profile_sample_file[KPEP_DEBUG_IPC_PATH_MAX] = {0};
+static char abs_profile_interval_file[KPEP_DEBUG_IPC_PATH_MAX] = {0};
+static char abs_both_file[KPEP_DEBUG_IPC_PATH_MAX] = {0};
+
+static const char *test_files[5] = {
+    abs_trace_file,
+    abs_profile_sample_file,
+    abs_profile_interval_file,
+    abs_both_file,
+    NULL
+};
+
+/* ************************************************************************************************
+ * ************************************************************************************************
+ * USAGE
+ * ************************************************************************************************
+ * ***********************************************************************************************/
+
+static void print_usage(const char* appname)
+{
+	const int indent = 22;
+	printf("%s --interval <integer> [--ipc-path <path>] [--preserve]\n", appname);
+	printf("\n");
+	printf("Test and validate KPEP runtime debug reconfiguration via IPC (UNIX domain socket or\n");
+	printf("Windows named pipe). Designed to run alongside an active instance of 'keypair_rand --interval <sec>'\n");
+	printf("to verify dynamic reconfiguration of tracing, profiling, and full debug reset.\n");
+	printf("\n");
+	printf("Arguments:\n");
+	printf("%-*s%s\n", indent, "--interval <integer>", "Specify the sleep interval (in seconds) used by the running");
+	printf("%-*s%s\n", indent, "",                  "instance of keypair_rand (required)");
+	printf("%-*s%s\n", indent, "--ipc-path <path>",   "Specify the IPC socket or named pipe path to use instead of");
+	printf("%-*s%s\n", indent, "",                  "reading '" KPEP_DEBUG_IPC_PATH_KEY "' from the OpenSSL configuration");
+	printf("%-*s%s\n", indent, "--preserve",          "Preserve test output log files on exit for inspection");
+	printf("%-*s%s\n", indent, "",                  "(default: delete all temporary log files upon completion)");
+	printf("\n");
+}
+
+static void sleep_seconds(unsigned int sec)
+{
+#if defined(OPENSSL_SYS_WINDOWS)
+    Sleep((DWORD)(sec * 1000));
+#else
+    sleep(sec);
+#endif
+}
+
+static void print_openssl_errors(void)
+{
+    unsigned long error;
+
+    while ((error = ERR_get_error()) != 0)
+        fprintf(stderr, "OpenSSL error: %s\n", ERR_reason_error_string(error));
+}
+
+static int get_debug_ipc_path(char *path, size_t path_len)
+{
+    CONF *config;
+    char *default_config = NULL;
+    const char *config_file;
+    const char *value;
+    long error_line = 0;
+
+    config_file = getenv("OPENSSL_CONF");
+    if (!config_file || config_file[0] == '\0') {
+        default_config = CONF_get1_default_config_file();
+        config_file = default_config;
+    }
+
+    if (!config_file || config_file[0] == '\0') {
+        fprintf(stderr, "Unable to determine OpenSSL configuration file.\n");
+        OPENSSL_free(default_config);
+        return 0;
+    }
+
+    config = NCONF_new(NULL);
+    if (!config) {
+        fprintf(stderr, "Unable to allocate OpenSSL configuration.\n");
+        print_openssl_errors();
+        OPENSSL_free(default_config);
+        return 0;
+    }
+
+    if (NCONF_load(config, config_file, &error_line) <= 0) {
+        fprintf(stderr, "Unable to load OpenSSL configuration '%s' at line %ld.\n",
+                config_file, error_line);
+        print_openssl_errors();
+        NCONF_free(config);
+        OPENSSL_free(default_config);
+        return 0;
+    }
+
+    value = NCONF_get_string(config, KPEP_CONFIG_SECTION, KPEP_DEBUG_IPC_PATH_KEY);
+    if (!value || value[0] == '\0') {
+        fprintf(stderr, "OpenSSL configuration setting [%s] %s is required.\n",
+                KPEP_CONFIG_SECTION, KPEP_DEBUG_IPC_PATH_KEY);
+        ERR_clear_error();
+        NCONF_free(config);
+        OPENSSL_free(default_config);
+        return 0;
+    }
+
+    if (strlen(value) >= path_len) {
+        fprintf(stderr, "OpenSSL configuration setting [%s] %s is too long.\n",
+                KPEP_CONFIG_SECTION, KPEP_DEBUG_IPC_PATH_KEY);
+        NCONF_free(config);
+        OPENSSL_free(default_config);
+        return 0;
+    }
+
+    strcpy(path, value);
+    NCONF_free(config);
+    OPENSSL_free(default_config);
+    return 1;
+}
+
+static int get_local_dir(char *dir, size_t dir_len)
+{
+#if defined(OPENSSL_SYS_WINDOWS)
+    if (_getcwd(dir, (int)dir_len) == NULL)
+        return 0;
+#else
+    if (getcwd(dir, dir_len) == NULL)
+        return 0;
+#endif
+    return 1;
+}
+
+static int send_reload_config(const char *path, const char *config, size_t config_len)
+{
+#if defined(OPENSSL_SYS_UNIX)
+    struct sockaddr_un address;
+    int socket_fd;
+    char acknowledge = 0;
+    size_t sent = 0;
+
+    if (strlen(path) >= sizeof(address.sun_path)) {
+        fprintf(stderr, "Debug socket path is too long.\n");
+        return 0;
+    }
+
+    socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (socket_fd < 0) {
+        fprintf(stderr, "Unable to create debug control socket: %s\n", strerror(errno));
+        return 0;
+    }
+
+    memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    strcpy(address.sun_path, path);
+
+    if (connect(socket_fd, (struct sockaddr *)&address, sizeof(address)) != 0) {
+        fprintf(stderr, "Unable to connect to debug socket '%s': %s\n", path, strerror(errno));
+        close(socket_fd);
+        return 0;
+    }
+
+    while (sent < config_len) {
+        ssize_t result = send(socket_fd, config + sent, config_len - sent, 0);
+
+        if (result <= 0)
+            break;
+        sent += (size_t)result;
+    }
+
+    if (sent != config_len || shutdown(socket_fd, SHUT_WR) != 0 ||
+        recv(socket_fd, &acknowledge, sizeof(acknowledge), 0) != sizeof(acknowledge)) {
+        close(socket_fd);
+        return 0;
+    }
+
+    close(socket_fd);
+    return acknowledge != 0;
+#elif defined(OPENSSL_SYS_WINDOWS)
+    HANDLE pipe;
+    DWORD written = 0;
+    DWORD read = 0;
+    char acknowledge = 0;
+
+    pipe = CreateFileA(path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+    if (pipe == INVALID_HANDLE_VALUE) {
+        fprintf(stderr, "Unable to connect to debug pipe '%s': system error %lu\n",
+                path, (unsigned long)GetLastError());
+        return 0;
+    }
+
+    if ((config_len > 0 && (!WriteFile(pipe, config, (DWORD)config_len, &written, NULL) || written != config_len)) ||
+        !ReadFile(pipe, &acknowledge, sizeof(acknowledge), &read, NULL) || read != sizeof(acknowledge)) {
+        CloseHandle(pipe);
+        return 0;
+    }
+
+    CloseHandle(pipe);
+    return acknowledge != 0;
+#else
+    (void)path;
+    (void)config;
+    (void)config_len;
+    fprintf(stderr, "Runtime debug reload is unsupported on this platform.\n");
+    return 0;
+#endif
+}
+
+typedef enum {
+    EXPECT_NONE = 0,
+    EXPECT_TRACE_ONLY,
+    EXPECT_PROFILE_SAMPLE_ONLY,
+    EXPECT_PROFILE_SUMMARY_ONLY,
+    EXPECT_PROFILE_ANY_ONLY,
+    EXPECT_BOTH
+} validation_type_t;
+
+static int validate_log_file(const char *filename, validation_type_t expected)
+{
+    FILE *fp;
+    char line[512];
+    int has_banner = 0;
+    int has_trace_records = 0;
+    int has_profile_sample_records = 0;
+    int has_profile_summary_records = 0;
+
+    fp = fopen(filename, "r");
+    if (!fp) {
+        if (expected == EXPECT_NONE)
+            return 1;
+        return 0;
+    }
+
+    while (fgets(line, sizeof(line), fp)) {
+        if (strstr(line, "=== KPEP Debug Output ==="))
+            has_banner = 1;
+        if (strstr(line, "Start:") && strstr(line, "UTC"))
+            has_banner = 1;
+
+        /* Trace records contain timestamp bracket and module/submodule tags */
+        if (line[0] == '[' && (strstr(line, "SEED") || strstr(line, "THREAD") ||
+            strstr(line, "SINK") || strstr(line, "KPEP") || strstr(line, "PROVIDER") ||
+            strstr(line, "RAND") || strstr(line, "JITTER") || strstr(line, "RDRAND") ||
+            strstr(line, "RDSEED") || strstr(line, "OSRAND") || strstr(line, "EXTERN"))) {
+            if (!strstr(line, "Start:"))
+                has_trace_records = 1;
+        }
+
+        /* Profile records contain PROFILE label (per-sample) or PROFILE-SUMMARY (interval reset) */
+        if (strstr(line, "PROF-SUMMARY")) {
+            has_profile_summary_records = 1;
+        } else if (strstr(line, "PROF-SAMPLE")) {
+            has_profile_sample_records = 1;
+        }
+    }
+    fclose(fp);
+
+    switch (expected) {
+    case EXPECT_NONE:
+        return (!has_trace_records && !has_profile_sample_records && !has_profile_summary_records);
+    case EXPECT_TRACE_ONLY:
+        return (has_banner && has_trace_records && !has_profile_sample_records && !has_profile_summary_records);
+    case EXPECT_PROFILE_SAMPLE_ONLY:
+        return (has_banner && has_profile_sample_records && !has_trace_records);
+    case EXPECT_PROFILE_SUMMARY_ONLY:
+        return (has_banner && has_profile_summary_records && !has_trace_records);
+    case EXPECT_PROFILE_ANY_ONLY:
+        return (has_banner && (has_profile_sample_records || has_profile_summary_records) && !has_trace_records);
+    case EXPECT_BOTH:
+        return (has_banner && has_trace_records && (has_profile_sample_records || has_profile_summary_records));
+    default:
+        return 0;
+    }
+}
+
+static void cleanup_test_files(int preserve)
+{
+    int i;
+
+    if (preserve) {
+        printf("\nPreserving test log files:\n");
+        for (i = 0; test_files[i]; ++i) {
+            if (test_files[i][0] != '\0')
+                printf("  - %s\n", test_files[i]);
+        }
+        return;
+    }
+
+    for (i = 0; test_files[i]; ++i) {
+        if (test_files[i][0] != '\0')
+            remove(test_files[i]);
+    }
+}
+
+int main(int argc, char *argv[])
+{
+    char debug_ipc_path[KPEP_DEBUG_IPC_PATH_MAX] = {0};
+    char local_dir[KPEP_DEBUG_IPC_PATH_MAX] = {0};
+    const char *debug_ipc_path_arg = NULL;
+    int interval = 0;
+    int preserve = 0;
+    int index;
+    int step_pass[6] = {0};
+    const char *step_names[6] = {
+        "Step 1: Trace Only Configuration",
+        "Step 2: Profile Sample Only (each-sample = 1, interval = 0)",
+        "Step 3: Profile Summary Only (each-sample = 0, interval = N)",
+        "Step 4: Combined Trace & Profile Configuration",
+        "Step 5: Invalid Configuration Rejection",
+        "Step 6: Runtime Debug Reset to Full Off"
+    };
+
+    if (argc < 2) {
+        print_usage(argv[0]);
+        return 1;
+    }
+
+    for (index = 1; index < argc; ++index) {
+        if (strcmp(argv[index], "--interval") == 0) {
+            if (index + 1 >= argc || argv[index + 1][0] == '-') {
+                print_usage(argv[0]);
+                return 1;
+            }
+            interval = atoi(argv[++index]);
+        } else if (strcmp(argv[index], "--ipc-path") == 0) {
+            if (index + 1 >= argc || argv[index + 1][0] == '\0') {
+                print_usage(argv[0]);
+                return 1;
+            }
+            debug_ipc_path_arg = argv[++index];
+        } else if (strcmp(argv[index], "--preserve") == 0) {
+            preserve = 1;
+        } else {
+            print_usage(argv[0]);
+            return 1;
+        }
+    }
+
+    if (interval <= 0) {
+        fprintf(stderr, "Error: --interval must be a positive integer (seconds).\n");
+        print_usage(argv[0]);
+        return 1;
+    }
+
+    if (debug_ipc_path_arg) {
+        if (strlen(debug_ipc_path_arg) >= sizeof(debug_ipc_path)) {
+            fprintf(stderr, "Debug path is too long.\n");
+            return 1;
+        }
+        strcpy(debug_ipc_path, debug_ipc_path_arg);
+    } else if (!get_debug_ipc_path(debug_ipc_path, sizeof(debug_ipc_path))) {
+        fprintf(stderr, "Specify --ipc-path or configure [%s] %s in OPENSSL_CONF.\n",
+                KPEP_CONFIG_SECTION, KPEP_DEBUG_IPC_PATH_KEY);
+        return 1;
+    }
+
+    if (!get_local_dir(local_dir, sizeof(local_dir))) {
+        fprintf(stderr, "Error: unable to determine current working directory: %s\n", strerror(errno));
+        return 1;
+    }
+
+    if (strlen(local_dir) + 32 >= sizeof(abs_trace_file)) {
+        fprintf(stderr, "Error: current working directory path is too long.\n");
+        return 1;
+    }
+
+    strcpy(abs_trace_file, local_dir);
+    strcat(abs_trace_file, "/" TEST_FILE_TRACE);
+    strcpy(abs_profile_sample_file, local_dir);
+    strcat(abs_profile_sample_file, "/" TEST_FILE_PROFILE_SAMPLE);
+    strcpy(abs_profile_interval_file, local_dir);
+    strcat(abs_profile_interval_file, "/" TEST_FILE_PROFILE_INTERVAL);
+    strcpy(abs_both_file, local_dir);
+    strcat(abs_both_file, "/" TEST_FILE_BOTH);
+
+    /* Clean up any preexisting files from prior runs before testing */
+    cleanup_test_files(0);
+
+    printf("Connecting to debug IPC at '%s'...\n", debug_ipc_path);
+    printf("Local test files directory: '%s'\n", local_dir);
+    printf("Configured test wait interval: %d seconds per step.\n\n", interval + 1);
+
+    /* ------------------------------------------------------------- */
+    /* Step 1: Trace Only Configuration                              */
+    /* ------------------------------------------------------------- */
+    {
+        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        snprintf(cfg, sizeof(cfg),
+            "[trace]\n"
+            "file = %s\n"
+            "seed = 1\n"
+            "sink = 1\n"
+            "thread = 1\n"
+            "lazy-write = 0\n",
+            abs_trace_file);
+
+        printf("Executing %s...\n", step_names[0]);
+        if (send_reload_config(debug_ipc_path, cfg, strlen(cfg))) {
+            sleep_seconds((unsigned int)(interval + 1));
+            if (validate_log_file(abs_trace_file, EXPECT_TRACE_ONLY))
+                step_pass[0] = 1;
+        }
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Step 2: Profile Sample Only (each-sample = 1, interval = 0)   */
+    /* ------------------------------------------------------------- */
+    {
+        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        snprintf(cfg, sizeof(cfg),
+            "[profile]\n"
+            "file = %s\n"
+            "interval = 0\n"
+            "each-sample = 1\n",
+            abs_profile_sample_file);
+
+        printf("Executing %s...\n", step_names[1]);
+        if (send_reload_config(debug_ipc_path, cfg, strlen(cfg))) {
+            sleep_seconds((unsigned int)(interval + 1));
+            if (validate_log_file(abs_profile_sample_file, EXPECT_PROFILE_SAMPLE_ONLY))
+                step_pass[1] = 1;
+        }
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Step 3: Profile Summary Only (each-sample = 0, interval = N)  */
+    /* ------------------------------------------------------------- */
+    {
+        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        snprintf(cfg, sizeof(cfg),
+            "[profile]\n"
+            "file = %s\n"
+            "interval = %d\n"
+            "each-sample = 0\n",
+            abs_profile_interval_file,
+            interval);
+
+        printf("Executing %s...\n", step_names[2]);
+        if (send_reload_config(debug_ipc_path, cfg, strlen(cfg))) {
+            /* Wait for interval reset period + margin */
+            sleep_seconds((unsigned int)(interval + 2));
+            if (validate_log_file(abs_profile_interval_file, EXPECT_PROFILE_SUMMARY_ONLY))
+                step_pass[2] = 1;
+        }
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Step 4: Combined Trace & Profile Configuration               */
+    /* ------------------------------------------------------------- */
+    {
+        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        snprintf(cfg, sizeof(cfg),
+            "[trace]\n"
+            "file = %s\n"
+            "seed = 1\n"
+            "sink = 1\n"
+            "thread = 1\n"
+            "lazy-write = 0\n"
+            "\n"
+            "[profile]\n"
+            "file = %s\n"
+            "interval = %d\n"
+            "each-sample = 1\n",
+            abs_both_file,
+            abs_both_file,
+            interval);
+
+        printf("Executing %s...\n", step_names[3]);
+        if (send_reload_config(debug_ipc_path, cfg, strlen(cfg))) {
+            sleep_seconds((unsigned int)(interval + 2));
+            if (validate_log_file(abs_both_file, EXPECT_BOTH))
+                step_pass[3] = 1;
+        }
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Step 5: Invalid Configuration Rejection                       */
+    /* ------------------------------------------------------------- */
+    {
+        /* Incomplete section (missing required 'file' or 'seed') */
+        const char bad_cfg[] =
+            "[trace]\n"
+            "seed = 1\n"
+            "thread = 1\n";
+
+        printf("Executing %s...\n", step_names[4]);
+        /* Expect send_reload_config to return 0 (rejection from provider) */
+        if (!send_reload_config(debug_ipc_path, bad_cfg, strlen(bad_cfg)))
+            step_pass[4] = 1;
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Step 6: Runtime Debug Reset to Full Off (0-byte payload)       */
+    /* ------------------------------------------------------------- */
+    {
+        printf("Executing %s...\n", step_names[5]);
+        if (send_reload_config(debug_ipc_path, "", 0)) {
+            sleep_seconds((unsigned int)(interval + 1));
+            step_pass[5] = 1;
+        }
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Final Results Summary                                         */
+    /* ------------------------------------------------------------- */
+    {
+        int all_passed = 1;
+        int pass_count = 0;
+
+        printf("\n============================================================\n");
+        printf("              KPEP Runtime Config Test Results\n");
+        printf("============================================================\n");
+        for (index = 0; index < 6; ++index) {
+            if (step_pass[index]) {
+                printf("  [PASS] %s\n", step_names[index]);
+                pass_count++;
+            } else {
+                printf("  [FAIL] %s\n", step_names[index]);
+                all_passed = 0;
+            }
+        }
+        printf("============================================================\n");
+        if (all_passed)
+            printf("Overall Status: ALL TESTS PASSED (%d/6)\n", pass_count);
+        else
+            printf("Overall Status: SOME TESTS FAILED (%d/6 passed)\n", pass_count);
+        printf("============================================================\n");
+
+        cleanup_test_files(preserve);
+        return all_passed ? 0 : 1;
+    }
+}

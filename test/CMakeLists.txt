@@ -32,4 +32,9 @@ if (tests)
     ADD_EXECUTABLE         (APP_rand_stress rand_stress.c)
     SET_TARGET_PROPERTIES  (APP_rand_stress PROPERTIES OUTPUT_NAME "rand_stress")
     TARGET_LINK_LIBRARIES  (APP_rand_stress PRIVATE ${OPENSSL_LIB})
+
+    # Runtime debug IPC dynamic reconfiguration tester
+    ADD_EXECUTABLE         (APP_test_runtime_config test_runtime_config.c)
+    SET_TARGET_PROPERTIES  (APP_test_runtime_config PROPERTIES OUTPUT_NAME "test_runtime_config")
+    TARGET_LINK_LIBRARIES  (APP_test_runtime_config PRIVATE ${OPENSSL_LIB})
 endif (tests)

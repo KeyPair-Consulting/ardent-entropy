@@ -21,7 +21,7 @@ Set environment variables before the enterprise application loads the KPEP provi
 | `KPEP_TRACE_SEED` | Enable seed-source trace messages only when set to `1`. |
 | `KPEP_TRACE_SINK` | Enable logging-sink trace messages using the same flag rules. |
 | `KPEP_TRACE_THREAD` | Enable thread trace messages using the same flag rules. |
-| `KPEP_TRACE_STRICT` | Flush trace output after each write only when set to `1`. |
+| `KPEP_TRACE_LAZY_WRITE` | Buffer trace writes without immediate flush when set to `1` (default: `0`, flush on every write). |
 | `KPEP_PROFILE_FILE` | Profile output destination: `stdout`, `stderr`, or a filename. |
 | `KPEP_PROFILE_INTERVAL` | Profile interval as an unsigned 32-bit integer. `0` is valid. |
 | `KPEP_PROFILE_EACH_SAMPLE` | Enable per-sample profiling only when set to `1`. |
@@ -83,20 +83,21 @@ The configuration filename is required when applying settings. The client exits 
 
 ## Runtime Configuration File
 
-The runtime file uses OpenSSL configuration syntax and must contain every field below. The complete file must be between 1 and 2048 bytes; comments count toward that limit.
+The runtime file uses OpenSSL configuration syntax. Sections (`[trace]`, `[profile]`) are optional. Omitted sections default to off; included sections require all of their fields to be present. An empty file (0 bytes) resets all debug features to off. The complete file must not exceed 1024 bytes; comments count toward that limit.
 
 ```ini
 # Debug template for KPEP debugging (tracing and profiling).   
 # This template provides all the configuration fields with 
 # default settings.  Copy, rename and modify as needed.
-# NOTE: All fields in [trace] and [profile] must be present.
+# NOTE: Sections ([trace], [profile]) are optional. Omitted sections default to
+# off; included sections require all of their fields to be present.
 
 [trace]
 file = stderr
 seed = 0
 sink = 0
 thread = 0
-strict = 0
+lazy-write = 0
 
 [profile]
 file = stderr
@@ -107,18 +108,23 @@ each-sample = 0
 | Section | Field | Valid values |
 | --- | --- | --- |
 | `trace` | `file` | `stdout`, `stderr`, or a filename. |
-| `trace` | `seed`, `sink`, `thread`, `strict` | Exactly `0` or `1`. |
+| `trace` | `seed`, `sink`, `thread`, `lazy-write` | Exactly `0` or `1`. |
 | `profile` | `file` | `stdout`, `stderr`, or a filename. |
 | `profile` | `interval` | An unsigned 32-bit decimal integer, including `0`. |
 | `profile` | `each-sample` | Exactly `0` or `1`. |
 
-To disable trace, set all four trace flags to `0`; its `file` field must still be present. To disable profile output, use a valid `file` target and set `each-sample = 0`; profile reporting behavior is otherwise controlled by the profile subsystem.
+To disable trace, omit the `[trace]` section or set all trace flags to `0`. To disable profile output, omit the `[profile]` section or set `each-sample = 0` and `interval = 0`. An empty configuration file resets both trace and profile to disabled and releases all open debug sinks.
 
 ## Output Destinations
 
 Both features accept `stdout`, `stderr`, or a regular filename as their output destination. The special stream names are lowercase and must match exactly.
 
-When trace and profile request the same destination string, they share one managed sink and one per-sink OpenSSL mutex. A regular file is opened in append mode and closed when the final feature releases it; standard streams are flushed but never closed. Each newly opened sink receives one UTC banner beginning with `KPEP Debug Output`.
+When trace and profile request the same destination string, they share one managed sink and one per-sink OpenSSL mutex. A regular file is opened in append mode and closed when the final feature releases it; standard streams are flushed but never closed. Each newly opened sink receives one banner:
+
+```text
+=== KPEP Debug Output ===
+Start: YYYY-MM-DD HH:MM:SS UTC
+```
 
 ## Operational Procedure
 
@@ -152,7 +158,7 @@ keypair_debug --ipc-path /var/run/kpep-debug.sock kpep_trace_template.cnf
 | `No configuration file specified.` | No positional runtime configuration file was supplied. | Supply one file path. |
 | `Specify --ipc-path ...` | The CLI override was omitted and `debug-ipc-path` is absent from the effective OpenSSL configuration. | Add `debug-ipc-path` to `[kpep_sect]`, or supply `--ipc-path`. |
 | Connection to the IPC endpoint fails | The provider did not start a listener, the endpoint path differs, or permissions deny access. | Verify the provider config, process state, endpoint path, and security mode. |
-| `Runtime debug configuration was rejected.` | The payload is incomplete, invalid, oversized, or not authorized. | Start from `--write-template`; verify every field and the 2048-byte limit. |
+| `Runtime debug configuration was rejected.` | The payload is incomplete, invalid, oversized, or not authorized. | Start from `--write-template`; verify every field in present sections and the 1024-byte limit. |
 | No trace output after applying config | All trace flags are `0`, or the output target cannot be opened. | Enable at least one trace flag and verify the destination path. |
 | No early startup trace records | Trace was enabled only after provider startup. | Set `KPEP_TRACE_FILE` and at least one `KPEP_TRACE_*` flag before the application starts. |
 

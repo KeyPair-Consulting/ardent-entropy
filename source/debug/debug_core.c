@@ -70,6 +70,8 @@ struct kpep_debug_sink_st {
 	struct kpep_debug_sink_st *next;
 };
 
+static int kpep_debug_apply_config(const char *buffer, size_t buffer_len);
+
 /* ************************************************************************************************
  * ************************************************************************************************
  * LOCK/MUTEX management and operations
@@ -118,6 +120,399 @@ static void kpep_debug_reload_unlock(void)
 {
 	if (debug_reload_mutex)
 		ossl_crypto_mutex_unlock(debug_reload_mutex);
+}
+
+/* ************************************************************************************************
+ * ************************************************************************************************
+ * SINK management and operations
+ * ************************************************************************************************
+ * ***********************************************************************************************/
+
+static 
+KPEP_DEBUG_SINK *kpep_debug_find_sink(const char *name)
+{
+	KPEP_DEBUG_SINK *sink;
+
+	for (sink = debug_sinks; sink; sink = sink->next) {
+		if (strcmp(sink->name, name) == 0)
+			return sink;
+	}
+
+	return NULL;
+}
+
+static 
+void kpep_debug_destroy_sink(KPEP_DEBUG_SINK *sink)
+{
+	if (!sink)
+		return;
+
+	if (sink->stream) {
+		if (sink->owned_stream)
+			fclose(sink->stream);
+		else
+			fflush(sink->stream);
+		sink->stream = NULL;
+	}
+
+	if (sink->lock)
+		ossl_crypto_mutex_free(&sink->lock);
+
+	OPENSSL_free(sink->name);
+	OPENSSL_free(sink);
+}
+
+KPEP_DEBUG_SINK *kpep_debug_sink_acquire(const char *name,
+										 const char *error_tag,
+										 const char *env_name)
+{
+	KPEP_DEBUG_SINK *sink;
+	FILE *stream = NULL;
+	int owned_stream = 0;
+	char errbuf[256] = {0};
+
+	if (!name || name[0] == '\0')
+		return NULL;
+
+	kpep_debug_core_lock();
+	sink = kpep_debug_find_sink(name);
+	if (sink) {
+		sink->refcount += 1;
+		kpep_debug_core_unlock();
+		return sink;
+	}
+
+	if (!kpep_debug_open_output(name,
+								"KPEP Debug Output",
+								&stream,
+								&owned_stream,
+								errbuf,
+								sizeof(errbuf))) {
+		kpep_debug_core_unlock();
+		kpep_debug_report_error_once(error_tag,
+									 "%s '%s' failed: %s",
+									 env_name ? env_name : "debug output",
+									 name,
+									 errbuf[0] != '\0' ? errbuf : "unknown error");
+		return NULL;
+	}
+
+	sink = OPENSSL_zalloc(sizeof(*sink));
+	if (!sink) {
+		if (owned_stream)
+			fclose(stream);
+		else
+			fflush(stream);
+		kpep_debug_core_unlock();
+		kpep_debug_report_error_once(error_tag, "failed to allocate debug sink for %s", name);
+		return NULL;
+	}
+
+	sink->name = OPENSSL_strdup(name);
+	sink->lock = ossl_crypto_mutex_new();
+	sink->stream = stream;
+	sink->owned_stream = owned_stream;
+	sink->refcount = 1;
+	if (!sink->name || !sink->lock) {
+		kpep_debug_destroy_sink(sink);
+		kpep_debug_core_unlock();
+		kpep_debug_report_error_once(error_tag, "failed to allocate debug sink for %s", name);
+		return NULL;
+	}
+
+	sink->next = debug_sinks;
+	debug_sinks = sink;
+	kpep_debug_core_unlock();
+	return sink;
+}
+
+void kpep_debug_sink_release(KPEP_DEBUG_SINK **sink_ptr)
+{
+	KPEP_DEBUG_SINK *sink;
+	KPEP_DEBUG_SINK *iter;
+	KPEP_DEBUG_SINK *prev = NULL;
+	int free_mutex = 0;
+	CRYPTO_MUTEX *mutex_to_free = NULL;
+
+	if (!sink_ptr || !*sink_ptr)
+		return;
+
+	sink = *sink_ptr;
+	*sink_ptr = NULL;
+
+	kpep_debug_core_lock();
+	if (sink->refcount > 1) {
+		sink->refcount -= 1;
+		kpep_debug_core_unlock();
+		return;
+	}
+
+	for (iter = debug_sinks; iter; iter = iter->next) {
+		if (iter == sink) {
+			if (prev)
+				prev->next = iter->next;
+			else
+				debug_sinks = iter->next;
+			break;
+		}
+		prev = iter;
+	}
+
+	if (!debug_sinks && debug_core_mutex) {
+		mutex_to_free = debug_core_mutex;
+		debug_core_mutex = NULL;
+		free_mutex = 1;
+	}
+	if (mutex_to_free)
+		ossl_crypto_mutex_unlock(mutex_to_free);
+	else
+		kpep_debug_core_unlock();
+
+	kpep_debug_destroy_sink(sink);
+	if (free_mutex)
+		ossl_crypto_mutex_free(&mutex_to_free);
+}
+
+int kpep_debug_sink_write(KPEP_DEBUG_SINK *sink, const char *text, int flush_output)
+{
+	int ok = 1;
+
+	if (!sink || !sink->lock || !sink->stream || !text)
+		return 0;
+
+	ossl_crypto_mutex_lock(sink->lock);
+	if (fputs(text, sink->stream) == EOF)
+		ok = 0;
+
+	if (ok && flush_output && fflush(sink->stream) != 0)
+		ok = 0;
+
+	if (!ok && ferror(sink->stream))
+		clearerr(sink->stream);
+	ossl_crypto_mutex_unlock(sink->lock);
+	return ok;
+}
+
+/* ************************************************************************************************
+* ************************************************************************************************
+* SUBSYSTEM management and operations
+* ************************************************************************************************
+* ***********************************************************************************************/
+
+// Forward declaration for the debug listener stop function
+static void kpep_debug_listener_stop(void);
+
+static void kpep_debug_cleanup_if_unused(void)
+{
+	CRYPTO_MUTEX *mutex_to_free = NULL;
+
+	kpep_debug_core_lock();
+	if (!debug_sinks && debug_core_mutex) {
+		mutex_to_free = debug_core_mutex;
+		debug_core_mutex = NULL;
+	}
+	if (mutex_to_free)
+		ossl_crypto_mutex_unlock(mutex_to_free);
+	else
+		kpep_debug_core_unlock();
+
+	if (mutex_to_free)
+		ossl_crypto_mutex_free(&mutex_to_free);
+}
+
+void kpep_debug_fini(void)
+{
+	KPEP_DEBUG_SINK *sink;
+	KPEP_DEBUG_SINK *next;
+	CRYPTO_MUTEX *mutex_to_free = NULL;
+
+#if defined(OPENSSL_SYS_UNIX) || defined(OPENSSL_SYS_WINDOWS)
+	kpep_debug_listener_stop();
+#endif
+	kpep_debug_reload_lock();
+	kpep_profile_fini();
+	kpep_trace_fini();
+
+	kpep_debug_core_lock();
+	sink = debug_sinks;
+	debug_sinks = NULL;
+	if (debug_core_mutex) {
+		mutex_to_free = debug_core_mutex;
+		debug_core_mutex = NULL;
+	}
+	if (mutex_to_free)
+		ossl_crypto_mutex_unlock(mutex_to_free);
+	else
+		kpep_debug_core_unlock();
+
+	while (sink) {
+		next = sink->next;
+		kpep_debug_destroy_sink(sink);
+		sink = next;
+	}
+
+	if (mutex_to_free)
+		ossl_crypto_mutex_free(&mutex_to_free);
+
+	kpep_debug_reload_unlock();
+	if (debug_reload_mutex)
+		ossl_crypto_mutex_free(&debug_reload_mutex);
+	debug_ipc_path[0] = '\0';
+	debug_peer_security = 0;
+}
+
+void kpep_debug_init(void)
+{
+	KPEP_DEBUG_TRACE_CONFIG trace_config = {0};
+	KPEP_DEBUG_PROFILE_CONFIG profile_config = {0};
+	const char *interval;
+
+	trace_config.file = getenv(KPEP_ENV_TRACE_FILE);
+	trace_config.seed = kpep_debug_is_enabled_flag(KPEP_ENV_TRACE_SEED);
+	trace_config.sink = kpep_debug_is_enabled_flag(KPEP_ENV_TRACE_SINK);
+	trace_config.thread = kpep_debug_is_enabled_flag(KPEP_ENV_TRACE_THREAD);
+	trace_config.lazy_write = kpep_debug_is_enabled_flag(KPEP_ENV_TRACE_LAZY_WRITE);
+
+	profile_config.file = getenv(KPEP_ENV_PROFILE_FILE);
+	profile_config.each_sample = kpep_debug_is_enabled_flag(KPEP_ENV_PROFILE_EACH_SAMPLE);
+	interval = getenv(KPEP_ENV_PROFILE_INTERVAL);
+	if (interval && interval[0] != '\0' &&
+		!kpep_debug_parse_interval(interval, &profile_config.interval)) {
+		kpep_debug_report_error_once("PROFILE ERROR", "%s '%s' is invalid; profiling disabled",
+			KPEP_ENV_PROFILE_INTERVAL, interval);
+		profile_config.file = NULL;
+		profile_config.each_sample = 0;
+	}
+
+	kpep_debug_reload_lock();
+	kpep_profile_fini();
+	kpep_trace_fini();
+	kpep_trace_init(&trace_config);
+	kpep_profile_init(&profile_config);
+	kpep_debug_cleanup_if_unused();
+	kpep_debug_reload_unlock();
+}
+
+static int kpep_debug_get_required_string(CONF *config,
+		const char *section,
+		const char *name,
+		const char **out)
+{
+	const char *value = NCONF_get_string(config, section, name);
+
+	if (!value || value[0] == '\0') {
+		ERR_clear_error();
+		return 0;
+	}
+
+	*out = value;
+	return 1;
+}
+
+static int kpep_debug_apply_config(const char *buffer, size_t buffer_len)
+{
+	KPEP_DEBUG_TRACE_CONFIG trace_config = {0};
+	KPEP_DEBUG_PROFILE_CONFIG profile_config = {0};
+	int has_trace = 0;
+	int has_profile = 0;
+	BIO *bio = NULL;
+	CONF *config = NULL;
+	long error_line = 0;
+	int result = 0;
+
+	if (!buffer || buffer_len > KPEP_DEBUG_CONFIG_MAX)
+		return 0;
+
+	if (buffer_len > 0) {
+		bio = BIO_new_mem_buf(buffer, (int)buffer_len);
+		config = NCONF_new(NULL);
+		if (!bio || !config)
+			goto end;
+
+		if (NCONF_load_bio(config, bio, &error_line) <= 0)
+			goto end;
+
+		if (NCONF_get_section(config, "trace") != NULL) {
+			has_trace = 1;
+			if (!kpep_debug_get_required_string(config, "trace", "file", &trace_config.file) ||
+				!kpep_debug_parse_bool(NCONF_get_string(config, "trace", "seed"), &trace_config.seed) ||
+				!kpep_debug_parse_bool(NCONF_get_string(config, "trace", "sink"), &trace_config.sink) ||
+				!kpep_debug_parse_bool(NCONF_get_string(config, "trace", "thread"), &trace_config.thread) ||
+				!kpep_debug_parse_bool(NCONF_get_string(config, "trace", "lazy-write"), &trace_config.lazy_write)) {
+				goto end;
+			}
+		}
+
+		if (NCONF_get_section(config, "profile") != NULL) {
+			has_profile = 1;
+			if (!kpep_debug_get_required_string(config, "profile", "file", &profile_config.file) ||
+				!kpep_debug_parse_interval(NCONF_get_string(config, "profile", "interval"), &profile_config.interval) ||
+				!kpep_debug_parse_bool(NCONF_get_string(config, "profile", "each-sample"), &profile_config.each_sample)) {
+				goto end;
+			}
+		}
+	}
+
+	kpep_debug_reload_lock();
+	kpep_profile_fini();
+	kpep_trace_fini();
+	if (has_trace)
+		kpep_trace_init(&trace_config);
+	if (has_profile)
+		kpep_profile_init(&profile_config);
+	kpep_debug_cleanup_if_unused();
+	kpep_debug_reload_unlock();
+	result = 1;
+
+end:
+	ERR_clear_error();
+	NCONF_free(config);
+	BIO_free(bio);
+	return result;
+}
+
+static int load_params(void *prov_ctx)
+{
+	const char *socket_value = NULL;
+	const char *security_value = NULL;
+	OSSL_PARAM params[3], *p = params;
+
+	debug_ipc_path[0] = '\0';
+	debug_peer_security = 0;
+
+	if (!prov_ctx)
+		return 0;
+
+	*p++ = OSSL_PARAM_construct_utf8_ptr(KPEP_PROV_PARAM_DEBUG_IPC_PATH,
+			(char **)&socket_value, sizeof(socket_value));
+	*p++ = OSSL_PARAM_construct_utf8_ptr(KPEP_PROV_PARAM_DEBUG_SECURITY,
+			(char **)&security_value, sizeof(security_value));
+	*p = OSSL_PARAM_construct_end();
+
+	if (!kpep_get_core_params(prov_ctx, params)) {
+		kpep_debug_report_error_once("DEBUG ERROR", "failed to load debug control configuration");
+		return 0;
+	}
+
+	if (!socket_value || socket_value[0] == '\0')
+		return 1;
+
+	if (strlen(socket_value) >= sizeof(debug_ipc_path)) {
+		kpep_debug_report_error_once("DEBUG ERROR", "%s is too long", KPEP_PROV_PARAM_DEBUG_IPC_PATH);
+		return 0;
+	}
+
+	if (security_value && security_value[0] != '\0') {
+		if (strcmp(security_value, "peer") == 0)
+			debug_peer_security = 1;
+		else if (strcmp(security_value, "none") != 0) {
+			kpep_debug_report_error_once("DEBUG ERROR", "%s must be 'none' or 'peer'", KPEP_PROV_PARAM_DEBUG_SECURITY);
+			return 0;
+		}
+	}
+
+	strcpy(debug_ipc_path, socket_value);
+	return 1;
 }
 
 /* ************************************************************************************************
@@ -262,12 +657,57 @@ static void kpep_debug_listener_stop(void)
 		ossl_crypto_thread_native_clean(thread);
 	}
 
+	if (debug_ipc_path[0] != '\0') {
+		unlink(debug_ipc_path);
+		debug_ipc_path[0] = '\0';
+	}
+}
+
+static void kpep_debug_atexit_cleanup(void)
+{
 	if (debug_ipc_path[0] != '\0')
 		unlink(debug_ipc_path);
 }
 
+static int kpep_debug_prepare_socket_path(const char *path)
+{
+	struct sockaddr_un probe_addr;
+	int probe_fd;
+
+	if (!path || path[0] == '\0')
+		return 0;
+
+	/* Check if the socket file already exists on the filesystem */
+	if (access(path, F_OK) != 0)
+		return 1;
+
+	/* Probe whether a live listener is actively accepting connections */
+	probe_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (probe_fd < 0)
+		return 1;
+
+	memset(&probe_addr, 0, sizeof(probe_addr));
+	probe_addr.sun_family = AF_UNIX;
+	strncpy(probe_addr.sun_path, path, sizeof(probe_addr.sun_path) - 1);
+
+	if (connect(probe_fd, (struct sockaddr *)&probe_addr, sizeof(probe_addr)) == 0) {
+		/* An active listener is genuinely using this socket */
+		close(probe_fd);
+		kpep_debug_report_error_once("DEBUG ERROR",
+			"debug socket '%s' is already in use by an active process", path);
+		return 0;
+	}
+
+	close(probe_fd);
+
+	/* Stale/orphaned socket file from a crashed or abruptly terminated run */
+	unlink(path);
+	return 1;
+}
+
 static int kpep_debug_listener_start(void)
 {
+	static int atexit_registered = 0;
 	struct sockaddr_un address;
 	mode_t old_umask;
 	int listener_fd;
@@ -278,6 +718,14 @@ static int kpep_debug_listener_start(void)
 	if (strlen(debug_ipc_path) >= sizeof(address.sun_path)) {
 		kpep_debug_report_error_once("DEBUG ERROR", "%s is too long", KPEP_PROV_PARAM_DEBUG_IPC_PATH);
 		return 0;
+	}
+
+	if (!kpep_debug_prepare_socket_path(debug_ipc_path))
+		return 0;
+
+	if (!atexit_registered) {
+		atexit(kpep_debug_atexit_cleanup);
+		atexit_registered = 1;
 	}
 
 	listener_fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -491,387 +939,3 @@ void kpep_debug_control_init(void *prov_ctx)
 		kpep_debug_report_error_once("DEBUG ERROR", "debug control listener is unsupported on this platform");
 #endif
 }
-
-/* ************************************************************************************************
- * ************************************************************************************************
- * SINK management and operations
- * ************************************************************************************************
- * ***********************************************************************************************/
-
-static 
-KPEP_DEBUG_SINK *kpep_debug_find_sink(const char *name)
-{
-	KPEP_DEBUG_SINK *sink;
-
-	for (sink = debug_sinks; sink; sink = sink->next) {
-		if (strcmp(sink->name, name) == 0)
-			return sink;
-	}
-
-	return NULL;
-}
-
-static 
-void kpep_debug_destroy_sink(KPEP_DEBUG_SINK *sink)
-{
-	if (!sink)
-		return;
-
-	if (sink->stream) {
-		if (sink->owned_stream)
-			fclose(sink->stream);
-		else
-			fflush(sink->stream);
-		sink->stream = NULL;
-	}
-
-	if (sink->lock)
-		ossl_crypto_mutex_free(&sink->lock);
-
-	OPENSSL_free(sink->name);
-	OPENSSL_free(sink);
-}
-
-KPEP_DEBUG_SINK *kpep_debug_sink_acquire(const char *name,
-										 const char *error_tag,
-										 const char *env_name)
-{
-	KPEP_DEBUG_SINK *sink;
-	FILE *stream = NULL;
-	int owned_stream = 0;
-	char errbuf[256] = {0};
-
-	printf("Attempting to acquire debug sink: %s\n", name);
-	
-	if (!name || name[0] == '\0')
-		return NULL;
-
-	kpep_debug_core_lock();
-	sink = kpep_debug_find_sink(name);
-	if (sink) {
-		printf("Acquiring existing debug sink: %s\n", name);
-		sink->refcount += 1;
-		kpep_debug_core_unlock();
-		return sink;
-	}
-
-	if (!kpep_debug_open_output(name,
-								"KPEP Debug Output",
-								&stream,
-								&owned_stream,
-								errbuf,
-								sizeof(errbuf))) {
-		kpep_debug_core_unlock();
-		kpep_debug_report_error_once(error_tag,
-									 "%s '%s' failed: %s",
-									 env_name ? env_name : "debug output",
-									 name,
-									 errbuf[0] != '\0' ? errbuf : "unknown error");
-		printf("Failed to open debug output: %s\n", errbuf[0] != '\0' ? errbuf : "unknown error");
-		return NULL;
-	}
-
-	sink = OPENSSL_zalloc(sizeof(*sink));
-	if (!sink) {
-		if (owned_stream)
-			fclose(stream);
-		else
-			fflush(stream);
-		kpep_debug_core_unlock();
-		kpep_debug_report_error_once(error_tag, "failed to allocate debug sink for %s", name);
-		printf("Failed to allocate debug sink object for %s\n", name);
-		return NULL;
-	}
-
-	sink->name = OPENSSL_strdup(name);
-	sink->lock = ossl_crypto_mutex_new();
-	sink->stream = stream;
-	sink->owned_stream = owned_stream;
-	sink->refcount = 1;
-	if (!sink->name || !sink->lock) {
-		kpep_debug_destroy_sink(sink);
-		kpep_debug_core_unlock();
-		kpep_debug_report_error_once(error_tag, "failed to allocate debug sink for %s", name);
-		printf("Failed to allocate debug sink fields for %s\n", name);
-		return NULL;
-	}
-	printf("Successfully allocated debug sink for %s\n", name);
-
-	sink->next = debug_sinks;
-	debug_sinks = sink;
-	kpep_debug_core_unlock();
-	return sink;
-}
-
-void kpep_debug_sink_release(KPEP_DEBUG_SINK **sink_ptr)
-{
-	KPEP_DEBUG_SINK *sink;
-	KPEP_DEBUG_SINK *iter;
-	KPEP_DEBUG_SINK *prev = NULL;
-	int free_mutex = 0;
-	CRYPTO_MUTEX *mutex_to_free = NULL;
-
-	if (!sink_ptr || !*sink_ptr)
-		return;
-
-	sink = *sink_ptr;
-	*sink_ptr = NULL;
-
-	kpep_debug_core_lock();
-	if (sink->refcount > 1) {
-		sink->refcount -= 1;
-		kpep_debug_core_unlock();
-		return;
-	}
-
-	for (iter = debug_sinks; iter; iter = iter->next) {
-		if (iter == sink) {
-			if (prev)
-				prev->next = iter->next;
-			else
-				debug_sinks = iter->next;
-			break;
-		}
-		prev = iter;
-	}
-
-	if (!debug_sinks && debug_core_mutex) {
-		mutex_to_free = debug_core_mutex;
-		debug_core_mutex = NULL;
-		free_mutex = 1;
-	}
-	if (mutex_to_free)
-		ossl_crypto_mutex_unlock(mutex_to_free);
-	else
-		kpep_debug_core_unlock();
-
-	kpep_debug_destroy_sink(sink);
-	if (free_mutex)
-		ossl_crypto_mutex_free(&mutex_to_free);
-}
-
-int kpep_debug_sink_write(KPEP_DEBUG_SINK *sink, const char *text, int flush_output)
-{
-	int ok = 1;
-
-	if (!sink || !sink->lock || !sink->stream || !text)
-		return 0;
-
-	ossl_crypto_mutex_lock(sink->lock);
-	if (fputs(text, sink->stream) == EOF)
-		ok = 0;
-
-	if (ok && flush_output && fflush(sink->stream) != 0)
-		ok = 0;
-
-	if (!ok && ferror(sink->stream))
-		clearerr(sink->stream);
-	ossl_crypto_mutex_unlock(sink->lock);
-	return ok;
-}
-
-/* ************************************************************************************************
-* ************************************************************************************************
-* SUBSYSTEM management and operations
-* ************************************************************************************************
-* ***********************************************************************************************/
-
-static void kpep_debug_cleanup_if_unused(void)
-{
-	CRYPTO_MUTEX *mutex_to_free = NULL;
-
-	kpep_debug_core_lock();
-	if (!debug_sinks && debug_core_mutex) {
-		printf("Cleaning up debug core mutex\n");
-		mutex_to_free = debug_core_mutex;
-		debug_core_mutex = NULL;
-	}
-	if (mutex_to_free)
-		ossl_crypto_mutex_unlock(mutex_to_free);
-	else
-		kpep_debug_core_unlock();
-
-	if (mutex_to_free)
-		ossl_crypto_mutex_free(&mutex_to_free);
-}
-
-void kpep_debug_fini(void)
-{
-	KPEP_DEBUG_SINK *sink;
-	KPEP_DEBUG_SINK *next;
-	CRYPTO_MUTEX *mutex_to_free = NULL;
-
-#if defined(OPENSSL_SYS_UNIX) || defined(OPENSSL_SYS_WINDOWS)
-	kpep_debug_listener_stop();
-#endif
-	kpep_debug_reload_lock();
-	kpep_profile_fini();
-	kpep_trace_fini();
-
-	kpep_debug_core_lock();
-	sink = debug_sinks;
-	debug_sinks = NULL;
-	if (debug_core_mutex) {
-		mutex_to_free = debug_core_mutex;
-		debug_core_mutex = NULL;
-	}
-	if (mutex_to_free)
-		ossl_crypto_mutex_unlock(mutex_to_free);
-	else
-		kpep_debug_core_unlock();
-
-	while (sink) {
-		next = sink->next;
-		kpep_debug_destroy_sink(sink);
-		sink = next;
-	}
-
-	if (mutex_to_free)
-		ossl_crypto_mutex_free(&mutex_to_free);
-
-	kpep_debug_reload_unlock();
-	if (debug_reload_mutex)
-		ossl_crypto_mutex_free(&debug_reload_mutex);
-	debug_ipc_path[0] = '\0';
-	debug_peer_security = 0;
-}
-
-void kpep_debug_init(void)
-{
-	KPEP_DEBUG_TRACE_CONFIG trace_config = {0};
-	KPEP_DEBUG_PROFILE_CONFIG profile_config = {0};
-	const char *interval;
-
-	trace_config.file = getenv(KPEP_ENV_TRACE_FILE);
-	trace_config.seed = kpep_debug_is_enabled_flag(KPEP_ENV_TRACE_SEED);
-	trace_config.sink = kpep_debug_is_enabled_flag(KPEP_ENV_TRACE_SINK);
-	trace_config.thread = kpep_debug_is_enabled_flag(KPEP_ENV_TRACE_THREAD);
-	trace_config.strict = kpep_debug_is_enabled_flag(KPEP_ENV_TRACE_STRICT);
-
-	profile_config.file = getenv(KPEP_ENV_PROFILE_FILE);
-	profile_config.each_sample = kpep_debug_is_enabled_flag(KPEP_ENV_PROFILE_EACH_SAMPLE);
-	interval = getenv(KPEP_ENV_PROFILE_INTERVAL);
-	if (interval && interval[0] != '\0' &&
-		!kpep_debug_parse_interval(interval, &profile_config.interval)) {
-		kpep_debug_report_error_once("PROFILE ERROR", "%s '%s' is invalid; profiling disabled",
-			KPEP_ENV_PROFILE_INTERVAL, interval);
-		profile_config.file = NULL;
-		profile_config.each_sample = 0;
-	}
-
-	kpep_debug_reload_lock();
-	kpep_profile_fini();
-	kpep_trace_fini();
-	kpep_trace_init(&trace_config);
-	kpep_profile_init(&profile_config);
-	kpep_debug_cleanup_if_unused();
-	kpep_debug_reload_unlock();
-}
-
-static int kpep_debug_get_required_string(CONF *config,
-		const char *section,
-		const char *name,
-		const char **out)
-{
-	const char *value = NCONF_get_string(config, section, name);
-
-	if (!value || value[0] == '\0') {
-		ERR_clear_error();
-		return 0;
-	}
-
-	*out = value;
-	return 1;
-}
-
-static int kpep_debug_apply_config(const char *buffer, size_t buffer_len)
-{
-	KPEP_DEBUG_TRACE_CONFIG trace_config = {0};
-	KPEP_DEBUG_PROFILE_CONFIG profile_config = {0};
-	BIO *bio = NULL;
-	CONF *config = NULL;
-	long error_line = 0;
-	int result = 0;
-
-	if (!buffer || buffer_len == 0 || buffer_len > KPEP_DEBUG_CONFIG_MAX)
-		return 0;
-
-	bio = BIO_new_mem_buf(buffer, (int)buffer_len);
-	config = NCONF_new(NULL);
-	if (!bio || !config)
-		goto end;
-
-	if (NCONF_load_bio(config, bio, &error_line) <= 0)
-		goto end;
-
-	if (!kpep_debug_get_required_string(config, "trace", "file", &trace_config.file) ||
-		!kpep_debug_get_required_string(config, "profile", "file", &profile_config.file) ||
-		!kpep_debug_parse_bool(NCONF_get_string(config, "trace", "seed"), &trace_config.seed) ||
-		!kpep_debug_parse_bool(NCONF_get_string(config, "trace", "sink"), &trace_config.sink) ||
-		!kpep_debug_parse_bool(NCONF_get_string(config, "trace", "thread"), &trace_config.thread) ||
-		!kpep_debug_parse_bool(NCONF_get_string(config, "trace", "strict"), &trace_config.strict) ||
-		!kpep_debug_parse_interval(NCONF_get_string(config, "profile", "interval"), &profile_config.interval) ||
-		!kpep_debug_parse_bool(NCONF_get_string(config, "profile", "each-sample"), &profile_config.each_sample)) {
-		ERR_clear_error();
-		goto end;
-	}
-
-	kpep_debug_reload_lock();
-	kpep_profile_fini();
-	kpep_trace_fini();
-	kpep_trace_init(&trace_config);
-	kpep_profile_init(&profile_config);
-	kpep_debug_cleanup_if_unused();
-	kpep_debug_reload_unlock();
-	result = 1;
-
-end:
-	NCONF_free(config);
-	BIO_free(bio);
-	return result;
-}
-
-static int load_params(void *prov_ctx)
-{
-	const char *socket_value = NULL;
-	const char *security_value = NULL;
-	OSSL_PARAM params[3], *p = params;
-
-	debug_ipc_path[0] = '\0';
-	debug_peer_security = 0;
-
-	if (!prov_ctx)
-		return 0;
-
-	*p++ = OSSL_PARAM_construct_utf8_ptr(KPEP_PROV_PARAM_DEBUG_IPC_PATH,
-			(char **)&socket_value, sizeof(socket_value));
-	*p++ = OSSL_PARAM_construct_utf8_ptr(KPEP_PROV_PARAM_DEBUG_SECURITY,
-			(char **)&security_value, sizeof(security_value));
-	*p = OSSL_PARAM_construct_end();
-
-	if (!kpep_get_core_params(prov_ctx, params)) {
-		kpep_debug_report_error_once("DEBUG ERROR", "failed to load debug control configuration");
-		return 0;
-	}
-
-	if (!socket_value || socket_value[0] == '\0')
-		return 1;
-
-	if (strlen(socket_value) >= sizeof(debug_ipc_path)) {
-		kpep_debug_report_error_once("DEBUG ERROR", "%s is too long", KPEP_PROV_PARAM_DEBUG_IPC_PATH);
-		return 0;
-	}
-
-	if (security_value && security_value[0] != '\0') {
-		if (strcmp(security_value, "peer") == 0)
-			debug_peer_security = 1;
-		else if (strcmp(security_value, "none") != 0) {
-			kpep_debug_report_error_once("DEBUG ERROR", "%s must be 'none' or 'peer'", KPEP_PROV_PARAM_DEBUG_SECURITY);
-			return 0;
-		}
-	}
-
-	strcpy(debug_ipc_path, socket_value);
-	return 1;
-}
-

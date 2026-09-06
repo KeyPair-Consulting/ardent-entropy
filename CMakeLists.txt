@@ -402,16 +402,21 @@ ENDIF (debug)
 
 # KPEP Test Applications
 IF (tests)
+    INSTALL(TARGETS APP_rand_stress DESTINATION ${OPENSSL_ROOT}/test
+        PERMISSIONS 
+            OWNER_READ OWNER_EXECUTE OWNER_WRITE
+            GROUP_READ GROUP_EXECUTE 
+            WORLD_READ WORLD_EXECUTE)
     INSTALL(TARGETS APP_test_ringbuffer DESTINATION ${OPENSSL_ROOT}/test
         PERMISSIONS 
             OWNER_READ OWNER_EXECUTE OWNER_WRITE
             GROUP_READ GROUP_EXECUTE 
             WORLD_READ WORLD_EXECUTE)
-    INSTALL(TARGETS APP_rand_stress DESTINATION ${OPENSSL_ROOT}/test
+    INSTALL(TARGETS APP_test_runtime_config DESTINATION ${OPENSSL_ROOT}/test
         PERMISSIONS 
             OWNER_READ OWNER_EXECUTE OWNER_WRITE
             GROUP_READ GROUP_EXECUTE 
-            WORLD_READ WORLD_EXECUTE)            
+            WORLD_READ WORLD_EXECUTE)       
 ENDIF (tests)
 
 # Example external entropy source using libjitterentropy.a

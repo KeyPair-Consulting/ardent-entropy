@@ -15,10 +15,27 @@
  * ***********************************************************************************************/
 
 #include <strings.h>
+#include <signal.h>
+
+#include "openssl/e_os2.h"
+
+#if defined(OPENSSL_SYS_UNIX)
+# include <unistd.h>
+#elif defined(OPENSSL_SYS_WINDOWS)
+# include <windows.h>
+#endif
 
 //  Includes
 #include "app_common.h"  //  Includes <stdlib.h>, <stdio.h>, and <string.h>
 #include "kpep/kpep.h"
+
+static volatile sig_atomic_t g_keep_running = 1;
+
+static void handle_signal(int sig)
+{
+	(void)sig;
+	g_keep_running = 0;
+}
 
 /* ************************************************************************************************
  * ************************************************************************************************
@@ -29,7 +46,7 @@
 void print_usage(const char* appname)
 {
 	const int indent = 20;
-	printf("%s [-v] [--verbose] [--size <integer>] [--prov <name>]\n", appname);
+	printf("%s [-v] [--verbose] [--size <integer>] [--interval <integer>] [--prov <name>]\n", appname);
 	printf("%*s [--impl <name>] [--algo <name>] [--propq <string>]\n", (int)strlen(appname), "");
 	printf("\n");
 	printf("Generate a random number using a method specified by the command line arguments. If no arguments\n");
@@ -59,6 +76,7 @@ void print_usage(const char* appname)
 	printf("\n");
 	printf("Arguments for all interfaces:\n");
 	printf("%-*s%s\n", indent, "--size <integer>", "Specify the number of bytes to retrieve (default 32)");
+	printf("%-*s%s\n", indent, "--interval <sec>", "Loop continuously until stopped (e.g. Ctrl-C), sleeping specified seconds between iterations");
 	printf("%-*s%s\n", indent, "--verbose, -v", "Output additional information about the operation");
 	printf("\n");
 }
@@ -133,6 +151,7 @@ int main(int argc, char* argv[])
 	int ind = 1;
 	uint32_t openssl = 1;
 	uint32_t gathered = 0;
+	int interval = 0;
 
 	int32_t tmp;
 
@@ -161,6 +180,19 @@ int main(int argc, char* argv[])
 			tmp = atoi(argv[++ind]);
 			if (tmp > 0)
 				buflen = tmp;
+		}
+		else if (0 == strncmp(argv[ind], "--interval", 10)) {
+			if ((argc <= ind+1) || (argv[ind+1][0]=='-')) {
+				printf("Argument '--interval' requires an additional argument with the sleep interval in seconds\n");
+				return 1;
+			}
+			tmp = atoi(argv[++ind]);
+			if (tmp > 0)
+				interval = tmp;
+			else {
+				printf("Argument '--interval' requires a positive integer value\n");
+				return 1;
+			}
 		}
 		else if (0 == strncmp(argv[ind], "--prov", 6)) {
 			if ((argc <= ind+1) || (argv[ind+1][0]=='-')) {
@@ -214,13 +246,30 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	// Get the random bytes
-	gathered = do_openssl_api();
+	signal(SIGINT, handle_signal);
+	signal(SIGTERM, handle_signal);
 
-	// Each mode prints its own errors.  We only print on good results
-	if (gathered > 0) {
-		print_hex(NULL, 0, buffer, buflen);
-	}
+	do {
+		// Get the random bytes
+		gathered = do_openssl_api();
+
+		// Each mode prints its own errors.  We only print on good results
+		if (gathered > 0) {
+			print_hex(NULL, 0, buffer, buflen);
+		}
+
+		if (interval > 0 && g_keep_running) {
+			int elapsed_sec = 0;
+			while (elapsed_sec < interval && g_keep_running) {
+#if defined(OPENSSL_SYS_WINDOWS)
+				Sleep(1000);
+#else
+				sleep(1);
+#endif
+				elapsed_sec++;
+			}
+		}
+	} while (interval > 0 && g_keep_running);
 
 	if (buffer)
 		free(buffer);

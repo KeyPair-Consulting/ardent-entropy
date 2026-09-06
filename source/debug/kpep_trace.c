@@ -66,7 +66,7 @@ void kpep_trace_sub_fmt(const char* module, const char* submodule, const char* f
 int kpep_trace_seed_enabled = 0;
 int kpep_trace_sink_enabled = 0;
 int kpep_trace_thread_enabled = 0;
-int kpep_trace_strict_mode = 0;
+int kpep_trace_lazy_write = 0;
 
 static int trace_enabled = 0;
 static KPEP_DEBUG_SINK *trace_sink = NULL;
@@ -75,72 +75,6 @@ static uint64_t trace_start_us = 0;
 static uint64_t kpep_trace_monotonic_us(void)
 {
 	return kpep_debug_monotonic_us();
-}
-
-static void kpep_trace_report_error_once(KPEP_RESULT kpep_errnum, const char *fmt, ...)
-{
-    static KPEP_RESULT last_reported = 0;
-    va_list args;
-    char buf[512];
-    int n;
-
-    if (last_reported == kpep_errnum)
-        return;
-    last_reported = kpep_errnum;
-
-    va_start(args, fmt);
-    n = vsnprintf(buf, sizeof(buf), fmt, args);
-    va_end(args);
-    if (n < 0)
-        return;
-
-    if (n >= (int)sizeof(buf))
-        buf[sizeof(buf) - 1] = '\0';
-
-    kpep_debug_report_error_once("TRACE ERROR", "%s", buf);
-}
-
-static int kpep_trace_get_realtime_timespec(struct timespec *ts)
-{
-#if defined(OPENSSL_SYS_WINDOWS) || defined(WINDOWS)
-	FILETIME ft;
-	ULONGLONG value;
-	SYSTEMTIME st;
-	struct tm tmv;
-	TIME_ZONE_INFORMATION tz;
-	long bias;
-
-	if (!ts)
-		return -1;
-
-	GetSystemTimeAsFileTime(&ft);
-	value = ((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
-	value -= 116444736000000000ULL;
-	ts->tv_sec = (time_t)(value / 10000000ULL);
-	ts->tv_nsec = (long)((value % 10000000ULL) * 100ULL);
-
-	GetLocalTime(&st);
-	memset(&tmv, 0, sizeof(tmv));
-	tmv.tm_year = st.wYear - 1900;
-	tmv.tm_mon = st.wMonth - 1;
-	tmv.tm_mday = st.wDay;
-	tmv.tm_hour = st.wHour;
-	tmv.tm_min = st.wMinute;
-	tmv.tm_sec = st.wSecond;
-
-	if (GetTimeZoneInformation(&tz) != TIME_ZONE_ID_INVALID) {
-		bias = (long)tz.Bias * 60;
-		if (tz.StandardDate.wMonth != 0)
-			bias = (long)tz.Bias * 60;
-		if (bias > 0)
-			ts->tv_sec -= bias;
-		else
-			ts->tv_sec += (-bias);
-	}
-	return 0;
-#else
-	return clock_gettime(CLOCK_REALTIME, ts);
-#endif
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -152,7 +86,7 @@ void kpep_trace_fini(void)
 	kpep_trace_seed_enabled = 0;
 	kpep_trace_sink_enabled = 0;
 	kpep_trace_thread_enabled = 0;
-	kpep_trace_strict_mode = 0;
+	kpep_trace_lazy_write = 0;
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -169,13 +103,13 @@ void kpep_trace_init(const KPEP_DEBUG_TRACE_CONFIG *config)
 	kpep_trace_seed_enabled = config->seed;
 	kpep_trace_sink_enabled = config->sink;
 	kpep_trace_thread_enabled = config->thread;
-	kpep_trace_strict_mode = config->strict;
+	kpep_trace_lazy_write = config->lazy_write;
 	if (!kpep_trace_seed_enabled && !kpep_trace_sink_enabled && !kpep_trace_thread_enabled) {
 		return;
 	}
 
 	if (!config->file || config->file[0] == '\0') {
-		kpep_trace_report_error_once(KPEP_R_FILE_UNEXPECTED,
+		kpep_debug_report_error_once("TRACE ERROR",
 			"trace file is required to enable tracing; tracing disabled");
 		return;
 	}
@@ -195,10 +129,11 @@ static void kpep_trace_write_v(const char *module,
 						   va_list args)
 {
 	va_list copy;
-	char *line = NULL;
-	char *msg = NULL;
+	char msg[512];
+	char line[1024];
 	char ts[32];
 	uint64_t now_us;
+	int n;
 
 	if (!fmt)
 		return;
@@ -207,13 +142,11 @@ static void kpep_trace_write_v(const char *module,
 		return;
 
 	va_copy(copy, args);
-	if (vasprintf(&msg, fmt, copy) < 0)
-		msg = NULL;
+	n = vsnprintf(msg, sizeof(msg), fmt, copy);
 	va_end(copy);
 
-	if (!msg) {
-		kpep_trace_report_error_once(KPEP_R_FILE_UNEXPECTED,
-			"TRACE ERROR: failed to format trace message");
+	if (n < 0) {
+		kpep_debug_report_error_once("TRACE ERROR", "failed to format trace message");
 		return;
 	}
 
@@ -223,24 +156,14 @@ static void kpep_trace_write_v(const char *module,
 	snprintf(ts, sizeof(ts), "[%13llu]", (unsigned long long)(now_us - trace_start_us));
 
 	if (submodule && submodule[0] != '\0')
-		asprintf(&line, "%s %-12s : %s : %s\n", ts, module ? module : "", submodule, msg);
+		snprintf(line, sizeof(line), "%s %-12s : %s : %s\n", ts, module ? module : "", submodule, msg);
 	else
-		asprintf(&line, "%s %-12s : %s\n", ts, module ? module : "", msg);
+		snprintf(line, sizeof(line), "%s %-12s : %s\n", ts, module ? module : "", msg);
 
-	if (!line) {
-		kpep_trace_report_error_once(KPEP_R_FILE_UNEXPECTED,
-			"TRACE ERROR: failed to format trace output");
-		free(msg);
-		return;
-	}
-
-	if (!kpep_debug_sink_write(trace_sink, line, kpep_trace_strict_mode)) {
+	if (!kpep_debug_sink_write(trace_sink, line, !kpep_trace_lazy_write)) {
 		trace_enabled = 0;
-		kpep_trace_report_error_once(KPEP_R_FILE_UNEXPECTED,
-			"TRACE ERROR: failed to write trace output");
+		kpep_debug_report_error_once("TRACE ERROR", "failed to write trace output");
 	}
-	free(line);
-	free(msg);
 }
 
 void kpep_trace_fmt(const char* module, const char* fmt, ...)
