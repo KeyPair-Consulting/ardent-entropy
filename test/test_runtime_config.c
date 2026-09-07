@@ -42,19 +42,45 @@
 #define TEST_FILE_TRACE            "test_trace.log"
 #define TEST_FILE_PROFILE_SAMPLE   "test_profile_sample.log"
 #define TEST_FILE_PROFILE_INTERVAL "test_profile_interval.log"
+#define TEST_FILE_PROFILE_CSV      "test_profile_csv.log"
 #define TEST_FILE_BOTH             "test_both.log"
+#define TEST_FILE_BOTH_TRACE       "test_both_trace.log"
+#define TEST_FILE_BOTH_PROFILE     "test_both_profile.log"
+#define TEST_FILE_SUMMARY_BOTH     "test_summary_both.log"
+#define TEST_FILE_SUMMARY_TRACE    "test_summary_trace.log"
+#define TEST_FILE_SUMMARY_PROFILE  "test_summary_profile.log"
 
-static char abs_trace_file[KPEP_DEBUG_IPC_PATH_MAX] = {0};
-static char abs_profile_sample_file[KPEP_DEBUG_IPC_PATH_MAX] = {0};
-static char abs_profile_interval_file[KPEP_DEBUG_IPC_PATH_MAX] = {0};
-static char abs_both_file[KPEP_DEBUG_IPC_PATH_MAX] = {0};
+typedef struct {
+    char trace_file[KPEP_DEBUG_IPC_PATH_MAX];
+    char profile_file[KPEP_DEBUG_IPC_PATH_MAX];
+    const char *test_name;
+} RUNTIME_TEST_FILES;
 
-static const char *test_files[5] = {
-    abs_trace_file,
-    abs_profile_sample_file,
-    abs_profile_interval_file,
-    abs_both_file,
-    NULL
+enum {
+    TEST_TRACE_ONLY,
+    TEST_PROFILE_SAMPLE_ONLY,
+    TEST_PROFILE_SUMMARY_ONLY,
+    TEST_PROFILE_CSV,
+    TEST_BOTH_SAMPLE_SHARED,
+    TEST_BOTH_SAMPLE_SEPARATE,
+    TEST_BOTH_SUMMARY_SHARED,
+    TEST_BOTH_SUMMARY_SEPARATE,
+    TEST_INVALID_CONFIG,
+    TEST_DEBUG_RESET,
+    TEST_COUNT
+};
+
+static RUNTIME_TEST_FILES test_files[TEST_COUNT] = {
+    [TEST_TRACE_ONLY] = {{0}, {0}, "Test 1: Trace Only Configuration"},
+    [TEST_PROFILE_SAMPLE_ONLY] = {{0}, {0}, "Test 2: Profile Sample Only (each-sample = 1, interval = 0)"},
+    [TEST_PROFILE_SUMMARY_ONLY] = {{0}, {0}, "Test 3: Profile Summary Only (each-sample = 0, interval = N)"},
+    [TEST_PROFILE_CSV] = {{0}, {0}, "Test 4: Profile CSV (each-sample and interval)"},
+    [TEST_BOTH_SAMPLE_SHARED] = {{0}, {0}, "Test 5: Combined Trace & Profile Configuration"},
+    [TEST_BOTH_SAMPLE_SEPARATE] = {{0}, {0}, "Test 6: Combined Trace & Profile to Separate Files"},
+    [TEST_BOTH_SUMMARY_SHARED] = {{0}, {0}, "Test 7: Combined Trace & Profile Summary to Same File"},
+    [TEST_BOTH_SUMMARY_SEPARATE] = {{0}, {0}, "Test 8: Combined Trace & Profile Summary to Separate Files"},
+    [TEST_INVALID_CONFIG] = {{0}, {0}, "Test 9: Invalid Configuration Rejection"},
+    [TEST_DEBUG_RESET] = {{0}, {0}, "Test 10: Runtime Debug Reset to Full Off"}
 };
 
 /* ************************************************************************************************
@@ -253,7 +279,9 @@ typedef enum {
     EXPECT_PROFILE_SAMPLE_ONLY,
     EXPECT_PROFILE_SUMMARY_ONLY,
     EXPECT_PROFILE_ANY_ONLY,
-    EXPECT_BOTH
+    EXPECT_BOTH,
+    EXPECT_BOTH_SUMMARY,
+    EXPECT_PROFILE_CSV
 } validation_type_t;
 
 static int validate_log_file(const char *filename, validation_type_t expected)
@@ -264,6 +292,9 @@ static int validate_log_file(const char *filename, validation_type_t expected)
     int has_trace_records = 0;
     int has_profile_sample_records = 0;
     int has_profile_summary_records = 0;
+    int has_profile_csv_header = 0;
+    int has_profile_csv_sample = 0;
+    int has_profile_csv_summary = 0;
 
     fp = fopen(filename, "r");
     if (!fp) {
@@ -277,6 +308,8 @@ static int validate_log_file(const char *filename, validation_type_t expected)
             has_banner = 1;
         if (strstr(line, "Start:") && strstr(line, "UTC"))
             has_banner = 1;
+        if (strcmp(line, "Type,Source,Size (B),Last (us),Mean (us),Window (us),Min (us),Max (us),Count\n") == 0)
+            has_profile_csv_header = 1;
 
         /* Trace records contain timestamp bracket and module/submodule tags */
         if (line[0] == '[' && (strstr(line, "SEED") || strstr(line, "THREAD") ||
@@ -293,6 +326,10 @@ static int validate_log_file(const char *filename, validation_type_t expected)
         } else if (strstr(line, "PROF-SAMPLE")) {
             has_profile_sample_records = 1;
         }
+        if (strncmp(line, "PROF-SAMPLE,", strlen("PROF-SAMPLE,")) == 0)
+            has_profile_csv_sample = 1;
+        if (strncmp(line, "PROF-SUMMARY,", strlen("PROF-SUMMARY,")) == 0)
+            has_profile_csv_summary = 1;
     }
     fclose(fp);
 
@@ -309,6 +346,11 @@ static int validate_log_file(const char *filename, validation_type_t expected)
         return (has_banner && (has_profile_sample_records || has_profile_summary_records) && !has_trace_records);
     case EXPECT_BOTH:
         return (has_banner && has_trace_records && (has_profile_sample_records || has_profile_summary_records));
+    case EXPECT_BOTH_SUMMARY:
+        return (has_banner && has_trace_records && has_profile_summary_records && !has_profile_sample_records);
+    case EXPECT_PROFILE_CSV:
+        return (has_banner && has_profile_csv_header && has_profile_csv_sample &&
+            has_profile_csv_summary && !has_trace_records);
     default:
         return 0;
     }
@@ -320,17 +362,35 @@ static void cleanup_test_files(int preserve)
 
     if (preserve) {
         printf("\nPreserving test log files:\n");
-        for (i = 0; test_files[i]; ++i) {
-            if (test_files[i][0] != '\0')
-                printf("  - %s\n", test_files[i]);
+        for (i = 0; i < TEST_COUNT; ++i) {
+            if (test_files[i].trace_file[0] != '\0')
+                printf("  - %s\n", test_files[i].trace_file);
+            if (test_files[i].profile_file[0] != '\0' &&
+                strcmp(test_files[i].trace_file, test_files[i].profile_file) != 0) {
+                printf("  - %s\n", test_files[i].profile_file);
+            }
         }
         return;
     }
 
-    for (i = 0; test_files[i]; ++i) {
-        if (test_files[i][0] != '\0')
-            remove(test_files[i]);
+    for (i = 0; i < TEST_COUNT; ++i) {
+        if (test_files[i].trace_file[0] != '\0')
+            remove(test_files[i].trace_file);
+        if (test_files[i].profile_file[0] != '\0' &&
+            strcmp(test_files[i].trace_file, test_files[i].profile_file) != 0) {
+            remove(test_files[i].profile_file);
+        }
     }
+}
+
+static void set_test_file(char *path, const char *directory, const char *filename)
+{
+    if (!filename)
+        return;
+
+    strcpy(path, directory);
+    strcat(path, "/");
+    strcat(path, filename);
 }
 
 int main(int argc, char *argv[])
@@ -341,15 +401,7 @@ int main(int argc, char *argv[])
     int interval = 0;
     int preserve = 0;
     int index;
-    int step_pass[6] = {0};
-    const char *step_names[6] = {
-        "Step 1: Trace Only Configuration",
-        "Step 2: Profile Sample Only (each-sample = 1, interval = 0)",
-        "Step 3: Profile Summary Only (each-sample = 0, interval = N)",
-        "Step 4: Combined Trace & Profile Configuration",
-        "Step 5: Invalid Configuration Rejection",
-        "Step 6: Runtime Debug Reset to Full Off"
-    };
+    int test_pass[TEST_COUNT] = {0};
 
     if (argc < 2) {
         print_usage(argv[0]);
@@ -400,19 +452,23 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    if (strlen(local_dir) + 32 >= sizeof(abs_trace_file)) {
+    if (strlen(local_dir) + 32 >= sizeof(test_files[0].trace_file)) {
         fprintf(stderr, "Error: current working directory path is too long.\n");
         return 1;
     }
 
-    strcpy(abs_trace_file, local_dir);
-    strcat(abs_trace_file, "/" TEST_FILE_TRACE);
-    strcpy(abs_profile_sample_file, local_dir);
-    strcat(abs_profile_sample_file, "/" TEST_FILE_PROFILE_SAMPLE);
-    strcpy(abs_profile_interval_file, local_dir);
-    strcat(abs_profile_interval_file, "/" TEST_FILE_PROFILE_INTERVAL);
-    strcpy(abs_both_file, local_dir);
-    strcat(abs_both_file, "/" TEST_FILE_BOTH);
+    set_test_file(test_files[TEST_TRACE_ONLY].trace_file, local_dir, TEST_FILE_TRACE);
+    set_test_file(test_files[TEST_PROFILE_SAMPLE_ONLY].profile_file, local_dir, TEST_FILE_PROFILE_SAMPLE);
+    set_test_file(test_files[TEST_PROFILE_SUMMARY_ONLY].profile_file, local_dir, TEST_FILE_PROFILE_INTERVAL);
+    set_test_file(test_files[TEST_PROFILE_CSV].profile_file, local_dir, TEST_FILE_PROFILE_CSV);
+    set_test_file(test_files[TEST_BOTH_SAMPLE_SHARED].trace_file, local_dir, TEST_FILE_BOTH);
+    set_test_file(test_files[TEST_BOTH_SAMPLE_SHARED].profile_file, local_dir, TEST_FILE_BOTH);
+    set_test_file(test_files[TEST_BOTH_SAMPLE_SEPARATE].trace_file, local_dir, TEST_FILE_BOTH_TRACE);
+    set_test_file(test_files[TEST_BOTH_SAMPLE_SEPARATE].profile_file, local_dir, TEST_FILE_BOTH_PROFILE);
+    set_test_file(test_files[TEST_BOTH_SUMMARY_SHARED].trace_file, local_dir, TEST_FILE_SUMMARY_BOTH);
+    set_test_file(test_files[TEST_BOTH_SUMMARY_SHARED].profile_file, local_dir, TEST_FILE_SUMMARY_BOTH);
+    set_test_file(test_files[TEST_BOTH_SUMMARY_SEPARATE].trace_file, local_dir, TEST_FILE_SUMMARY_TRACE);
+    set_test_file(test_files[TEST_BOTH_SUMMARY_SEPARATE].profile_file, local_dir, TEST_FILE_SUMMARY_PROFILE);
 
     /* Clean up any preexisting files from prior runs before testing */
     cleanup_test_files(0);
@@ -422,7 +478,7 @@ int main(int argc, char *argv[])
     printf("Configured test wait interval: %d seconds per step.\n\n", interval + 1);
 
     /* ------------------------------------------------------------- */
-    /* Step 1: Trace Only Configuration                              */
+    /* Test 1: Trace Only Configuration                              */
     /* ------------------------------------------------------------- */
     {
         char cfg[KPEP_DEBUG_CONFIG_MAX];
@@ -433,18 +489,18 @@ int main(int argc, char *argv[])
             "sink = 1\n"
             "thread = 1\n"
             "lazy-write = 0\n",
-            abs_trace_file);
+            test_files[TEST_TRACE_ONLY].trace_file);
 
-        printf("Executing %s...\n", step_names[0]);
+        printf("Executing %s...\n", test_files[TEST_TRACE_ONLY].test_name);
         if (send_reload_config(debug_ipc_path, cfg, strlen(cfg))) {
             sleep_seconds((unsigned int)(interval + 1));
-            if (validate_log_file(abs_trace_file, EXPECT_TRACE_ONLY))
-                step_pass[0] = 1;
+            if (validate_log_file(test_files[TEST_TRACE_ONLY].trace_file, EXPECT_TRACE_ONLY))
+                test_pass[TEST_TRACE_ONLY] = 1;
         }
     }
 
     /* ------------------------------------------------------------- */
-    /* Step 2: Profile Sample Only (each-sample = 1, interval = 0)   */
+    /* Test 2: Profile Sample Only (each-sample = 1, interval = 0)   */
     /* ------------------------------------------------------------- */
     {
         char cfg[KPEP_DEBUG_CONFIG_MAX];
@@ -452,19 +508,20 @@ int main(int argc, char *argv[])
             "[profile]\n"
             "file = %s\n"
             "interval = 0\n"
-            "each-sample = 1\n",
-            abs_profile_sample_file);
+            "each-sample = 1\n"
+            "format-csv = 0\n",
+            test_files[TEST_PROFILE_SAMPLE_ONLY].profile_file);
 
-        printf("Executing %s...\n", step_names[1]);
+        printf("Executing %s...\n", test_files[TEST_PROFILE_SAMPLE_ONLY].test_name);
         if (send_reload_config(debug_ipc_path, cfg, strlen(cfg))) {
             sleep_seconds((unsigned int)(interval + 1));
-            if (validate_log_file(abs_profile_sample_file, EXPECT_PROFILE_SAMPLE_ONLY))
-                step_pass[1] = 1;
+            if (validate_log_file(test_files[TEST_PROFILE_SAMPLE_ONLY].profile_file, EXPECT_PROFILE_SAMPLE_ONLY))
+                test_pass[TEST_PROFILE_SAMPLE_ONLY] = 1;
         }
     }
 
     /* ------------------------------------------------------------- */
-    /* Step 3: Profile Summary Only (each-sample = 0, interval = N)  */
+    /* Test 3: Profile Summary Only (each-sample = 0, interval = 3N) */
     /* ------------------------------------------------------------- */
     {
         char cfg[KPEP_DEBUG_CONFIG_MAX];
@@ -472,21 +529,44 @@ int main(int argc, char *argv[])
             "[profile]\n"
             "file = %s\n"
             "interval = %d\n"
-            "each-sample = 0\n",
-            abs_profile_interval_file,
-            interval);
+            "each-sample = 0\n"
+            "format-csv = 0\n",
+            test_files[TEST_PROFILE_SUMMARY_ONLY].profile_file,
+            interval * 3);
 
-        printf("Executing %s...\n", step_names[2]);
+        printf("Executing %s...\n", test_files[TEST_PROFILE_SUMMARY_ONLY].test_name);
         if (send_reload_config(debug_ipc_path, cfg, strlen(cfg))) {
             /* Wait for interval reset period + margin */
-            sleep_seconds((unsigned int)(interval + 2));
-            if (validate_log_file(abs_profile_interval_file, EXPECT_PROFILE_SUMMARY_ONLY))
-                step_pass[2] = 1;
+            sleep_seconds((unsigned int)(interval * 3 + 2));
+            if (validate_log_file(test_files[TEST_PROFILE_SUMMARY_ONLY].profile_file, EXPECT_PROFILE_SUMMARY_ONLY))
+                test_pass[TEST_PROFILE_SUMMARY_ONLY] = 1;
         }
     }
 
     /* ------------------------------------------------------------- */
-    /* Step 4: Combined Trace & Profile Configuration               */
+    /* Test 4: Profile CSV (each-sample = 1, interval = 3N)         */
+    /* ------------------------------------------------------------- */
+    {
+        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        snprintf(cfg, sizeof(cfg),
+            "[profile]\n"
+            "file = %s\n"
+            "interval = %d\n"
+            "each-sample = 1\n"
+            "format-csv = 1\n",
+            test_files[TEST_PROFILE_CSV].profile_file,
+            interval * 3);
+
+        printf("Executing %s...\n", test_files[TEST_PROFILE_CSV].test_name);
+        if (send_reload_config(debug_ipc_path, cfg, strlen(cfg))) {
+            sleep_seconds((unsigned int)(interval * 3 + 2));
+            if (validate_log_file(test_files[TEST_PROFILE_CSV].profile_file, EXPECT_PROFILE_CSV))
+                test_pass[TEST_PROFILE_CSV] = 1;
+        }
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Test 5: Combined Trace & Profile Configuration               */
     /* ------------------------------------------------------------- */
     {
         char cfg[KPEP_DEBUG_CONFIG_MAX];
@@ -501,21 +581,116 @@ int main(int argc, char *argv[])
             "[profile]\n"
             "file = %s\n"
             "interval = %d\n"
-            "each-sample = 1\n",
-            abs_both_file,
-            abs_both_file,
-            interval);
+            "each-sample = 1\n"
+            "format-csv = 0\n",
+            test_files[TEST_BOTH_SAMPLE_SHARED].trace_file,
+            test_files[TEST_BOTH_SAMPLE_SHARED].profile_file,
+            interval * 3);
 
-        printf("Executing %s...\n", step_names[3]);
+        printf("Executing %s...\n", test_files[TEST_BOTH_SAMPLE_SHARED].test_name);
         if (send_reload_config(debug_ipc_path, cfg, strlen(cfg))) {
-            sleep_seconds((unsigned int)(interval + 2));
-            if (validate_log_file(abs_both_file, EXPECT_BOTH))
-                step_pass[3] = 1;
+            sleep_seconds((unsigned int)(interval * 3 + 2));
+            if (validate_log_file(test_files[TEST_BOTH_SAMPLE_SHARED].trace_file, EXPECT_BOTH))
+                test_pass[TEST_BOTH_SAMPLE_SHARED] = 1;
         }
     }
 
     /* ------------------------------------------------------------- */
-    /* Step 5: Invalid Configuration Rejection                       */
+    /* Test 6: Combined Trace & Profile to Separate Files            */
+    /* ------------------------------------------------------------- */
+    {
+        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        snprintf(cfg, sizeof(cfg),
+            "[trace]\n"
+            "file = %s\n"
+            "seed = 1\n"
+            "sink = 1\n"
+            "thread = 1\n"
+            "lazy-write = 0\n"
+            "\n"
+            "[profile]\n"
+            "file = %s\n"
+            "interval = %d\n"
+            "each-sample = 1\n"
+            "format-csv = 0\n",
+            test_files[TEST_BOTH_SAMPLE_SEPARATE].trace_file,
+            test_files[TEST_BOTH_SAMPLE_SEPARATE].profile_file,
+            interval * 3);
+
+        printf("Executing %s...\n", test_files[TEST_BOTH_SAMPLE_SEPARATE].test_name);
+        if (send_reload_config(debug_ipc_path, cfg, strlen(cfg))) {
+            sleep_seconds((unsigned int)(interval * 3 + 2));
+            if (validate_log_file(test_files[TEST_BOTH_SAMPLE_SEPARATE].trace_file, EXPECT_TRACE_ONLY) &&
+                validate_log_file(test_files[TEST_BOTH_SAMPLE_SEPARATE].profile_file, EXPECT_PROFILE_ANY_ONLY)) {
+                test_pass[TEST_BOTH_SAMPLE_SEPARATE] = 1;
+            }
+        }
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Test 7: Combined Trace & Profile Summary to Same File         */
+    /* ------------------------------------------------------------- */
+    {
+        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        snprintf(cfg, sizeof(cfg),
+            "[trace]\n"
+            "file = %s\n"
+            "seed = 1\n"
+            "sink = 1\n"
+            "thread = 1\n"
+            "lazy-write = 0\n"
+            "\n"
+            "[profile]\n"
+            "file = %s\n"
+            "interval = %d\n"
+            "each-sample = 0\n"
+            "format-csv = 0\n",
+            test_files[TEST_BOTH_SUMMARY_SHARED].trace_file,
+            test_files[TEST_BOTH_SUMMARY_SHARED].profile_file,
+            interval * 3);
+
+        printf("Executing %s...\n", test_files[TEST_BOTH_SUMMARY_SHARED].test_name);
+        if (send_reload_config(debug_ipc_path, cfg, strlen(cfg))) {
+            sleep_seconds((unsigned int)(interval * 3 + 2));
+            if (validate_log_file(test_files[TEST_BOTH_SUMMARY_SHARED].trace_file, EXPECT_BOTH_SUMMARY))
+                test_pass[TEST_BOTH_SUMMARY_SHARED] = 1;
+        }
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Test 8: Combined Trace & Profile Summary to Separate Files    */
+    /* ------------------------------------------------------------- */
+    {
+        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        snprintf(cfg, sizeof(cfg),
+            "[trace]\n"
+            "file = %s\n"
+            "seed = 1\n"
+            "sink = 1\n"
+            "thread = 1\n"
+            "lazy-write = 0\n"
+            "\n"
+            "[profile]\n"
+            "file = %s\n"
+            "interval = %d\n"
+            "each-sample = 0\n"
+            "format-csv = 0\n",
+            test_files[TEST_BOTH_SUMMARY_SEPARATE].trace_file,
+            test_files[TEST_BOTH_SUMMARY_SEPARATE].profile_file,
+            interval * 3);
+
+        printf("Executing %s...\n", test_files[TEST_BOTH_SUMMARY_SEPARATE].test_name);
+        if (send_reload_config(debug_ipc_path, cfg, strlen(cfg))) {
+            sleep_seconds((unsigned int)(interval * 3 + 2));
+            if (validate_log_file(test_files[TEST_BOTH_SUMMARY_SEPARATE].trace_file, EXPECT_TRACE_ONLY) &&
+                validate_log_file(test_files[TEST_BOTH_SUMMARY_SEPARATE].profile_file, EXPECT_PROFILE_SUMMARY_ONLY)) {
+                test_pass[TEST_BOTH_SUMMARY_SEPARATE] = 1;
+            }
+        }
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Test 9: Invalid Configuration Rejection                       */
     /* ------------------------------------------------------------- */
     {
         /* Incomplete section (missing required 'file' or 'seed') */
@@ -524,20 +699,20 @@ int main(int argc, char *argv[])
             "seed = 1\n"
             "thread = 1\n";
 
-        printf("Executing %s...\n", step_names[4]);
+        printf("Executing %s...\n", test_files[TEST_INVALID_CONFIG].test_name);
         /* Expect send_reload_config to return 0 (rejection from provider) */
         if (!send_reload_config(debug_ipc_path, bad_cfg, strlen(bad_cfg)))
-            step_pass[4] = 1;
+            test_pass[TEST_INVALID_CONFIG] = 1;
     }
 
     /* ------------------------------------------------------------- */
-    /* Step 6: Runtime Debug Reset to Full Off (0-byte payload)       */
+    /* Test 10: Runtime Debug Reset to Full Off (0-byte payload)      */
     /* ------------------------------------------------------------- */
     {
-        printf("Executing %s...\n", step_names[5]);
+        printf("Executing %s...\n", test_files[TEST_DEBUG_RESET].test_name);
         if (send_reload_config(debug_ipc_path, "", 0)) {
             sleep_seconds((unsigned int)(interval + 1));
-            step_pass[5] = 1;
+            test_pass[TEST_DEBUG_RESET] = 1;
         }
     }
 
@@ -551,20 +726,20 @@ int main(int argc, char *argv[])
         printf("\n============================================================\n");
         printf("              KPEP Runtime Config Test Results\n");
         printf("============================================================\n");
-        for (index = 0; index < 6; ++index) {
-            if (step_pass[index]) {
-                printf("  [PASS] %s\n", step_names[index]);
+        for (index = 0; index < TEST_COUNT; ++index) {
+            if (test_pass[index]) {
+                printf("  [PASS] %s\n", test_files[index].test_name);
                 pass_count++;
             } else {
-                printf("  [FAIL] %s\n", step_names[index]);
+                printf("  [FAIL] %s\n", test_files[index].test_name);
                 all_passed = 0;
             }
         }
         printf("============================================================\n");
         if (all_passed)
-            printf("Overall Status: ALL TESTS PASSED (%d/6)\n", pass_count);
+            printf("Overall Status: ALL TESTS PASSED (%d/%d)\n", pass_count, TEST_COUNT);
         else
-            printf("Overall Status: SOME TESTS FAILED (%d/6 passed)\n", pass_count);
+            printf("Overall Status: SOME TESTS FAILED (%d/%d passed)\n", pass_count, TEST_COUNT);
         printf("============================================================\n");
 
         cleanup_test_files(preserve);

@@ -36,6 +36,7 @@ typedef struct kpep_debug_profile_config_st {
     const char *file;
     uint32_t interval;
     int each_sample;
+    int format_csv;
 } KPEP_DEBUG_PROFILE_CONFIG;
 
 /* Initialize the debug features in their disabled state. */

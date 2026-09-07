@@ -15,6 +15,7 @@
  * ***********************************************************************************************/
 
 #include "app_common.h"
+#include "kpep/kpep_debug.h"
 
 #include <errno.h>
 
@@ -142,24 +143,6 @@ static int read_config_file(const char *filename, char *config, size_t config_le
 
 static int write_template(void)
 {
-    static const char template_text[] =
-        "# Debug template for KPEP debugging (tracing and profiling).  This \n"
-        "# template provides all the configuration fields with default settings.\n"
-        "# Rename and modify as needed.\n"
-        "# NOTE: Sections ([trace], [profile]) are optional. Omitted sections default to\n"
-        "# off; included sections require all of their fields to be present.\n"
-        "\n"
-        "[trace]\n"
-        "file = stdout\n"
-        "seed = 0\n"
-        "sink = 0\n"
-        "thread = 0\n"
-        "lazy-write = 0\n"
-        "\n"
-        "[profile]\n"
-        "file = stdout\n"
-        "interval = 0\n"
-        "each-sample = 0\n";
     FILE *file;
 
     file = fopen(KPEP_TEMPLATE_FILE, "w");

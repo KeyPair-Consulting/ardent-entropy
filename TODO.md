@@ -15,7 +15,7 @@
     * Build and runtime-test keypair_debug against named pipes
     * Verify OPENSSL_CONF representation of named-pipe paths
     * Add busy-pipe retry and improve Windows error reporting
-8) DONE; Reserve index
+8) RESERVED to maintain ordinal values
 9) Implement Profiling runtime communications
     * Create a thin abstration layer for POSIX/WINDOWS (kpep_shm.c and kpep_event.c)
     * SHM for data plane

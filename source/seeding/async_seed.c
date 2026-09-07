@@ -305,7 +305,6 @@ KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_le
         // DEV NOTE: This will go in the async thread as well, but currently executed synchronously for simplicity
         size_t buflen = gather_bytes;
         uint8_t *buf = NULL;
-        uint32_t start_us, elapsed_us;
 
         buf = kpep_zalloc(gather_bytes);
         if (!buf) {
@@ -313,11 +312,8 @@ KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_le
             ossl_crypto_mutex_unlock(ctx->mutex);  // Need better handling
             goto err;
         }
-        // Gather with profiling
-        start_us = seed_stub_profile_now_us();
+        // Gather from backing seed soubce
         rv = ctx->source_fn->gather_fn(ctx->source_ctx, buf, &buflen, nbits);
-        elapsed_us = seed_stub_profile_now_us() - start_us;
-        seed_stub_profile_update((SEED_STUB_INFO *)ctx->source_ctx, elapsed_us);
         if (rv) {
             LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' gather operation failed", ctx->source_info->name);
             ossl_crypto_mutex_unlock(ctx->mutex);  // Need better handling

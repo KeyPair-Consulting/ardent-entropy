@@ -84,14 +84,17 @@ static SEED_SOURCE_DEF seed_source_defs[] = {
     uint32_t block_size;             \
     uint32_t block_count;            \
     double   entropy_per_bit;        \
+                                     \
     uint32_t prof_last;              \
+    uint32_t prof_last_sz;           \
     uint32_t prof_min;               \
     uint32_t prof_max;               \
     uint32_t prof_avg_g;             \
     uint32_t prof_avg_w;             \
     uint32_t prof_count;             \
     uint64_t prof_total;             \
-
+    uint64_t prof_total_sz;          \
+    uint64_t prof_last_reset_us;     \
 /*
  * This structure is used to cast each opaque seed-source context structure so the 
  * async ring buffer can read the capabilities of each seed-source in order to make 
@@ -119,8 +122,7 @@ uint32_t seed_get_gather_sz(const SEED_STUB_INFO *info, size_t nbits)
 uint32_t seed_stub_profile_now_us(void);
 
 // Update the profiling information for a seed stub context
-void seed_stub_profile_update(SEED_STUB_INFO *info, uint32_t last_us);
-
+void seed_stub_profile_update(SEED_STUB_INFO *info, uint32_t last_us, uint32_t last_sz);
 
 #ifdef __cplusplus
 }

@@ -142,8 +142,11 @@ void* stub_osrand_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
         kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'osrand' startup successful (full entropy)");
     else
         kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'osrand' startup successful (%.6f ent-per-bit)", ctx->entropy_per_bit);
-
     ctx->state = KPEP_RAND_STATE_READY;
+
+    // Set initial state for profiling
+    ctx->prof_min = UINT32_MAX;
+
     return ctx;
 }
 
@@ -221,7 +224,8 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     }
     bytes_read = fread(out, 1, gather_bytes, fp);
     if ((kpep_profile_enabled)) {
-        seed_stub_profile_update((SEED_STUB_INFO *)ctx, seed_stub_profile_now_us() - start_us);
+        seed_stub_profile_update((SEED_STUB_INFO *)ctx, seed_stub_profile_now_us() - start_us,
+            (uint32_t)bytes_read);
     }
     if (bytes_read != gather_bytes) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'osrand' gather failed");

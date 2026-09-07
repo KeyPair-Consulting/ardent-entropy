@@ -447,7 +447,8 @@ static int kpep_debug_apply_config(const char *buffer, size_t buffer_len)
 			has_profile = 1;
 			if (!kpep_debug_get_required_string(config, "profile", "file", &profile_config.file) ||
 				!kpep_debug_parse_interval(NCONF_get_string(config, "profile", "interval"), &profile_config.interval) ||
-				!kpep_debug_parse_bool(NCONF_get_string(config, "profile", "each-sample"), &profile_config.each_sample)) {
+				!kpep_debug_parse_bool(NCONF_get_string(config, "profile", "each-sample"), &profile_config.each_sample) ||
+				!kpep_debug_parse_bool(NCONF_get_string(config, "profile", "format-csv"), &profile_config.format_csv)) {
 				goto end;
 			}
 		}

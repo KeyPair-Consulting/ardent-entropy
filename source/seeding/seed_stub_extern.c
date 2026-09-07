@@ -181,6 +181,10 @@ void* stub_extern_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
     // Start initialized
     kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'external' startup successful");
     ctx->state = KPEP_RAND_STATE_READY;
+
+    // Set initial state for profiling
+    ctx->prof_min = UINT32_MAX;
+
     return ctx;
 
 err:
@@ -251,7 +255,8 @@ KPEP_RESULT stub_extern_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     }
     rv = ctx->ext_stub->gather_fn(ctx->ext_ctx, out, out_len, nbits);
     if (kpep_profile_enabled) {
-        seed_stub_profile_update((SEED_STUB_INFO *)ctx, seed_stub_profile_now_us() - start_us);
+        seed_stub_profile_update((SEED_STUB_INFO *)ctx, seed_stub_profile_now_us() - start_us,
+            (uint32_t)*out_len);
     }
     if (rv) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'external' gather failed");

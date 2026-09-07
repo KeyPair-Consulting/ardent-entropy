@@ -153,6 +153,10 @@ void* stub_jitter_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
         kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'jitter' startup successful (%.6f ent-per-bit)", ctx->entropy_per_bit);
 
     ctx->state = KPEP_RAND_STATE_READY;
+
+    // Set initial state for profiling
+    ctx->prof_min = UINT32_MAX;
+
     return ctx;
 }
 
@@ -257,7 +261,8 @@ KPEP_RESULT stub_jitter_gather(void *stub_ctx, unsigned char *out, size_t *out_l
         // Success
         if (result >= 0 && (size_t)result == gather_bytes)  {
             if (kpep_profile_enabled) {
-                seed_stub_profile_update((SEED_STUB_INFO *)ctx, seed_stub_profile_now_us() - start_us);
+                seed_stub_profile_update((SEED_STUB_INFO *)ctx, seed_stub_profile_now_us() - start_us,
+                    (uint32_t)result);
             }
             *out_len = gather_bytes;
             return KPEP_R_SUCCESS;
@@ -267,7 +272,7 @@ KPEP_RESULT stub_jitter_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     // We are going to be entering a permanent error state, but it's probaby a good idea to still 
     // grab the profiling information.
     if (kpep_profile_enabled) {
-        seed_stub_profile_update((SEED_STUB_INFO *)ctx, seed_stub_profile_now_us() - start_us);
+        seed_stub_profile_update((SEED_STUB_INFO *)ctx, seed_stub_profile_now_us() - start_us, 0);
     }
 
     // If no error already set, assume a general error
