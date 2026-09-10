@@ -517,7 +517,7 @@ static int generate_mac(OSSL_LIB_CTX *libctx, const char *filename, int verbose)
 	// Open
 	bio = BIO_new_file(out_filename, "w");
 	if (bio == NULL) {
-		rv = KPEP_R_FILE_FAILED_TO_OPEN;
+		rv = KPEP_R_FILE_OPEN_ERROR;
 		printf("Failed to open file '%s' for writing\n", out_filename);
 		goto err;
 	}

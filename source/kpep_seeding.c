@@ -102,8 +102,8 @@ KPEP_RESULT kpep_seeding_init(void* prov_ctx)
     // Initialize seed lock mechanism
     lock = ossl_crypto_mutex_new();
     if (!lock) {
-        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_LOCK_ERROR);
-        return KPEP_R_LOCK_ERROR;
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_MUTEX_FAIL_START);
+        return KPEP_R_MUTEX_FAIL_START;
     }
     ossl_crypto_mutex_lock(lock);
 
@@ -295,14 +295,6 @@ static int kpep_seed_reseed(ossl_unused void *seed_ctx,
     if (!ossl_prov_is_running())
         return 0;
 
-    // Initialize seed lock mechanism
-    #if 0
-    if (!RUN_ONCE(&lock_init, do_lock_init)) {
-        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_LOCK_ERROR);
-        return 0;
-    }
-    #endif
-
     // Check seed state
     ossl_crypto_mutex_lock(lock);
     state = seed_control_get_state(ctrl_ctx);
@@ -364,14 +356,6 @@ static int kpep_seed_verify_zeroization(ossl_unused void *seed_ctx)
         TRACE_START;
     }
 
-    // Initialize seed lock mechanism
-    #if 0
-    if (!RUN_ONCE(&lock_init, do_lock_init)) {
-        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_LOCK_ERROR);
-        return 0;
-    }
-    #endif
-   
     if (!drbg_ctx)
         return 1;
     ossl_crypto_mutex_lock(lock);
@@ -402,13 +386,6 @@ static size_t kpep_seed_get_seed(ossl_unused void *seed_ctx, unsigned char **pou
         return 0;
     if (!entropy)
         return 0;
-
-    #if 0
-    if (!RUN_ONCE(&lock_init, do_lock_init)) {
-        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_LOCK_ERROR);
-        return 0;
-    }
-    #endif
 
     if (!drbg_instantiated) {
         ossl_crypto_mutex_lock(lock);

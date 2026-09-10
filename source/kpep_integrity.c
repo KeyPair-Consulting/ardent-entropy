@@ -31,10 +31,27 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <errno.h>
-#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include "internal/e_os.h"
+#ifndef OPENSSL_SYS_WINDOWS
+# include <unistd.h>
+#endif
 #include "crypto/hmac.h"
+
+/* Fallback definitions for file mode masks if missing in strict ANSI mode */
+#ifndef S_IFMT
+# define S_IFMT 0170000
+#endif
+#ifndef S_IFREG
+# define S_IFREG 0100000
+#endif
+#ifndef S_IFDIR
+# define S_IFDIR 0040000
+#endif
+#ifndef S_IFCHR
+# define S_IFCHR 0020000
+#endif
 
 // TODO: CHANGE ME!
 EXPORT_VISIBILITY_HIDDEN
@@ -53,24 +70,38 @@ static const char* is_valid_file(const char *filename)
 {
 	struct stat st;
 
+#ifdef OPENSSL_SYS_WINDOWS
+	if (0 != stat(filename, &st)) {
+		return "stat failed, probably no such file";
+	}
+#else
 	if (0 != lstat(filename, &st)) {
 		return "lstat failed, probably no such file";
 	}
+#endif
 
 	switch (st.st_mode & S_IFMT) {
+#ifdef S_IFLNK
 	case S_IFLNK:
+#endif
 	case S_IFREG:
 		return NULL;
+#ifdef S_IFSOCK
 	case S_IFSOCK:
 		return "socket";
+#endif
+#ifdef S_IFBLK
 	case S_IFBLK:
 		return "block device";
+#endif
 	case S_IFDIR:
 		return "directory";
 	case S_IFCHR:
 		return "character device";
+#ifdef S_IFIFO
 	case S_IFIFO:
 		return "FIFO";
+#endif
 	}
 	return NULL;
 }
@@ -87,13 +118,12 @@ KPEP_RESULT integrity_check_file(const char* filename,
     size_t bytes_read = 0;
 
     HMAC_CTX *hctx;
-    const char *file_type = NULL;
 
     // Validate arguments
     if (!mac) {
         if (mac_len) {
             *mac_len = KPEP_GLOBAL_DIGEST_SIZE;
-            return 0; // ok
+            return KPEP_R_SUCCESS; // ok
         }
         else 
             return KPEP_R_NULL_ARG;  // !mac and !mac_len... what do you want?
@@ -102,7 +132,7 @@ KPEP_RESULT integrity_check_file(const char* filename,
     if (!filename || !mac_len || *mac_len < KPEP_GLOBAL_DIGEST_SIZE) {
         return KPEP_R_INVALID_ARG;
     }
-    if ((file_type = is_valid_file(filename)) != NULL) {
+    if (is_valid_file(filename) != NULL) {
         return KPEP_R_FILE_NOT_VALID;
     }
 
@@ -151,7 +181,7 @@ KPEP_RESULT integrity_check_file(const char* filename,
     while ((bytes_read = fread(buffer, 1, FILE_BUFFER_SIZE, fp)) > 0) {
         hmac_update(hctx, buffer, bytes_read);
     }
-    if (ferror(fp)) {
+    if (ferror(fp) || !feof(fp)) {
         rv = KPEP_R_FILE_UNEXPECTED;
         clearerr(fp);
         goto err;

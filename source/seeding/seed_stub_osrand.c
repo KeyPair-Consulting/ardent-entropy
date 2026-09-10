@@ -213,7 +213,7 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     // Get the entropy from OS
     fp = fopen(ctx->filepath, "r");
     if (!fp) {
-        rv = KPEP_R_SEED_CANNOT_OPEN_FILE;
+        rv = KPEP_R_FILE_OPEN_ERROR;
         LOG_FORMATTED_ERROR(MODULE_NAME, "Error opening file '%s' for reading seed", ctx->filepath);
         LOG_KPEP_ERROR(MODULE_NAME, rv);
         goto err;
@@ -230,17 +230,17 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     if (bytes_read != gather_bytes) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'osrand' gather failed");
         if (feof(fp)) {
-            rv = KPEP_R_SEED_FILE_EOF;
+            rv = KPEP_R_FILE_EOF;
             LOG_FORMATTED_ERROR(MODULE_NAME, "EOF while reading file '%s'", ctx->filepath);
             LOG_KPEP_ERROR(MODULE_NAME, rv);
         }
         else if (ferror(fp)) {
-            rv = KPEP_R_SEED_FILE_ERROR;
+            rv = KPEP_R_FILE_ERROR;
             LOG_FORMATTED_ERROR(MODULE_NAME, "Error while reading file '%s': %s", ctx->filepath, strerror(errno));
             LOG_KPEP_ERROR(MODULE_NAME, rv);
         }
         else {
-            rv = KPEP_R_SEED_FILE_ERROR;
+            rv = KPEP_R_FILE_UNEXPECTED;
             LOG_FORMATTED_ERROR(MODULE_NAME, "Unknown error (gathered %d, expected %d)", bytes_read, gather_bytes);
             LOG_KPEP_ERROR(MODULE_NAME, rv);
         }

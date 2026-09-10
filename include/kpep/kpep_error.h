@@ -44,23 +44,23 @@ extern int ERR_LIB_KPEP;           // Handle for accessing OpenSSL error functio
 #define KPEP_R_ERROR_RETRIEVING_ENTROPY  104
 #define KPEP_R_FIPS_OPTEST               105
 
-#define KPEP_R_EXTERN_LOAD_FAILURE       106
+#define KPEP_R_EXTERN_LOAD_FAILURE       106  /* Problem in DLSYM loading */
 #define KPEP_R_INTERNAL_HASH_FAIL        107
-#define KPEP_R_KDF_FAILED_OPERATION      108
-#define KPEP_R_LOG_NO_SINK_SLOTS         109
+#define KPEP_R_RESERVED_108              108
+#define KPEP_R_NO_SLOTS                  109
 #define KPEP_R_LOG_BUGFIX_FAIL           110
 
-#define KPEP_R_SEED_FATAL_ERROR          111
-#define KPEP_R_SEED_NOT_READY            112
+#define KPEP_R_RESERVED_111              111
+#define KPEP_R_RESERVED_112              112
 #define KPEP_R_SEED_NOT_INSTANTIATED     113
 #define KPEP_R_SEED_IN_ERROR_STATE       114
 #define KPEP_R_SEED_NO_CPU_SUPPORT       115
 
 #define KPEP_R_SEED_BUFFER_TOO_SMALL     116
-#define KPEP_R_SEED_NO_SLOTS             117
-#define KPEP_R_SEED_FILE_EOF             118
-#define KPEP_R_SEED_FILE_ERROR           119
-#define KPEP_R_SEED_CANNOT_OPEN_FILE     120
+#define KPEP_R_RESERVED_117              117
+#define KPEP_R_RESERVED_118              118
+#define KPEP_R_RESERVED_119              119
+#define KPEP_R_RESERVED_120              120
 
 #define KPEP_R_DRBG_INVALID_STATE        121
 #define KPEP_R_DRBG_INSUFFICIENT_ENTROPY 122
@@ -69,16 +69,16 @@ extern int ERR_LIB_KPEP;           // Handle for accessing OpenSSL error functio
 #define KPEP_R_DRBG_FAILED_STARTUP       125
 
 #define KPEP_R_FILE_NOT_VALID            126
-#define KPEP_R_FILE_FAILED_TO_OPEN       127
+#define KPEP_R_FILE_OPEN_ERROR           127
 #define KPEP_R_FILE_BAD_PERMISSIONS      128
 #define KPEP_R_FILE_NOT_FOUND            129
-#define KPEP_R_FILE_UNEXPECTED           130
+#define KPEP_R_FILE_UNEXPECTED           130  // order s/b EOF->ERROR->UNEXPECTED
 
-#define KPEP_R_CONFIG_LOOKUP_FAILURE     131
-#define KPEP_R_CONFIG_PARAMETER_MISSING  132
-#define KPEP_R_CONFIG_PARAMETER_INVALID  133
-#define KPEP_R_KDF_CAST_FAILED           134
-#define KPEP_R_LOCK_ERROR                135
+#define KPEP_R_FILE_EOF                  131
+#define KPEP_R_FILE_ERROR                132
+#define KPEP_R_CONFIG_LOOKUP_FAILURE     133
+#define KPEP_R_CONFIG_PARAMETER_MISSING  134
+#define KPEP_R_CONFIG_PARAMETER_INVALID  135
 
 #define KPEP_R_RING_INVALID_SIZE         136
 #define KPEP_R_RING_NOT_POWER_OF_TWO     137
@@ -91,6 +91,12 @@ extern int ERR_LIB_KPEP;           // Handle for accessing OpenSSL error functio
 #define KPEP_R_MUTEX_FAIL_START          143
 #define KPEP_R_RESERVED_144              144
 #define KPEP_R_RESERVED_145              145
+
+#define KPEP_R_SEED_NOT_READY            146
+#define KPEP_R_SEED_SOURCE_ERR_1         147
+#define KPEP_R_SEED_SOURCE_ERR_2         148
+#define KPEP_R_SEED_SOURCE_ERR_3         149
+#define KPEP_R_SEED_FATAL_ERROR          150
 
 #define KPEP_R_END                       145   /* MUST BE SAME AS LAST INDEX */
 

@@ -116,7 +116,7 @@ KPEP_RESULT kpep_log_add_sink(const SINK_FUNCTIONS *funcs)
 	}
 	if (idx == MAX_SINK_COUNT) {
 		printf("ERROR: Could not attach log sink; no slots available\n");
-		return KPEP_R_LOG_NO_SINK_SLOTS;
+		return KPEP_R_NO_SLOTS;
 	}
 
 	return KPEP_R_SUCCESS;
