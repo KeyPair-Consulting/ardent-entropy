@@ -50,17 +50,17 @@ extern int ERR_LIB_KPEP;           // Handle for accessing OpenSSL error functio
 #define KPEP_R_NO_SLOTS                  109
 #define KPEP_R_LOG_BUGFIX_FAIL           110
 
-#define KPEP_R_RESERVED_111              111
-#define KPEP_R_RESERVED_112              112
+#define KPEP_R_SEED_INIT_FAIL            111
+#define KPEP_R_SEED_CPUID_FAIL           112
 #define KPEP_R_SEED_NOT_INSTANTIATED     113
 #define KPEP_R_SEED_IN_ERROR_STATE       114
 #define KPEP_R_SEED_NO_CPU_SUPPORT       115
 
 #define KPEP_R_SEED_BUFFER_TOO_SMALL     116
-#define KPEP_R_RESERVED_117              117
-#define KPEP_R_RESERVED_118              118
+#define KPEP_R_SEED_REQUEST_TOO_LARGE    117
+#define KPEP_R_SEED_INSUFFICIENT_ENTROPY 118
 #define KPEP_R_RESERVED_119              119
-#define KPEP_R_RESERVED_120              120
+#define KPEP_R_DRBG_RBG2_OVERFLOW        120
 
 #define KPEP_R_DRBG_INVALID_STATE        121
 #define KPEP_R_DRBG_INSUFFICIENT_ENTROPY 122
@@ -89,16 +89,16 @@ extern int ERR_LIB_KPEP;           // Handle for accessing OpenSSL error functio
 #define KPEP_R_THREAD_NOT_READY          141
 #define KPEP_R_THREAD_FAIL_START         142
 #define KPEP_R_MUTEX_FAIL_START          143
-#define KPEP_R_RESERVED_144              144
+#define KPEP_R_SEED_CONTROL_FATAL        144
 #define KPEP_R_RESERVED_145              145
 
 #define KPEP_R_SEED_NOT_READY            146
-#define KPEP_R_SEED_SOURCE_ERR_1         147
-#define KPEP_R_SEED_SOURCE_ERR_2         148
-#define KPEP_R_SEED_SOURCE_ERR_3         149
+#define KPEP_R_SEED_SOURCE_ERROR_1       147
+#define KPEP_R_SEED_SOURCE_ERROR_2       148
+#define KPEP_R_SEED_SOURCE_ERROR_3       149
 #define KPEP_R_SEED_FATAL_ERROR          150
 
-#define KPEP_R_END                       145   /* MUST BE SAME AS LAST INDEX */
+#define KPEP_R_END                       150   /* MUST BE SAME AS LAST INDEX */
 
 #define KPEP_R_COUNT (KPEP_R_END-KPEP_R_START+1)
 

@@ -64,15 +64,34 @@ extern "C" {
 
 /*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
- * Purpose: Whether to use the more restrictive entropy counting "Method 1"
- */
-#define KPEP_PROV_PARAM_RESTRICTIVE_COUNTING  "seed.restricted-entropy-counting"
-
-/*
- * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: Whether to run the seed pipeline in async mode. Default: 0 (sync mode)
  */
 #define KPEP_PROV_PARAM_SEED_ASYNC_MODE       "seed.async-mode"
+
+/*
+ * Type: OSSL_PARAM_UTF8_STRING
+ * Purpose: RBG Construction Mode; whether to require entropy/reseed for each entropy request
+ * If "RBG3", new entropy is required for each entropy request
+ * If "RBG2", new entropy is used "on demand, if available", but requests can be serviced up 
+ * to 2^17 total bits before reseed.  Any successful gather from validated source(s)  resets 
+ * this counter.
+ */
+#define KPEP_PROV_PARAM_RBG_ENTROPY_MODE       "seed.rbg-entropy-mode"
+
+/*
+ * Type: OSSL_PARAM_UNSIGNED_INTEGER
+ * Purpose: Require all seed sources to provide entgropy for each request. Default: 0
+ * If "1", require all entropy sources to provide entropy for each request.
+ * If "0", require at least one seed source to provide entropy for each request.
+ */
+#define KPEP_PROV_PARAM_REQ_ALL_SOURCES       "seed.req-all-sources"
+
+/*
+ * Type: OSSL_PARAM_UNSIGNED_INTEGER
+ * Purpose: Whether to use the more restrictive entropy counting "Method 1".
+ * This option is only in effect for "all" or "some" source settings (above).
+ */
+#define KPEP_PROV_PARAM_REQ_HARDWARE_SOURCE  "seed.req-hardware-source"
 
 /* **************************************************************************************** */
 /* **************************************************************************************** */

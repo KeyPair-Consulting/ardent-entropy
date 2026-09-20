@@ -99,10 +99,34 @@ extseed = extseed_sect
 # single thread and will block while gathering entropy.
 async-mode = 0
 
+# KPEP will always ask the seeds sources for entropy upon receiving an 
+# entropy request from OpenSSL. KPEP can use the following set of policies to determine 
+# the behavior around (temporrily) failed seed sources.
+#
+# The "all" and "some" settings are mutually exclusive (both cannot be "1").
+# If both are zero, the DRBG will continue to service entropy requests if
+# no sources provide entropy.  It will do this until a maximum of 2^17 bits
+# have been returned.  Any valid entropy from a source resets this counter.
+
+# Require all sources to provide entropy for each request
+# Highest security, no failover
+# Default: 0
+req-all-sources = 0
+
+# Require at least one source to provide entropy for each request
+# Medium security, failover
+# Default: 1
+req-some-sources = 1
+
+# Require at least one of the sources to be a hardware source.
+# Corresponds to SP800-90 restrictive entropy counting "Method 1"
+# Default: 0
+req-hardware-source = 0
+
 ############################################################################################
 # JITTER ENTROPY seed source
 # Built-in 'libjitterentropy' that complies with all technical/compilation requirements
-# of the KeyPair ESV Certificate #E239.  The operational environment must be listed on the
+# of the KeyPair ESV Certificate E239.  The operational environment must be listed on the
 # certificate (or a rebranded certificate) for this source to be considered ESV-compliant.
 # These values should not be altered by vendors unless done in consultation with KeyPair.
 

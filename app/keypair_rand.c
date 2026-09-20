@@ -395,10 +395,6 @@ static int32_t get_impl_bytes(void)
 			goto err;
 		}
 	}
-	else {
-		printf("No DRBG detected for '--impl'.\n");
-		goto err;	
-	}
 
 	if (EVP_RAND_instantiate(rctx, 128, 0, NULL, 0, NULL) != 1) {
 		printf("Error performing RAND instantiate\n");

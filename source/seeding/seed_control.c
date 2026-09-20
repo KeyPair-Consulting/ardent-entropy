@@ -45,7 +45,9 @@ typedef struct {
 // Control Context
 struct seed_control_ctx_st {
     uint32_t  initialized;
-    uint32_t  restricted_counting;
+    uint32_t  req_hardware;
+    uint32_t  req_all_sources;
+    uint32_t  async_mode;
 
     // Count of seed sources in each category
     uint32_t v_count;
@@ -57,8 +59,6 @@ struct seed_control_ctx_st {
 };
 
 static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx);
-
-int kpep_seed_async_mode = 0;
 
 /* ************************************************************************************************
  * ***********************************************************************************************
@@ -127,7 +127,7 @@ SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, KPEP_RESULT *errnum)
     }
 
     // If restrictive mode, check for a hardware source
-    if (ctx->restricted_counting) {
+    if (ctx->req_hardware) {
         uint32_t found;
         for (found=0, i=0; i < ctx->v_count; ++i)
             found |= ctx->valid[i].hardware_source;
@@ -139,7 +139,8 @@ SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, KPEP_RESULT *errnum)
     }
 
     // Loop through all sources and start their threads
-    if (kpep_seed_async_mode) {
+    if (ctx->async_mode) {
+        kpep_log(LOG_LVL_INFO, MODULE_NAME, "KPEP starting asynchronous mode (worker threads starting)");
         for (i = 0; i < ctx->v_count; ++i) {
             if (ctx->valid[i].seed_ctx) {
                 KPEP_RESULT rv = async_seed_start_thread(ctx->valid[i].seed_ctx);
@@ -185,7 +186,7 @@ uint32_t seed_control_get_state(SEED_CONTROL_CTX* ctx)
     // Need to have at least one Validated source (also must be hardware if restrictive mode)
     seed = ctx->valid;
     while (seed->seed_ctx) {    
-        if ((!ctx->restricted_counting || seed->hardware_source) && 
+        if ((!ctx->req_hardware || seed->hardware_source) && 
             async_seed_get_state(seed->seed_ctx) == KPEP_RAND_STATE_READY) {
             return KPEP_RAND_STATE_READY;
         }
@@ -207,7 +208,7 @@ void seed_control_get_description(SEED_CONTROL_CTX* ctx, char *buffer)
             seed = ctx->valid;
             while (seed->seed_ctx) {
                 sprintf(buffer+strlen(buffer), "%s%s\n", async_seed_get_name(seed->seed_ctx),
-                (ctx->restricted_counting && seed->hardware_source)?" [H]":"");
+                (ctx->req_hardware && seed->hardware_source)?" [H]":"");
                 seed++;
             }
         }
@@ -225,14 +226,14 @@ void seed_control_get_description(SEED_CONTROL_CTX* ctx, char *buffer)
             }
         }
         sprintf(buffer+strlen(buffer), "%s%s\n", "[...] indicates a validated source",
-                        ctx->restricted_counting?"\n[H] indicates a hardware source":"");
+                        ctx->req_hardware?"\n[H] indicates a hardware source":"");
     }
 }
 
 EXPORT_VISIBILITY_HIDDEN
 int seed_control_get_restricted_mode(SEED_CONTROL_CTX* ctx)
 {
-    return ctx?ctx->restricted_counting:0;
+    return ctx?ctx->req_hardware:0;
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -240,7 +241,7 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
                                 unsigned char **out, size_t *out_len, 
                                 size_t nbits, int validated)
 {
-    KPEP_RESULT    rv;
+    KPEP_RESULT    rv = KPEP_R_SUCCESS;
     SEED_STUB     *seed = NULL;
     unsigned char *buffer = NULL;
     size_t         buf_len[SEED_COUNT_MAX] = { 0 };
@@ -248,17 +249,13 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
     uint32_t       idx = 0;
     uint32_t       hardware = 0;
 
+    uint32_t       gather_state[SEED_COUNT_MAX] = { 0 };
+
     if (kpep_trace_seed_enabled) {
         TRACE_START;
     }
 
-    // Validate
-    if (!ctx || !out) {
-        return KPEP_R_NULL_ARG;
-    }
-    if (!out_len) {
-        return KPEP_R_INVALID_ARG;
-    }
+    // Non-validated (additional input) is optional
     if (!validated && !ctx->addl[0].seed_ctx) {
         *out_len = 0;
         *out = NULL;
@@ -269,22 +266,51 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
     seed = (validated)?ctx->valid:ctx->addl;
     while (seed->seed_ctx) {
         rv = async_seed_gather(seed->seed_ctx, NULL, &buf_len[idx], nbits);
-        if (!rv)
+        if (!rv) {
             buf_total += buf_len[idx];
+            gather_state[idx]++;
+        }
         idx++;
         seed++;
     }
-    if (buf_total < nbits>>3) {
-        rv = KPEP_R_SEED_FATAL_ERROR;
-        LOG_KPEP_ERROR(MODULE_NAME, rv);
+
+    // Check seed sources
+    rv = KPEP_R_SUCCESS;
+    for (idx = 0; idx < SEED_COUNT_MAX; idx++) {
+        if (gather_state[idx] > 0) {
+            if (!ctx->req_all_sources)
+                break; // OK
+        }
+        else if (ctx->req_all_sources) {
+            LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_SEED_INSUFFICIENT_ENTROPY);
+            rv = KPEP_R_SEED_INSUFFICIENT_ENTROPY;
+            goto err;
+        }
+    }
+
+    // Each source was asked for nbits, and added at least that to buf_total on success.
+    // So if true, then at least one responded with available entropy
+    if (buf_total < (nbits>>3)) {
+        if (!validated) {
+            *out_len = 0;
+            *out = NULL;
+            return KPEP_R_SUCCESS;
+        }
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_SEED_INSUFFICIENT_ENTROPY);
+        rv = KPEP_R_SEED_REQUEST_TOO_LARGE;
         goto err;
     }
 
     // Allocate
     buffer = kpep_zalloc(buf_total);
     if (!buffer) {
+        if (!validated) {
+            *out_len = 0;
+            *out = NULL;
+            return KPEP_R_SUCCESS;
+        }
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_MALLOC_FAIL);
         rv = KPEP_R_MALLOC_FAIL;
-        LOG_KPEP_ERROR(MODULE_NAME, rv);
         goto err;
     }
 
@@ -295,16 +321,29 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
         rv = async_seed_gather(seed->seed_ctx, buffer+accum, &buf_len[idx], nbits);
         if (!rv) {
             accum += buf_len[idx];
-            if (ctx->restricted_counting && validated && seed->hardware_source)
+            gather_state[idx]++;
+            if (ctx->req_hardware && validated && seed->hardware_source)
                 hardware = 1;
         }
         idx++;
         seed++;
     }
 
+    if (!validated) {
+        if (accum == 0) {
+            kpep_cleanse(buffer, buf_total);
+            *out_len = 0;
+            *out = NULL;
+            return KPEP_R_SUCCESS;
+        }
+        *out = buffer;
+        *out_len = accum;
+        return KPEP_R_SUCCESS;
+    }
+
     // Check seed source counting method #1 requirements for at least one (1) hardware source
-    if (ctx->restricted_counting && validated && !hardware) {
-        rv = KPEP_R_SEED_FATAL_ERROR;
+    if (ctx->req_hardware && validated && !hardware) {
+        rv = KPEP_R_SEED_CONTROL_FATAL;
         LOG_KPEP_ERROR(MODULE_NAME, rv);
         goto err;    
     }
@@ -314,18 +353,21 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
     // incremented on success.  So accum is set to the amount of bits gathered from one 
     // or more (N) sources, and contains (N * nbits) of qualified entropy, although the
     // actual number of bits may be very large if using low entropy sources.
-    if (accum < nbits>>3) {
-        rv = KPEP_R_SEED_FATAL_ERROR;
+    if (accum < (nbits>>3)) {
+        rv = KPEP_R_SEED_CONTROL_FATAL;
         LOG_KPEP_ERROR(MODULE_NAME, rv);
         goto err;
     }
 
     // Success
     *out = buffer;
-    *out_len = buf_total;
+    *out_len = accum;
     return KPEP_R_SUCCESS;
+
 err:
     kpep_cleanse(buffer, buf_total);
+    *out = NULL;
+    *out_len = 0;
     return rv;
 }
 
@@ -335,7 +377,7 @@ err:
  * ***********************************************************************************************
  * ***********************************************************************************************/
 
-#define LOOKUP_KEY_LENGTH 32
+#define LOOKUP_KEY_LENGTH 64
 
 static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
 {
@@ -345,6 +387,7 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
     uint32_t   *seed_cnt = NULL;
     void       *handle = NULL;
     int32_t     ring_sz;
+    char        key_start[LOOKUP_KEY_LENGTH/2];
     char        act_key[LOOKUP_KEY_LENGTH];
     char        val_key[LOOKUP_KEY_LENGTH];
     char        hard_key[LOOKUP_KEY_LENGTH];
@@ -362,12 +405,15 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
         return KPEP_R_NULL_ARG;
     }
 
-    kpep_seed_async_mode = 
+    // Get additional configuration parameters
+    ctx->req_all_sources =
+        kpep_get_core_param_bool(prov_ctx, KPEP_PROV_PARAM_REQ_ALL_SOURCES, 0); 
+    ctx->req_hardware =
+        kpep_get_core_param_bool(prov_ctx, KPEP_PROV_PARAM_REQ_HARDWARE_SOURCE, 0);
+    ctx->async_mode = 
         kpep_get_core_param_bool(prov_ctx, KPEP_PROV_PARAM_SEED_ASYNC_MODE, 0);
 
-    ctx->restricted_counting =
-        kpep_get_core_param_bool(prov_ctx, KPEP_PROV_PARAM_RESTRICTIVE_COUNTING, 0);
-
+    // Initialize each seed source
     for (def = seed_source_defs; def->desc; ++def) {
         act_value = NULL;
         val_value = NULL;
@@ -376,27 +422,17 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
         p = params;
 
         if (def->idx > 0)
-            sprintf(act_key, "%s.%u.%s", def->prefix, def->idx, KPEP_PROV_PARAM_SEED_ACTIVATE);
+            sprintf(key_start, "%s.%u", def->prefix, def->idx);
         else
-            sprintf(act_key, "%s.%s", def->prefix, KPEP_PROV_PARAM_SEED_ACTIVATE);
+            sprintf(key_start, "%s", def->prefix);
+
+        sprintf(act_key, "%s.%s", key_start, KPEP_PROV_PARAM_SEED_ACTIVATE);
         *p++ = OSSL_PARAM_construct_utf8_ptr(act_key, (char **) &act_value, sizeof(act_value));
-
-        if (def->idx > 0)
-            sprintf(val_key, "%s.%u.%s", def->prefix, def->idx, KPEP_PROV_PARAM_SEED_VALIDATED);
-        else
-            sprintf(val_key, "%s.%s", def->prefix, KPEP_PROV_PARAM_SEED_VALIDATED);
+        sprintf(val_key, "%s.%s", key_start, KPEP_PROV_PARAM_SEED_VALIDATED);
         *p++ = OSSL_PARAM_construct_utf8_ptr(val_key, (char **) &val_value, sizeof(val_value));
-
-        if (def->idx > 0)
-            sprintf(hard_key, "%s.%u.%s", def->prefix, def->idx, KPEP_PROV_PARAM_SEED_HARDWARE);
-        else
-            sprintf(hard_key, "%s.%s", def->prefix, KPEP_PROV_PARAM_SEED_HARDWARE);
+        sprintf(hard_key, "%s.%s", key_start, KPEP_PROV_PARAM_SEED_HARDWARE);
         *p++ = OSSL_PARAM_construct_utf8_ptr(hard_key, (char **) &hard_value, sizeof(hard_value));
-
-        if (def->idx > 0)
-            sprintf(ring_key, "%s.%u.%s", def->prefix, def->idx, KPEP_PROV_PARAM_SEED_RING_SIZE);
-        else
-            sprintf(ring_key, "%s.%s", def->prefix, KPEP_PROV_PARAM_SEED_RING_SIZE);
+        sprintf(ring_key, "%s.%s",key_start, KPEP_PROV_PARAM_SEED_RING_SIZE);
         *p++ = OSSL_PARAM_construct_utf8_ptr(ring_key, (char **) &ring_value, sizeof(ring_value));
         *p = OSSL_PARAM_construct_end();
 
@@ -417,7 +453,7 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
             }
             seed_cnt = &ctx->v_count;
             seed = &ctx->valid[*seed_cnt];
-            if (def->force_hardware || (hard_value && strncmp(hard_value, "0", 1))) {
+            if (def->force_hardware || (hard_value && !strncmp(hard_value, "1", 1))) {
                 seed->hardware_source = 1;
             }
         }
@@ -438,21 +474,16 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
         }
 
         handle = async_seed_new(prov_ctx,
-                                      def->stub_fn,
-                                      (uint32_t) ring_sz,
-                                      (uint8_t) def->idx,
-                                      &rv);
+                                def->stub_fn,
+                                (uint32_t) ring_sz,
+                                (uint8_t) def->idx,
+                                ctx->async_mode,
+                                &rv);
         if (!handle) {
-            LOG_FORMATTED_ERROR(MODULE_NAME, "Failed to initialize seed source '%s'.", def->desc);
             LOG_KPEP_ERROR(MODULE_NAME, rv);
+            LOG_FORMATTED_ERROR(MODULE_NAME, "Failed to initialize seed source '%s'.", def->desc);
             rv = KPEP_R_SUCCESS;
             continue;
-        }
-        if (rv) {
-            LOG_FORMATTED_ERROR(MODULE_NAME, "Error initializing seed source '%s'.", def->desc);
-            LOG_KPEP_ERROR(MODULE_NAME, rv);
-            def->stub_fn->free_fn(handle);
-            goto err;
         }
 
         seed->seed_ctx = handle;

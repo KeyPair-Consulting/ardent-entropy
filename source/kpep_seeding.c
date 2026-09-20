@@ -43,6 +43,8 @@ static KPEP_DRBG_CTX    *drbg_ctx = NULL;
 
 static const char       *perso_string = NULL;
 
+static RBG_ENTROPY_MODE rbg_entropy_mode = RBG3;
+
 // Flag to denote DRBG instantiation (delayed until first use, in one of two places)
 static uint32_t          drbg_instantiated = 0;
 
@@ -58,7 +60,7 @@ static char seed_description[SEED_CONTROL_DESCRIPTION_MAX] = { 0 };
 static CRYPTO_MUTEX     *lock = NULL;
 
 #define RAISE_ERROR(rv) \
-    if ((rv) == KPEP_R_SEED_FATAL_ERROR) { \
+    if ((rv) == KPEP_R_SEED_CONTROL_FATAL) { \
         ossl_set_error_state(OSSL_SELF_TEST_TYPE_CRNG); \
         ERR_raise(ERR_LIB_PROV, PROV_R_ENTROPY_SOURCE_FAILED_CONTINUOUS_TESTS); \
     } \
@@ -120,17 +122,9 @@ KPEP_RESULT kpep_seeding_init(void* prov_ctx)
         LOG_KPEP_ERROR(MODULE_NAME, rv);
         goto err;
     }
-    state = seed_control_get_state(ctrl_ctx);
-    if (state != KPEP_RAND_STATE_READY) {
-        if (state == KPEP_RAND_STATE_UNINITIALISED)
-            rv = KPEP_R_SEED_NOT_INSTANTIATED;
-        else if (state == KPEP_RAND_STATE_ERROR)
-            rv = KPEP_R_SEED_IN_ERROR_STATE;
-        goto err;
-    }
 
     // Setup DRBG
-    drbg_ctx = drbg_new(ctrl_ctx, &rv);
+    drbg_ctx = drbg_new(ctrl_ctx, rbg_entropy_mode, &rv);
     if (rv) {
         LOG_KPEP_ERROR(MODULE_NAME, rv);
         goto err;
@@ -556,18 +550,37 @@ const OSSL_DISPATCH kpep_core_seed_functions[] = {
 
 static KPEP_RESULT load_params(void* prov_ctx)
 {
+    const char *rbg_value = NULL;
+
     // Configuration items to read
-    OSSL_PARAM params[2], *p = params;
+    OSSL_PARAM params[3], *p = params;
     *p++ = OSSL_PARAM_construct_utf8_ptr(
         KPEP_PROV_PARAM_SEED_PERSO,
         (char **) &perso_string,
         sizeof(perso_string));
+    *p++ = OSSL_PARAM_construct_utf8_ptr(
+        KPEP_PROV_PARAM_RBG_ENTROPY_MODE, 
+        (char **) &rbg_value, 
+        sizeof(rbg_value));
     *p = OSSL_PARAM_construct_end();
 
     // Load from OpenSSL Core
     if (!kpep_get_core_params(prov_ctx, params)) {
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_LOOKUP_FAILURE);
         return KPEP_R_CONFIG_LOOKUP_FAILURE;
+    }
+
+    if (rbg_value) {
+        if (!strncmp(rbg_value, "RBG2", 4)) {
+            rbg_entropy_mode = RBG2;
+        }
+        else if (!strncmp(rbg_value, "RBG3", 4)) {
+            rbg_entropy_mode = RBG3;
+        }
+        else {
+            LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
+            return KPEP_R_CONFIG_PARAMETER_INVALID;
+        }
     }
 
     return KPEP_R_SUCCESS;

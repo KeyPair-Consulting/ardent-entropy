@@ -30,6 +30,44 @@
 
 #include <string.h>
 
+#if defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
+
+int check_is_intel(void)
+{
+    return 0;
+}
+
+int check_is_amd(void)
+{
+    return 0;
+}
+
+int check_is_arm(void)
+{
+    return 1;
+}
+
+void get_cpuid(CPUIDinfo *info, const uint32_t func, const uint32_t subfunc)
+{
+    (void)func;
+    (void)subfunc;
+    if (info != NULL) {
+        memset(info, 0, sizeof(*info));
+    }
+}
+
+int check_rdrand_support(void)
+{
+    return 0;
+}
+
+int check_rdseed_support(void)
+{
+    return 0;
+}
+
+#else
+
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
 static void get_cpuid_windows(int leaf, CPUIDinfo *info) {
     uint32_t a;
@@ -109,13 +147,8 @@ int check_is_amd()
     return 0;
 }
 
-int check_aesni_support()
+int check_is_arm(void)
 {
-    CPUIDinfo info;
-    if ((check_is_intel()==1) || (check_is_amd()==1)){
-        get_cpuid(&info,1,0);
-        return !!((info.ECX & 0x02000000)==0x02000000);
-    }
     return 0;
 }
  
@@ -139,3 +172,4 @@ int check_rdseed_support()
     return 0;
 }
 
+#endif

@@ -108,32 +108,28 @@ void* stub_rdseed_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
     }
     else {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'rdseed' failed startup (cpuid)");
-        if (errnum) *errnum = KPEP_R_MALLOC_FAIL;
-        kpep_free(ctx);
-        return NULL;
+        if (errnum) *errnum = KPEP_R_SEED_INIT_FAIL;
+        goto err;
     }
     if (!check_rdseed_support()) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'rdseed' failed startup (no cpu support)");
-        if (errnum) *errnum = KPEP_R_SEED_NO_CPU_SUPPORT;
-        kpep_free(ctx);
-        return NULL;
+        if (errnum) *errnum = KPEP_R_SEED_INIT_FAIL;
+        goto err;
     }
     
     // Pull runtime configuration from params
     if ((result = load_params(prov_ctx, ctx)) != KPEP_R_SUCCESS) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'rdseed' failed startup (load params)");
         if (errnum) *errnum = result;
-        kpep_cleanse(ctx, sizeof(RDSEED_CTX));
-        return NULL;        
+        goto err;
     }
 
     // Set entropy factors
     full_entropy_sz = ctx->block_size * ctx->block_count;
     if (full_entropy_sz < KPEP_SECURITY_STRENGTH_BITS) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'rdseed' failed startup (block size check)");
-        kpep_cleanse(ctx, sizeof(RDSEED_CTX));
         if (errnum) *errnum = KPEP_R_INVALID_ARG;
-        return NULL;        
+        goto err;
     }
     ctx->full_entropy = (KPEP_SECURITY_STRENGTH_BITS == full_entropy_sz);
     if (!ctx->full_entropy) {
@@ -141,8 +137,7 @@ void* stub_rdseed_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
     }
 
     // Name
-    len = snprintf(ctx->name,
-                sizeof(ctx->name),
+    len = snprintf(ctx->name, sizeof(ctx->name),
                 "%s (%s)",
                 base_name,
                 (ctx->cpu_type==CPU_AMD)  ?"AMD":
@@ -150,7 +145,8 @@ void* stub_rdseed_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
                                            "Unknown");
     if (len < 0) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Unable to format source name");
-        return NULL;
+        if (errnum) *errnum = KPEP_R_SEED_INIT_FAIL;
+        goto err;
     }
     if ((size_t)len >= sizeof(ctx->name)) {
         LOG_FORMATTED_ERROR(MODULE_NAME,
@@ -172,6 +168,10 @@ void* stub_rdseed_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
     ctx->prof_min = UINT32_MAX;
 
     return ctx;
+
+err:
+    kpep_cleanse(ctx, sizeof(RDSEED_CTX));
+    return NULL;
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -198,6 +198,7 @@ KPEP_RESULT stub_rdseed_gather(void *stub_ctx, unsigned char *out, size_t *out_l
         debug = getenv(ENV_OPTEST_SEED_RDSEED_FATAL);
         if (debug) {
             LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'rdseed' gather failed (optest-fatal)");
+            ctx->state = KPEP_RAND_STATE_ERROR;
             return KPEP_R_SEED_FATAL_ERROR;
         }
     }
@@ -242,7 +243,7 @@ KPEP_RESULT stub_rdseed_gather(void *stub_ctx, unsigned char *out, size_t *out_l
             result ? gather_bytes : 0);
     }
     if (!result) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'rdseed' gather failed (rdseed)");
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'rdseed' gather failed");
         goto err;
     }
 
@@ -261,8 +262,6 @@ err:
     memset(out, 0, *out_len);
     *out_len = 0;
 
-    // Permanent failure or too many intermittent failures
-    ctx->state = KPEP_RAND_STATE_ERROR;
     return rv;
 }
 
@@ -339,7 +338,7 @@ static KPEP_RESULT load_params(void* prov_ctx, RDSEED_CTX *ctx)
     // Block Size
     if (bsize_str) {
         ctx->block_size = atoi(bsize_str);
-        if (errno) {
+        if (!ctx->block_size || ctx->block_size < 0 || errno) {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }
@@ -352,7 +351,7 @@ static KPEP_RESULT load_params(void* prov_ctx, RDSEED_CTX *ctx)
     // Block Count
     if (bcount_str) {
         ctx->block_count = atoi(bcount_str);
-        if (errno) {
+        if (!ctx->block_count || ctx->block_count < 0 || errno) {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }
@@ -365,7 +364,7 @@ static KPEP_RESULT load_params(void* prov_ctx, RDSEED_CTX *ctx)
     // Retry Count (optional)
     if (retry_str) {
         ctx->retry_count = atoi(retry_str);
-        if (errno) {
+        if (!ctx->retry_count || ctx->retry_count < 0 || errno) {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }

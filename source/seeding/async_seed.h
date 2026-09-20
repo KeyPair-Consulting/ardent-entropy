@@ -36,13 +36,21 @@ typedef enum {
 typedef struct async_ctx_st ASYNC_CTX;
 
 EXPORT_VISIBILITY_HIDDEN
-ASYNC_CTX* async_seed_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32_t ring_sz, uint8_t idx, KPEP_RESULT *errnum);
+ASYNC_CTX* async_seed_new(void* prov_ctx, 
+                          const STUB_FUNCTIONS* stub_fn, 
+                          uint32_t ring_sz, 
+                          uint8_t idx, 
+                          uint32_t async_mode,
+                          KPEP_RESULT *errnum);
 
 EXPORT_VISIBILITY_HIDDEN
 void async_seed_free(ASYNC_CTX *async_ctx);
 
 EXPORT_VISIBILITY_HIDDEN
-KPEP_RESULT async_seed_gather(ASYNC_CTX *async_ctx, unsigned char *out, size_t *out_len, size_t nbits);
+KPEP_RESULT async_seed_gather(ASYNC_CTX *async_ctx, 
+                              unsigned char *out, 
+                              size_t *out_len, 
+                              size_t nbits);
 
 EXPORT_VISIBILITY_HIDDEN
 uint32_t  async_seed_get_state(ASYNC_CTX* async_ctx);

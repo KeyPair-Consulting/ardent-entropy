@@ -37,7 +37,8 @@
 #define MODULE_NAME "SEED-ASYNC"
 
 typedef struct async_ctx_st {
-    char name[64];
+    char                  name[64];
+    uint32_t              async_mode;
 
     void                 *source_ctx;
     const SEED_STUB_INFO *source_info;
@@ -126,7 +127,7 @@ void async_seed_free(ASYNC_CTX *ctx)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-ASYNC_CTX *async_seed_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32_t ring_sz, uint8_t idx, KPEP_RESULT *errnum)
+ASYNC_CTX *async_seed_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32_t ring_sz, uint8_t idx, uint32_t async_mode, KPEP_RESULT *errnum)
 {
     ASYNC_CTX *ctx;
     KPEP_RESULT rv;
@@ -136,26 +137,6 @@ ASYNC_CTX *async_seed_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32_
         TRACE_START;
     }
 
-#ifdef FIPS_OPTEST
-    {
-        const char* debug = getenv(ENV_OPTEST_SEED_ASYNC_NEW);
-        if (debug) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (optest)");
-            if (errnum) *errnum = KPEP_R_FIPS_OPTEST;
-            return NULL;
-        }
-    }
-#endif
-
-    if (!stub_fn || !ring_sz) {
-        if (errnum) *errnum = KPEP_R_INVALID_ARG;
-        return NULL;
-    }
-    if (!stub_is_valid(stub_fn)) {
-        if (errnum) *errnum = KPEP_R_INVALID_ARG;
-        return NULL;
-    }
-        
     // Allocate for source context
     ctx = kpep_zalloc(sizeof(ASYNC_CTX));
     if (ctx == NULL) {
@@ -168,11 +149,13 @@ ASYNC_CTX *async_seed_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32_
     ctx->mutex = ossl_crypto_mutex_new();
     if (!ctx->mutex) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (create mutex)");
+        if (errnum) *errnum = KPEP_R_MUTEX_FAIL_START;
         goto err;
     }
     ctx->cond = ossl_crypto_condvar_new();
     if (!ctx->cond) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (create condition variable)");
+        if (errnum) *errnum = KPEP_R_MUTEX_FAIL_START;
         goto err;
     }
 
@@ -180,20 +163,22 @@ ASYNC_CTX *async_seed_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32_
     ctx->source_fn = stub_fn;
     ctx->source_ctx = ctx->source_fn->new_fn(prov_ctx, idx, errnum);
     if (!ctx->source_ctx) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (new/load params)");
-        if (errnum) *errnum = KPEP_R_MALLOC_FAIL;
+        LOG_KPEP_ERROR(MODULE_NAME, *errnum);
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (new source)");
         goto err;
     }
     ctx->source_info = (SEED_STUB_INFO*) ctx->source_ctx;
+    ctx->async_mode = async_mode;
 
-    // Safely create seed source name
+    // Safely create seed source name (do not fail on error)
     len = snprintf(ctx->name,
                sizeof(ctx->name),
                "async (%s)",
                ctx->source_info->name);
     if (len < 0) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Unable to format source name");
-        goto err;
+        memset(ctx->name, 0, sizeof(ctx->name));
+        strcpy(ctx->name, "UNK-SOURCE");
     }
     if ((size_t)len >= sizeof(ctx->name)) {
         LOG_FORMATTED_ERROR(MODULE_NAME,
@@ -203,24 +188,17 @@ ASYNC_CTX *async_seed_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32_
 
     // Create ring
     rv = ring_new(&ctx->ring_ctx, ring_sz);
-    if (rv) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (new ring)");
-        if (errnum) *errnum = KPEP_R_MALLOC_FAIL;
-        goto err;
-    }
-
-    // Create the locks
-    ctx->mutex = ossl_crypto_mutex_new();
-    if (!ctx->mutex) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (create mutex)");
-        if (errnum) *errnum = KPEP_R_MUTEX_FAIL_START;
-        goto err;
-    }
-    ctx->cond = ossl_crypto_condvar_new();
-    if (!ctx->cond) {
-        LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (create condition variable)");
-        if (errnum) *errnum = KPEP_R_MUTEX_FAIL_START;
-        goto err;
+    switch (rv) {
+        case KPEP_R_SUCCESS:
+            break;
+        case KPEP_R_RING_NOT_POWER_OF_TWO:
+            LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (size not power-of-two)");
+            if (errnum) *errnum = KPEP_R_INVALID_ARG;
+            goto err;
+        default:
+            LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (new ring)");
+            if (errnum) *errnum = rv;
+            goto err;
     }
 
     // Start initialized
@@ -229,6 +207,7 @@ ASYNC_CTX *async_seed_new(void* prov_ctx, const STUB_FUNCTIONS* stub_fn, uint32_
     else 
         kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async (%s)' startup successful (%.6f ent-per-bit)", ctx->name, ctx->source_info->entropy_per_bit);
 
+    if (errnum) *errnum = KPEP_R_SUCCESS;
     return ctx;
 
 err:
@@ -246,22 +225,6 @@ KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_le
         TRACE_START;
     }
 
-#ifdef FIPS_OPTEST
-    {
-        const char* debug;
-        debug = getenv(ENV_OPTEST_SEED_RDSEED_GATHER);
-        if (debug) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'async' gather failed (optest)");
-            return KPEP_R_FIPS_OPTEST;
-        }
-        debug = getenv(ENV_OPTEST_SEED_RDSEED_FATAL);
-        if (debug) {
-            LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'async' gather failed (optest-fatal)");
-            return KPEP_R_SEED_FATAL_ERROR;
-        }
-    }
-#endif
-
     if (!nbits)
         return KPEP_R_SUCCESS;
 
@@ -274,6 +237,10 @@ KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_le
     // Calculate gather size
     gather_bits = seed_get_gather_sz(ctx->source_info, nbits);
     gather_bytes = (gather_bits + 7) >> 3;
+    if (!gather_bytes) {
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_INVALID_ARG);
+        return KPEP_R_INVALID_ARG;
+    }
 
     if (kpep_trace_seed_enabled) {
         kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bytes<<3);
@@ -292,38 +259,42 @@ KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_le
     }
 
     // Check state
-    if (ctx->source_info->state != KPEP_RAND_STATE_READY) {
+    if (async_seed_get_state(ctx) != KPEP_RAND_STATE_READY) {
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_SEED_NOT_READY);
         return KPEP_R_SEED_NOT_READY;
     }
 
-    // Get the entropy from the source
+    // Get the entropy from the ring buffer
     ossl_crypto_mutex_lock(ctx->mutex);
 
     // In synchronous mode?
-    if (!kpep_seed_async_mode) { 
+    if (!ctx->async_mode) { 
         // DEV NOTE: This will go in the async thread as well, but currently executed synchronously for simplicity
         size_t buflen = gather_bytes;
         uint8_t *buf = NULL;
 
         buf = kpep_zalloc(gather_bytes);
         if (!buf) {
+            rv = KPEP_R_MALLOC_FAIL;
+            LOG_KPEP_ERROR(MODULE_NAME, rv);
             LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' gather malloc failed", ctx->source_info->name);
-            ossl_crypto_mutex_unlock(ctx->mutex);  // Need better handling
+            ossl_crypto_mutex_unlock(ctx->mutex);
             goto err;
         }
-        // Gather from backing seed soubce
+        // Gather from backing seed source
         rv = ctx->source_fn->gather_fn(ctx->source_ctx, buf, &buflen, nbits);
         if (rv) {
+            LOG_KPEP_ERROR(MODULE_NAME, rv);
             LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' gather operation failed", ctx->source_info->name);
-            ossl_crypto_mutex_unlock(ctx->mutex);  // Need better handling
+            ossl_crypto_mutex_unlock(ctx->mutex);
             kpep_free(buf);
             goto err;
         }
         rv = ring_enqueue(ctx->ring_ctx, buf, buflen);
         if (rv) {
+            LOG_KPEP_ERROR(MODULE_NAME, rv);
             LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' write-to-ring failed", ctx->source_info->name);
-            ossl_crypto_mutex_unlock(ctx->mutex);  // Need better handling
+            ossl_crypto_mutex_unlock(ctx->mutex);
             kpep_free(buf);
             goto err;
         }
@@ -332,9 +303,11 @@ KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_le
 
     rv = ring_dequeue(ctx->ring_ctx, out, gather_bytes);
     ossl_crypto_mutex_unlock(ctx->mutex);
-    if (rv) {
-        LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' gather failed", ctx->source_info->name);
-        goto err;
+
+    // If empty, trigger the gather and soft fail
+    if (rv == KPEP_R_RING_EMPTY) {
+        rv = KPEP_R_SEED_NOT_READY;
+        gather_bytes = 0; // We didn't gather any bytes
     }
 
     // Trigger thread to gather more entropy if needed
@@ -342,9 +315,14 @@ KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_le
     ossl_crypto_condvar_signal(ctx->cond);
     ossl_crypto_mutex_unlock(ctx->mutex);
 
+    if (rv != KPEP_R_SUCCESS) {
+        LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' gather failed", ctx->source_info->name);
+        goto err;
+    }
+
     // Success
     *out_len = gather_bytes;
-    return KPEP_R_SUCCESS;
+    return rv;
 
 err:
     // If no error already set, assume a general error
@@ -357,16 +335,38 @@ err:
     memset(out, 0, *out_len);
     *out_len = 0;
 
-    // The source state should be "KPEP_RAND_STATE_ERROR"
     return rv;
 }
 
 EXPORT_VISIBILITY_HIDDEN
 uint32_t async_seed_get_state(ASYNC_CTX *ctx)
 {
-    if (!ctx)
+    uint32_t stub_state;
+    ASYNC_WORKER_STATE worker_state;
+
+    if (!ctx || !ctx->source_ctx || !ctx->source_fn)
         return KPEP_RAND_STATE_UNINITIALISED; // Value 0
-    return ctx->source_fn->get_state_fn(ctx->source_ctx);
+
+    if (ctx->mutex)
+        ossl_crypto_mutex_lock(ctx->mutex);
+
+    stub_state = ctx->source_fn->get_state_fn(ctx->source_ctx);
+    worker_state = ctx->state;
+
+    if (ctx->mutex)
+        ossl_crypto_mutex_unlock(ctx->mutex);
+
+    if (stub_state == KPEP_RAND_STATE_ERROR)
+        return KPEP_RAND_STATE_ERROR;
+
+    if (ctx->async_mode) {
+        if (worker_state == WORKER_ERROR)
+            return KPEP_RAND_STATE_ERROR;
+        if (worker_state != WORKER_RUNNING && worker_state != WORKER_INITIALIZED)
+            return KPEP_RAND_STATE_UNINITIALISED;
+    }
+
+    return stub_state;
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -423,6 +423,7 @@ static CRYPTO_THREAD_RETVAL async_worker(void *arg)
             if (kpep_trace_thread_enabled) {
                 kpep_trace_fmt(MODULE_NAME, "THREAD (%p) gathering...", (void*)ctx->thread);
             }
+            // Do the actual gather here!
             ossl_crypto_mutex_lock(ctx->mutex);
             continue;
         }
@@ -456,7 +457,7 @@ KPEP_RESULT async_seed_start_thread(ASYNC_CTX *ctx)
         return KPEP_R_NULL_ARG;
     }
 
-    if (!kpep_seed_async_mode) {
+    if (!ctx->async_mode) {
         ctx->state = WORKER_INITIALIZED; 
         return KPEP_R_SUCCESS;
     }
@@ -481,9 +482,9 @@ KPEP_RESULT async_seed_start_thread(ASYNC_CTX *ctx)
                 ctx?ctx->name:"unknown");
     }
 
-    // Start the thread.  IMPORTANT: The thread needs the lock to startup, so 
-    // release it ASAP after starting the thread!  DO NOT wait on the thread's 
-    // behavior or some change in the thread state  to release the lock.  
+    // Start the thread. IMPORTANT: The thread needs the lock to startup, so 
+    // release it ASAP after starting the thread! DO NOT wait on the thread's 
+    // behavior or some change in the thread state to release the lock.  
     ctx->state = WORKER_INITIALIZED;  // "Initialized" state tells the thread to go
     ctx->thread = ossl_crypto_thread_native_start(async_worker, ctx, 1);
     if (!ctx->thread) {

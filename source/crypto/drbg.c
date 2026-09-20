@@ -37,6 +37,8 @@
 struct kpep_drbg_ctx_st {
 	// State
 	uint32_t running;
+	RBG_ENTROPY_MODE entropy_mode;
+	uint32_t         entropy_counter;
 
 	// External Contexts
 	SHA2_CTX         *hash_ctx;
@@ -72,7 +74,7 @@ EXPORT_VISIBILITY_DEFAULT
 #else
 EXPORT_VISIBILITY_HIDDEN
 #endif
-void* drbg_new(void *vctx, KPEP_RESULT *errnum) 
+void* drbg_new(void *vctx, RBG_ENTROPY_MODE on_demand, KPEP_RESULT *errnum) 
 {
 	KPEP_DRBG_CTX* ctx = NULL;
 
@@ -99,6 +101,9 @@ void* drbg_new(void *vctx, KPEP_RESULT *errnum)
 
 	// Set the seed control context
 	ctx->seed_ctx = (SEED_CONTROL_CTX*) vctx;
+
+	// Set the RBG Type (RBG2 or RBG3; on-demand entropy)
+	ctx->entropy_mode = on_demand;
 
 	// Setup parameters
 	// None
@@ -672,6 +677,10 @@ KPEP_RESULT drbg_instantiate(KPEP_DRBG_CTX* ctx, int strength_bits, const uint8_
 	kpep_cleanse(entropy, ent_len);
 	kpep_cleanse(nonce, nonce_len);
 
+	if (rv == KPEP_R_SEED_CONTROL_FATAL) {
+		drbg_uninstantiate(ctx);
+	}
+
 	return rv;
 }
 
@@ -679,12 +688,13 @@ EXPORT_VISIBILITY_HIDDEN
 KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 {
 	KPEP_RESULT rv = KPEP_R_SUCCESS;
-	uint8_t *entropy = NULL;
-	uint8_t *addl = NULL;
-	size_t   ent_len = 0, addl_len = 0;
-	
-	size_t  cur_len = 0;
-	uint8_t drbg_out[KPEP_SECURITY_STRENGTH_BYTES];
+	uint8_t    *entropy = NULL;
+	uint8_t    *addl = NULL;
+ 
+	uint32_t    RBG2_event = 0;
+	size_t      ent_len = 0, addl_len = 0;
+	size_t      cur_len = 0;
+	uint8_t     drbg_out[KPEP_SECURITY_STRENGTH_BYTES];
 
 	if (kpep_trace_seed_enabled) {
 		kpep_trace_fmt(MODULE_NAME, "%s (req %u)", __func__, rand_len<<3);
@@ -712,16 +722,23 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 		if (rv) {
 			// Logged in seed_control.c with better context
 			//LOG_KPEP_ERROR(MODULE_NAME, rv);
-			break;
+
+			// Abort for all cases except insufficient entropy with RBG2 mode
+			if (rv == KPEP_R_SEED_INSUFFICIENT_ENTROPY && ctx->entropy_mode == RBG2) {
+				// Check overflow
+				if (ctx->entropy_counter >= RBG2_OVERFLOW) {
+					rv = KPEP_R_DRBG_RBG2_OVERFLOW; // Fatal?
+					break;
+				}
+				RBG2_event = 1;  // We need to account for the returned bits
+			}
+			else {
+				break;
+			}
 		}
-		// Gather additional input
-		// Same size as above
-		rv = seed_control_gather(ctx->seed_ctx, &addl, &addl_len, KPEP_SECURITY_STRENGTH_BITS+64, 0); // Non-Validated
-		if (rv) {
-			// Logged in seed_control.c with better context
-			//LOG_KPEP_ERROR(MODULE_NAME, rv);
-			break;
-		}
+		// Gather additional input (We don't abort for additional input gathering failures)
+		seed_control_gather(ctx->seed_ctx, &addl, &addl_len, KPEP_SECURITY_STRENGTH_BITS+64, 0); // Non-Validated
+
 		// Call the generate function, gathering no more than SECURITY_STRENGTH bytes per request
 		// (see SP 800-90C section 6.5.1.2, step 3.2)
 		rv = drbg_generate_ex(  ctx, 
@@ -735,6 +752,12 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 		// Truncate the last block as required (see SP 800-90C section 6.5.1.2, step 4)
 		cur_len = (rand_len<KPEP_SECURITY_STRENGTH_BYTES)?rand_len:KPEP_SECURITY_STRENGTH_BYTES;
 
+		// Account for the bits we're returning for the RBG2 construction
+		if (ctx->entropy_mode == RBG2) {
+			ctx->entropy_counter = (RBG2_event)?ctx->entropy_counter + cur_len:0; // Accum or reset
+			RBG2_event = 0;
+		}
+
 		// Copy out and update
 		memcpy(rand, drbg_out, cur_len);
 		rand += cur_len;
@@ -744,6 +767,10 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 	// Free the seed buffers
 	kpep_cleanse(entropy, ent_len);
 	kpep_cleanse(addl, addl_len);
+
+	if (rv == KPEP_R_SEED_CONTROL_FATAL) {
+		drbg_uninstantiate(ctx);
+	}
 	
 	return rv;
 }

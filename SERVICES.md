@@ -10,15 +10,15 @@
  Provider interaction
 
     0000000000004747 g    DF .text	000000000000046c  Base        OSSL_provider_init
-    00000000000050c8 g    DF .text	0000000000000038  Base        kemp_get_core_params
-    0000000000005100 g    DF .text	0000000000000042  Base        kemp_get_core_param_bool
+    00000000000050c8 g    DF .text	0000000000000038  Base        kpep_get_core_params
+    0000000000005100 g    DF .text	0000000000000042  Base        kpep_get_core_param_bool
 
 Logging subsystem
 
-    0000000000007c70 g    DF .text	0000000000000188  Base        kemp_log
-    000000000000766f g    DF .text	00000000000000c5  Base        kemp_log_data
-    000000000000746c g    DF .text	00000000000000e7  Base        kemp_log_add_sink
-    0000000000006ace g    DF .text	0000000000000087  Base        kemp_get_reason_string
+    0000000000007c70 g    DF .text	0000000000000188  Base        kpep_log
+    000000000000766f g    DF .text	00000000000000c5  Base        kpep_log_data
+    000000000000746c g    DF .text	00000000000000e7  Base        kpep_log_add_sink
+    0000000000006ace g    DF .text	0000000000000087  Base        kpep_get_reason_string
     000000000000770b g    DF .text	0000000000000032  Base        get_log_level_string
     0000000000007553 g    DF .text	00000000000001b8  Base        read_log_level_string
 

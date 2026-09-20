@@ -35,12 +35,23 @@ extern "C" {
 #define MAX_ADDL_LEN     (1024*1024)
 #define MAX_PERS_LEN      1024
 
+// Values for RBG construction mode
+#define RBG2_OVERFLOW    (2<<17)
+
+typedef enum {
+    RBG3 = 0,
+    RBG2
+} RBG_ENTROPY_MODE;
+
+// Opaque context structure
 typedef struct kpep_drbg_ctx_st KPEP_DRBG_CTX;
 
-void* drbg_new (void* seed_ctx, KPEP_RESULT *errnum);
+// Callable functions for DRBG management
+void* drbg_new (void* seed_ctx, uint32_t entropy_mode, KPEP_RESULT *errnum);
 void  drbg_free(KPEP_DRBG_CTX* ctx);
 int   drbg_verify_zeroization(KPEP_DRBG_CTX* ctx);
 
+// Callable functions for DRBG operations
 KPEP_RESULT drbg_instantiate   (KPEP_DRBG_CTX* ctx, int strength,
 								const uint8_t* perso, uint32_t perso_len);
 void        drbg_uninstantiate (KPEP_DRBG_CTX* ctx);

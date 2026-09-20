@@ -101,17 +101,15 @@ void* stub_osrand_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
     if ((result = load_params(prov_ctx, ctx)) != KPEP_R_SUCCESS) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'osrand' failed startup (load params)");
         if (errnum) *errnum = result;
-        kpep_cleanse(ctx, sizeof(OSRAND_CTX));
-        return NULL;        
+        goto err;
     }
 
     // Set entropy factors
     full_entropy_sz = ctx->block_size * ctx->block_count;
     if (full_entropy_sz < KPEP_SECURITY_STRENGTH_BITS) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'osrand' failed startup (block size check)");
-        kpep_cleanse(ctx, sizeof(OSRAND_CTX));
         if (errnum) *errnum = KPEP_R_INVALID_ARG;
-        return NULL;        
+        goto err;
     }
     ctx->full_entropy = (KPEP_SECURITY_STRENGTH_BITS == full_entropy_sz);
     if (!ctx->full_entropy) {
@@ -119,14 +117,14 @@ void* stub_osrand_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
     }
  
     // Name
-    len = snprintf(ctx->name,
-                sizeof(ctx->name),
+    len = snprintf(ctx->name, sizeof(ctx->name),
                 "%s (%s)",
                 base_name,
                 ctx->filepath);
     if (len < 0) {
         LOG_FORMATTED_ERROR(MODULE_NAME, "Unable to format source name for ID#%d", ctx->idx);
-        return NULL;
+        if (errnum) *errnum = KPEP_R_SEED_INIT_FAIL;
+        goto err;
     }
     if ((size_t)len >= sizeof(ctx->name)) {
         LOG_FORMATTED_ERROR(MODULE_NAME,
@@ -148,6 +146,10 @@ void* stub_osrand_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
     ctx->prof_min = UINT32_MAX;
 
     return ctx;
+
+err:
+    kpep_cleanse(ctx, sizeof(OSRAND_CTX));
+    return NULL;
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -176,6 +178,7 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
         debug = getenv(ENV_OPTEST_SEED_OSRAND_FATAL);
         if (debug) {
             LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'osrand' gather failed (optest-fatal)");
+            ctx->state = KPEP_RAND_STATE_ERROR;
             return KPEP_R_SEED_FATAL_ERROR;
         }
     }
@@ -266,8 +269,10 @@ err:
     memset(out, 0, *out_len);
     *out_len = 0;
 
-    // Permanent failure or too many intermittent failures
-    ctx->state = KPEP_RAND_STATE_ERROR;
+    // Set state to ERROR only if fatal error
+    if (rv == KPEP_R_SEED_FATAL_ERROR) {
+        ctx->state = KPEP_RAND_STATE_ERROR;
+    }
     return rv;
 }
 

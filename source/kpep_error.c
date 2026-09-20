@@ -46,17 +46,17 @@ static ERR_STRING_DATA reasons[] = {
 	{.string = "There are no slots left to add a logging sink"},
 	{.string = "The logging BugFix work-around has failed"},
 	// 111
-	{.string = "Seed source generated a FATAL error"},
-	{.string = "Seed source is not ready"},
+	{.string = "RESERVED 111"},
+	{.string = "RESERVED 112"},
 	{.string = "Seed source has not been instantiated"},
 	{.string = "Seed source is in an error state"},
 	{.string = "Seed source not supported by this CPU"},
 	// 116
 	{.string = "Seed buffer is too small"},
 	{.string = "No seed source slots available for configured source"},
-	{.string = "EOF error reading seed from file"},
-	{.string = "File error reading seed from file"},
-	{.string = "Cannot open file for reading seed data"},
+	{.string = "RESERVED 118"},
+	{.string = "RESERVED 119"},
+	{.string = "RESERVED 120"},
 	// 121
 	{.string = "DRBG is in an invalid state"},
 	{.string = "DRBG has insufficient entropy"},
@@ -68,19 +68,31 @@ static ERR_STRING_DATA reasons[] = {
 	{.string = "Failed to open a file"},
 	{.string = "Bad permissions"},
 	{.string = "File not found"},
-	{.string = "Enexpected error accessing file"},
+	{.string = "Unexpected error accessing file"},
 	// 131
+	{.string = "EOF error reading seed from file"},
+	{.string = "File error reading seed from file"},
 	{.string = "Failure looking up a configuration parameter"},
 	{.string = "A configuration parameter was missing"},
 	{.string = "A configuration parameter was invalid or could not be converted to the proper format"},
-	{.string = "A KDF failed the self-test"},
-	{.string = "A synchronization lock failed to be acquired"},
 	// 136
 	{.string = "Ring buffer requested size is not valid"},
 	{.string = "Ring buffer size is not a power of two"},
 	{.string = "Ring buffer is full"},
 	{.string = "Ring buffer is empty"},
 	{.string = "RESERVED 140"},
+	// 141
+	{.string = "Thread not ready"},
+	{.string = "Thread failed startup"},
+	{.string = "Synchronization lock failed to be acquired"},
+	{.string = "Seed control subsystem failure (no available entropy sources)"},
+	{.string = "RESERVED 145"},
+	// 146
+	{.string = "Seed source is not ready"},
+	{.string = "Seed source error 1"},
+	{.string = "Seed source error 2"},
+	{.string = "Seed source error 3"},
+	{.string = "Seed source generated a FATAL error"},
 };
 
  /* ************************************************************************************************
