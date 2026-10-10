@@ -19,6 +19,7 @@
 #include <string.h>
 
 #include "kpep/kpep.h"
+#include "kpep/kpep_names_optest.h"
 #include "sha2.h"
 #include "drbg.h"
 #include "../seeding/seed_control.h"
@@ -364,6 +365,9 @@ KPEP_RESULT drbg_reseed_ex(KPEP_DRBG_CTX* ctx,
 
 	if (!ctx || (addl_len > MAX_ADDL_LEN)) {
 		return KPEP_R_INVALID_ARG;
+	}
+	if (!entropy && ctx->entropy_mode == ENTROPY_MODE_RBG2) {
+		return KPEP_R_SUCCESS;
 	}
 	if (!entropy || (entropy_len < KPEP_SECURITY_STRENGTH_BITS>>3)) {
 		return KPEP_R_DRBG_INSUFFICIENT_ENTROPY;
@@ -719,18 +723,38 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 	do {
 		// Need to pull in STRENGTH_BITS + 64 bits for RBGC(RS) (see SP 800-90C section 6.5.1.2, in particular step 3.1)
 		rv = seed_control_gather(ctx->seed_ctx, &entropy, &ent_len, KPEP_SECURITY_STRENGTH_BITS+64, 1); // Validated
+#ifdef FIPS_OPTEST
+		{
+			const char* debug = getenv(ENV_OPTEST_RBG2_GATHER);
+			if (debug) {
+				LOG_SIMPLE_ERROR(MODULE_NAME, "DRBG-RBG2 insufficient entropy (optest)");
+				rv = KPEP_R_SEED_INSUFFICIENT_ENTROPY;
+			}
+		}
+#endif
 		if (rv) {
 			// Logged in seed_control.c with better context
 			//LOG_KPEP_ERROR(MODULE_NAME, rv);
 
 			// Abort for all cases except insufficient entropy with RBG2 mode
-			if (rv == KPEP_R_SEED_INSUFFICIENT_ENTROPY && ctx->entropy_mode == RBG2) {
+			if (rv == KPEP_R_SEED_INSUFFICIENT_ENTROPY && ctx->entropy_mode == ENTROPY_MODE_RBG2) {
+#ifdef FIPS_OPTEST
+				{
+					const char* debug = getenv(ENV_OPTEST_RBG2_OVERFLOW);
+					if (debug) {
+						LOG_SIMPLE_ERROR(MODULE_NAME, "DRBG-RBG2 Overflow (optest)");
+						rv = KPEP_R_DRBG_RBG2_OVERFLOW;
+						break;
+					}
+				}
+#endif
+
 				// Check overflow
-				if (ctx->entropy_counter >= RBG2_OVERFLOW) {
+				if (ctx->entropy_counter >= ENTROPY_MODE_RBG2_OVERFLOW) {
 					rv = KPEP_R_DRBG_RBG2_OVERFLOW; // Fatal?
 					break;
 				}
-				RBG2_event = 1;  // We need to account for the returned bits
+				RBG2_event = 1; // We need to account for the returned bits
 			}
 			else {
 				break;
@@ -753,8 +777,8 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 		cur_len = (rand_len<KPEP_SECURITY_STRENGTH_BYTES)?rand_len:KPEP_SECURITY_STRENGTH_BYTES;
 
 		// Account for the bits we're returning for the RBG2 construction
-		if (ctx->entropy_mode == RBG2) {
-			ctx->entropy_counter = (RBG2_event)?ctx->entropy_counter + cur_len:0; // Accum or reset
+		if (ctx->entropy_mode == ENTROPY_MODE_RBG2) {
+			ctx->entropy_counter = (RBG2_event)?ctx->entropy_counter + (cur_len<<3):0; // Accum or reset
 			RBG2_event = 0;
 		}
 

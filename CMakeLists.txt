@@ -342,9 +342,9 @@ ADD_SUBDIRECTORY ("app")
 ADD_SUBDIRECTORY ("example")
 
 # OpTest Tools?
-IF (FIPS_OPTEST)
-    ADD_SUBDIRECTORY ("optest")
-ENDIF (FIPS_OPTEST)
+#IF (FIPS_OPTEST)
+#    ADD_SUBDIRECTORY ("optest")
+#ENDIF (FIPS_OPTEST)
 
 # Test Applications?
 IF (tests)
@@ -438,18 +438,18 @@ IF (example-external-logging)
 ENDIF (example-external-logging)
 
 # FIPS Operational Testing tools
-IF (FIPS_OPTEST)
-    INSTALL(TARGETS TOOL_optest DESTINATION ${OPENSSL_ROOT}/bin
-        PERMISSIONS 
-            OWNER_READ OWNER_EXECUTE OWNER_WRITE
-            GROUP_READ GROUP_EXECUTE
-            WORLD_READ WORLD_EXECUTE)
-    INSTALL(TARGETS TOOL_edkex DESTINATION ${OPENSSL_ROOT}/bin
-        PERMISSIONS 
-            OWNER_READ OWNER_EXECUTE OWNER_WRITE
-            GROUP_READ GROUP_EXECUTE
-            WORLD_READ WORLD_EXECUTE)
-ENDIF (FIPS_OPTEST)
+#IF (FIPS_OPTEST)
+#    INSTALL(TARGETS TOOL_optest DESTINATION ${OPENSSL_ROOT}/bin
+#        PERMISSIONS 
+#            OWNER_READ OWNER_EXECUTE OWNER_WRITE
+#            GROUP_READ GROUP_EXECUTE
+#            WORLD_READ WORLD_EXECUTE)
+#    INSTALL(TARGETS TOOL_edkex DESTINATION ${OPENSSL_ROOT}/bin
+#        PERMISSIONS 
+#            OWNER_READ OWNER_EXECUTE OWNER_WRITE
+#            GROUP_READ GROUP_EXECUTE
+#            WORLD_READ WORLD_EXECUTE)
+#ENDIF (FIPS_OPTEST)
 
 # Fully custom finalization script; must be run after CMake installs above (to the bin/ directory)
 INSTALL(CODE "execute_process(COMMAND ${KPEP_SOURCE_DIR}/resources/cmake_finalize_kpep.sh)")

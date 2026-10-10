@@ -140,7 +140,6 @@ SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, KPEP_RESULT *errnum)
 
     // Loop through all sources and start their threads
     if (ctx->async_mode) {
-        kpep_log(LOG_LVL_INFO, MODULE_NAME, "KPEP starting asynchronous mode (worker threads starting)");
         for (i = 0; i < ctx->v_count; ++i) {
             if (ctx->valid[i].seed_ctx) {
                 KPEP_RESULT rv = async_seed_start_thread(ctx->valid[i].seed_ctx);
@@ -412,6 +411,10 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
         kpep_get_core_param_bool(prov_ctx, KPEP_PROV_PARAM_REQ_HARDWARE_SOURCE, 0);
     ctx->async_mode = 
         kpep_get_core_param_bool(prov_ctx, KPEP_PROV_PARAM_SEED_ASYNC_MODE, 0);
+    if (ctx->async_mode)
+        kpep_log(LOG_LVL_INFO, MODULE_NAME, "KPEP starting in asynchronous mode (gather from worker threads through ringbuffers)");
+    else
+        kpep_log(LOG_LVL_INFO, MODULE_NAME, "KPEP starting in synchronous mode (block while gathering entropy)");
 
     // Initialize each seed source
     for (def = seed_source_defs; def->desc; ++def) {
@@ -467,6 +470,10 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
             if (ring_sz <= 0 || ring_sz > INT32_MAX) {
                 LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_RING_INVALID_SIZE);
                 return KPEP_R_RING_INVALID_SIZE;
+            }
+            if ((ring_sz & (ring_sz - 1)) != 0) {
+                LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_RING_NOT_POWER_OF_TWO);
+                return KPEP_R_RING_NOT_POWER_OF_TWO;
             }
         }
         else {

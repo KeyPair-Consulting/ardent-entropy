@@ -36,11 +36,11 @@ extern "C" {
 #define MAX_PERS_LEN      1024
 
 // Values for RBG construction mode
-#define RBG2_OVERFLOW    (2<<17)
+#define ENTROPY_MODE_RBG2_OVERFLOW (1<<17)
 
 typedef enum {
-    RBG3 = 0,
-    RBG2
+    ENTROPY_MODE_RBG3 = 0,
+    ENTROPY_MODE_RBG2
 } RBG_ENTROPY_MODE;
 
 // Opaque context structure

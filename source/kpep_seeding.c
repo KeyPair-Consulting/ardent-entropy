@@ -43,7 +43,7 @@ static KPEP_DRBG_CTX    *drbg_ctx = NULL;
 
 static const char       *perso_string = NULL;
 
-static RBG_ENTROPY_MODE rbg_entropy_mode = RBG3;
+static RBG_ENTROPY_MODE rbg_entropy_mode = ENTROPY_MODE_RBG3;
 
 // Flag to denote DRBG instantiation (delayed until first use, in one of two places)
 static uint32_t          drbg_instantiated = 0;
@@ -572,15 +572,20 @@ static KPEP_RESULT load_params(void* prov_ctx)
 
     if (rbg_value) {
         if (!strncmp(rbg_value, "RBG2", 4)) {
-            rbg_entropy_mode = RBG2;
+            kpep_log(LOG_LVL_INFO, MODULE_NAME, "Entropy mode set to RBG2");
+            rbg_entropy_mode = ENTROPY_MODE_RBG2;
         }
         else if (!strncmp(rbg_value, "RBG3", 4)) {
-            rbg_entropy_mode = RBG3;
+            kpep_log(LOG_LVL_INFO, MODULE_NAME, "Entropy mode set to RBG3");
+            rbg_entropy_mode = ENTROPY_MODE_RBG3;
         }
         else {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }
+    }
+    else {
+        kpep_log(LOG_LVL_INFO, MODULE_NAME, "Entropy mode set to RBG3 (default)");
     }
 
     return KPEP_R_SUCCESS;

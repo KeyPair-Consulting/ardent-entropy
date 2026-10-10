@@ -29,11 +29,11 @@ extlog = extlog_sect
 fips-indicators = 1
 
 [syslog_sect]
-activate=1
+activate=0
 level=INFO
 
 [stderr_sect]
-activate=0
+activate=1
 level=INFO
 
 [extlog_sect]
@@ -109,14 +109,14 @@ async-mode = 0
 # have been returned.  Any valid entropy from a source resets this counter.
 
 # Require all sources to provide entropy for each request
-# Highest security, no failover
-# Default: 0
+# Default: 0 (only 1 validated source is needed)
 req-all-sources = 0
 
-# Require at least one source to provide entropy for each request
-# Medium security, failover
-# Default: 1
-req-some-sources = 1
+# Operate as RBG2 or RBG3
+# Valid values: "RBG2" or "RBG3"
+# Default:
+#rbg-entropy-mode=RBG3
+rbg-entropy-mode=RBG2
 
 # Require at least one of the sources to be a hardware source.
 # Corresponds to SP800-90 restrictive entropy counting "Method 1"
