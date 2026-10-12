@@ -721,6 +721,10 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 
 	// Gather entropy
 	do {
+		// Calculate size of the current block to generate
+		// Truncate the last block as required (see SP 800-90C section 6.5.1.2, step 4)
+		cur_len = (rand_len<KPEP_SECURITY_STRENGTH_BYTES)?rand_len:KPEP_SECURITY_STRENGTH_BYTES;
+
 		// Need to pull in STRENGTH_BITS + 64 bits for RBGC(RS) (see SP 800-90C section 6.5.1.2, in particular step 3.1)
 		rv = seed_control_gather(ctx->seed_ctx, &entropy, &ent_len, KPEP_SECURITY_STRENGTH_BITS+64, 1); // Validated
 #ifdef FIPS_OPTEST
@@ -728,6 +732,9 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 			const char* debug = getenv(ENV_OPTEST_RBG2_GATHER);
 			if (debug) {
 				LOG_SIMPLE_ERROR(MODULE_NAME, "DRBG-RBG2 insufficient entropy (optest)");
+				kpep_cleanse(entropy, ent_len); // Free also
+				entropy = NULL;
+				ent_len = 0;
 				rv = KPEP_R_SEED_INSUFFICIENT_ENTROPY;
 			}
 		}
@@ -749,8 +756,8 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 				}
 #endif
 
-				// Check overflow
-				if (ctx->entropy_counter >= ENTROPY_MODE_RBG2_OVERFLOW) {
+				// Check overflow on the next drbg_generate_ex() below
+				if ((ctx->entropy_counter + (cur_len<<3)) > ENTROPY_MODE_RBG2_OVERFLOW) {
 					rv = KPEP_R_DRBG_RBG2_OVERFLOW; // Fatal?
 					break;
 				}
@@ -773,8 +780,6 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 			LOG_KPEP_ERROR(MODULE_NAME, rv);
 			break;
 		}
-		// Truncate the last block as required (see SP 800-90C section 6.5.1.2, step 4)
-		cur_len = (rand_len<KPEP_SECURITY_STRENGTH_BYTES)?rand_len:KPEP_SECURITY_STRENGTH_BYTES;
 
 		// Account for the bits we're returning for the RBG2 construction
 		if (ctx->entropy_mode == ENTROPY_MODE_RBG2) {

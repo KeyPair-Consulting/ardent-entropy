@@ -296,7 +296,7 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
             return KPEP_R_SUCCESS;
         }
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_SEED_INSUFFICIENT_ENTROPY);
-        rv = KPEP_R_SEED_REQUEST_TOO_LARGE;
+        rv = KPEP_R_SEED_INSUFFICIENT_ENTROPY;
         goto err;
     }
 
