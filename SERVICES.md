@@ -1,6 +1,16 @@
 
 # The KeyPair Entropy Provider (KPEP) Runtime Services
 
+This file list all of the services KPEP provides outside of the OpenSSL provider interface.
+
+## Status
+
+This file is currently out-of-date and will be refreshed before release.  Many functions
+currently remain marked with "default" visibility, making them available to external callers.
+One of the cleanup steps before release will be to mark nearly every function as "hidden" so
+they cannot be called.  The list below (from KPMP, with edits) is the retained to serve as
+a list of expected functions that will be exposed in the RC1 release.
+
 ## Command to generate list
 
     objdump -T kpep.so
