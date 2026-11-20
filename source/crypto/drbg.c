@@ -37,9 +37,9 @@
 
 struct kpep_drbg_ctx_st {
 	// State
-	uint32_t running;
-	RBG_ENTROPY_MODE entropy_mode;
+	uint32_t         running;
 	uint32_t         entropy_counter;
+	RBG_ENTROPY_MODE entropy_mode;
 
 	// External Contexts
 	SHA2_CTX         *hash_ctx;
