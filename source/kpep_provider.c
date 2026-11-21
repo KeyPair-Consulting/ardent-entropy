@@ -217,7 +217,7 @@ static int kpep_get_params(void *provctx, OSSL_PARAM params[])
  * OpenSSL RAND_bytes() infrastructure
  * ************************************************************************************************
  * ***********************************************************************************************/
-
+/*
 extern const OSSL_DISPATCH kpep_seeding_functions[];
 
 static int kpep_random_bytes(void *vprov, int which,
@@ -251,7 +251,7 @@ static int kpep_random_bytes(void *vprov, int which,
     else
         return -1;
 }
-
+*/
 /* ************************************************************************************************
  * ************************************************************************************************
  * SELF-TEST INFRASTRUCTURE
@@ -412,7 +412,7 @@ static const OSSL_DISPATCH kpep_dispatch_table[] = {
     { OSSL_FUNC_PROVIDER_GET_PARAMS,       (void (*)(void))kpep_get_params },
     { OSSL_FUNC_PROVIDER_QUERY_OPERATION,  (void (*)(void))kpep_query },
     { OSSL_FUNC_PROVIDER_SELF_TEST,        (void (*)(void))kpep_self_test },
-    { OSSL_FUNC_PROVIDER_RANDOM_BYTES,     (void (*)(void))kpep_random_bytes },
+//    { OSSL_FUNC_PROVIDER_RANDOM_BYTES,     (void (*)(void))kpep_random_bytes },
     { 0, NULL }
 };
 

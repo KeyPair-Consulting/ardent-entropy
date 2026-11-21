@@ -489,7 +489,7 @@ const OSSL_DISPATCH kpep_seeding_functions[] = {
     { OSSL_FUNC_RAND_CLEAR_SEED,          (void(*)(void)) kpep_seed_clear_seed },
     OSSL_DISPATCH_END
 };
-
+/*
 EXPORT_VISIBILITY_HIDDEN
 size_t kpep_core_get_entropy(void *provctx, unsigned char **pout,
                              int entropy, size_t min_len, size_t max_len)
@@ -541,7 +541,7 @@ const OSSL_DISPATCH kpep_core_seed_functions[] = {
     { OSSL_FUNC_CLEANUP_USER_NONCE,   (void(*)(void)) kpep_core_cleanup_nonce },
     OSSL_DISPATCH_END
 };
-
+*/
 /* ***********************************************************************************************
  * ***********************************************************************************************
  * Parameters from 'kpepmodule.cnf'

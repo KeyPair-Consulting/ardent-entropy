@@ -33,7 +33,7 @@ activate=0
 level=INFO
 
 [stderr_sect]
-activate=1
+activate=0
 level=INFO
 
 [extlog_sect]
