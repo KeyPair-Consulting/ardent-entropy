@@ -72,7 +72,15 @@ typedef struct kpep_provider_ctx_st {
     OSSL_LIB_CTX           *libctx;         /* For all provider modules */
     BIO_METHOD             *corebiometh; 
     SELF_TEST_PARAMS       *st;
+    KPEP_SEEDING_CTX       *seeding;
 } KPEP_PROVIDER_CTX;
+
+EXPORT_VISIBILITY_HIDDEN
+KPEP_SEEDING_CTX *kpep_provider_get_seeding(void *prov_ctx)
+{
+    KPEP_PROVIDER_CTX *ctx = (KPEP_PROVIDER_CTX *)prov_ctx;
+    return ctx ? ctx->seeding : NULL;
+}
 
 /* Forward declarations to ensure that interface functions are correctly defined */
 static OSSL_FUNC_provider_teardown_fn         kpep_teardown;
@@ -186,7 +194,7 @@ static const OSSL_PARAM *kpep_gettable_params(void *provctx)
 static int kpep_get_params(void *provctx, OSSL_PARAM params[])
 {
     OSSL_PARAM *p;
-    //KPEP_PROVIDER_CTX *ctx = (KPEP_PROVIDER_CTX*)provctx;
+    KPEP_PROVIDER_CTX *ctx = (KPEP_PROVIDER_CTX*)provctx;
 
     p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_NAME);
     if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, KPEP_PROVIDER_MODULE_NAME))
@@ -201,11 +209,11 @@ static int kpep_get_params(void *provctx, OSSL_PARAM params[])
     if (p != NULL && !OSSL_PARAM_set_int(p, ossl_prov_is_running()))
         return 0;
     p = OSSL_PARAM_locate(params, KPEP_PROV_PARAM_RESTRICTED_MODE);
-    if (p != NULL && !OSSL_PARAM_set_int(p, kpep_seeding_get_restricted_mode()))
+    if (p != NULL && !OSSL_PARAM_set_int(p, kpep_seeding_get_restricted_mode(ctx->seeding)))
         return 0;
     p = OSSL_PARAM_locate(params, KPEP_PROV_PARAM_SEED_SOURCES);
     if (p != NULL) {
-        const char *desc = kpep_seeding_get_description();
+        const char *desc = kpep_seeding_get_description(ctx->seeding);
         if (!OSSL_PARAM_set_utf8_ptr(p, desc))
             return 0;
     }
@@ -395,7 +403,10 @@ static void kpep_teardown(void *provctx)
 {
     KPEP_PROVIDER_CTX *ctx = (KPEP_PROVIDER_CTX*)provctx;
 
-    kpep_seeding_fini(); // Teardown all the seeds
+	if (!ctx)
+		return;
+
+    kpep_seeding_free(ctx->seeding);
 	kpep_debug_fini();  // Trace teardown stays after seeding; core cleanup happens here
 	kpep_logging_fini(); // Must be last so all messages are flushed
     if (ctx->libctx) {
@@ -503,16 +514,13 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
     }
 
     // Initialize all subsystems
-    rv = kpep_logging_init(newctx);
+    rv = kpep_logging_init(newctx);  // Make into context!
     if (rv) {
         ERR_raise(ERR_LIB_KPEP, rv);
         goto err;
     }
-    rv = kpep_seeding_init(newctx);
-    if (rv) {
-        ERR_raise(ERR_LIB_KPEP, rv);
-        goto err;
-    }
+    newctx->seeding = kpep_seeding_new(newctx);
+	// TODO: Log error "some subsystems failed to start"?
 
     // Start the immutable-configured runtime debug listener after provider startup.
     kpep_debug_control_init(newctx);

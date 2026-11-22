@@ -28,11 +28,16 @@ extern "C" {
  * SEED-SOURCE descriptions and Mode
  * ***********************************************************************************************/
 
+typedef struct kpep_seeding_ctx_st KPEP_SEEDING_CTX;
+
 // Get a multi-line string containing a description of all the seed sources, one per line; source in kpep_seeding.c
-const char* kpep_seeding_get_description(void);
+const char* kpep_seeding_get_description(KPEP_SEEDING_CTX *ctx);
 
 // Get a boolean (0/1) whether entropy restrive counting (Method #1) is enabled
-int kpep_seeding_get_restricted_mode(void);
+int kpep_seeding_get_restricted_mode(KPEP_SEEDING_CTX *ctx);
+
+// Retrieve the seeding service owned by a provider context.
+KPEP_SEEDING_CTX *kpep_provider_get_seeding(void *prov_ctx);
 
 /* ************************************************************************************************
  * ERROR Reason strings
@@ -51,11 +56,11 @@ KPEP_RESULT kpep_logging_init(void* prov_ctx);
 // Finalize the logging subsystem; called once during provider close; source in kpep_logging.c
 void kpep_logging_fini(void);
 
-// Initialize the "singleton"; called once during provider init; source in kpep_seeding.c
-KPEP_RESULT kpep_seeding_init(void* prov_ctx);
+// Initialize provider-owned seed sources and DRBG state.
+KPEP_SEEDING_CTX* kpep_seeding_new(void *prov_ctx);
 
-// Finalize the "singleton"; called once during provider close; source in kpep_seeding.c
-void kpep_seeding_fini(void);
+// Finalize provider-owned seed sources and DRBG state.
+void kpep_seeding_free(KPEP_SEEDING_CTX *ctx);
 
 // Initialize the debug subsystem; source in debug/kpep_debug_core.c
 void kpep_debug_init(void);

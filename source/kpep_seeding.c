@@ -38,26 +38,27 @@
 
 #define MODULE_NAME "KPEP-SEED"
 
-static SEED_CONTROL_CTX *ctrl_ctx = NULL;
-static KPEP_DRBG_CTX    *drbg_ctx = NULL;
+struct kpep_seeding_ctx_st {
+    SEED_CONTROL_CTX *ctrl_ctx;
+    KPEP_DRBG_CTX    *drbg_ctx;
+    const char       *perso_string;
+    RBG_ENTROPY_MODE  rbg_entropy_mode;
+    int               drbg_instantiated;
+    CRYPTO_MUTEX     *lock;
+    char             seed_description[SEED_CONTROL_DESCRIPTION_MAX];
+};
 
-static const char       *perso_string = NULL;
+typedef struct {
+    KPEP_SEEDING_CTX *service;
+    int               instantiated;
+} KPEP_RAND_CTX;
 
-static RBG_ENTROPY_MODE rbg_entropy_mode = ENTROPY_MODE_RBG3;
-
+// RETAINED FOR COMMENTS DURING REFACTORING -- DELETE BEFORE RELEASE
 // Flag to denote DRBG instantiation (delayed until first use, in one of two places)
-static uint32_t          drbg_instantiated = 0;
-
-//  uses one global context, but OpenSSL requires a context handle.
-// Create a dummy handle to pass back to OpenSSL; ignore when passed to us
-static char              dummy_char = 0xEC;
-static char             *dummy_hnd = &dummy_char;
+//static uint32_t          drbg_instantiated = 0;
 
 // Static buffer for description to be assembled
-static char seed_description[SEED_CONTROL_DESCRIPTION_MAX] = { 0 };
-
-// Mutex mechanism
-static CRYPTO_MUTEX     *lock = NULL;
+//static char seed_description[SEED_CONTROL_DESCRIPTION_MAX] = { 0 };
 
 #define RAISE_ERROR(rv) \
     if ((rv) == KPEP_R_SEED_CONTROL_FATAL) { \
@@ -68,112 +69,176 @@ static CRYPTO_MUTEX     *lock = NULL;
 
 /* ***********************************************************************************************
  * ***********************************************************************************************
- *  Initialization and Static
+ *  Seeding Context and Service
  * ***********************************************************************************************
  * ***********************************************************************************************/
 
-static KPEP_RESULT load_params(void* prov_ctx);
+static KPEP_RESULT load_params(void* prov_ctx, KPEP_SEEDING_CTX *ctx);
 
 EXPORT_VISIBILITY_HIDDEN
-void kpep_seeding_fini(void)
+void kpep_seeding_free(KPEP_SEEDING_CTX *ctx)
 {
-    ossl_crypto_mutex_lock(lock);
-    if (drbg_ctx) {
-        drbg_uninstantiate(drbg_ctx);
-        drbg_free(drbg_ctx);
-        drbg_ctx = NULL;
+    if (!ctx)
+        return;
+
+    if (ctx->lock)
+        ossl_crypto_mutex_lock(ctx->lock);
+    if (ctx->drbg_ctx) {
+        drbg_uninstantiate(ctx->drbg_ctx);
+        drbg_free(ctx->drbg_ctx);
+        ctx->drbg_ctx = NULL;
     }
-    if (ctrl_ctx) {
-        seed_control_free(ctrl_ctx);
-        ctrl_ctx = NULL;
+    if (ctx->ctrl_ctx) {
+        seed_control_free(ctx->ctrl_ctx);
+        ctx->ctrl_ctx = NULL;
     }
-    ossl_crypto_mutex_unlock(lock);
-    ossl_crypto_mutex_free(&lock);
+    if (ctx->lock) {
+        ossl_crypto_mutex_unlock(ctx->lock);
+        ossl_crypto_mutex_free(&ctx->lock);
+    }
+    kpep_cleanse(ctx, sizeof(*ctx));
 }
 
 EXPORT_VISIBILITY_HIDDEN
-KPEP_RESULT kpep_seeding_init(void* prov_ctx)
+KPEP_SEEDING_CTX* kpep_seeding_new(void* prov_ctx)
 {
-    KPEP_RESULT rv = KPEP_R_SUCCESS;
-    uint32_t state;
+    KPEP_RESULT rv;
+    KPEP_SEEDING_CTX *ctx = NULL;
+
+    if (!prov_ctx) {
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_NULL_ARG);
+        return NULL;
+	}
 
     if (kpep_trace_seed_enabled) {
         kpep_trace(MODULE_NAME, "Seed subsystem Init Start");
     }
 
-    // Initialize seed lock mechanism
-    lock = ossl_crypto_mutex_new();
-    if (!lock) {
+    ctx = kpep_zalloc(sizeof(*ctx));
+    if (!ctx) {
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_MALLOC_FAIL);
+        return NULL;
+	}
+    ctx->rbg_entropy_mode = ENTROPY_MODE_RBG3;
+    ctx->lock = ossl_crypto_mutex_new();
+    if (!ctx->lock) {
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_MUTEX_FAIL_START);
-        return KPEP_R_MUTEX_FAIL_START;
+        kpep_cleanse(ctx, sizeof(*ctx));
+        return NULL;
     }
-    ossl_crypto_mutex_lock(lock);
 
-    // Pull runtime configuration from params
-    rv = load_params(prov_ctx);
-    if (rv) {
+    ossl_crypto_mutex_lock(ctx->lock);
+    rv = load_params(prov_ctx, ctx);
+    if (rv == KPEP_R_SUCCESS)
+        ctx->ctrl_ctx = seed_control_new(prov_ctx, &rv);
+    if (rv == KPEP_R_SUCCESS && ctx->ctrl_ctx)
+        ctx->drbg_ctx = drbg_new(ctx->ctrl_ctx, ctx->rbg_entropy_mode, &rv);
+    if (rv == KPEP_R_SUCCESS && (!ctx->ctrl_ctx || !ctx->drbg_ctx))
+        rv = KPEP_R_SEED_NOT_INSTANTIATED;
+    if (rv == KPEP_R_SUCCESS)
+        seed_control_get_description(ctx->ctrl_ctx, ctx->seed_description);
+    ossl_crypto_mutex_unlock(ctx->lock);
+
+    if (rv != KPEP_R_SUCCESS) {
         LOG_KPEP_ERROR(MODULE_NAME, rv);
-        goto err;
-    }
-    
-    // Setup Seed Control
-    ctrl_ctx = seed_control_new(prov_ctx, &rv);
-    if (rv) {
-        LOG_KPEP_ERROR(MODULE_NAME, rv);
-        goto err;
-    }
-
-    // Setup DRBG
-    drbg_ctx = drbg_new(ctrl_ctx, rbg_entropy_mode, &rv);
-    if (rv) {
-        LOG_KPEP_ERROR(MODULE_NAME, rv);
-        goto err;
-    }
-
-err:
-    // Release the lock
-    ossl_crypto_mutex_unlock(lock);
-
-    if (rv) {
-        kpep_seeding_fini();
+        kpep_seeding_free(ctx);
         RAISE_ERROR(rv);
+        return NULL;
     }
 
     if (kpep_trace_seed_enabled) {
         kpep_trace(MODULE_NAME, "Seed subsystem Init Complete");
     }
 
+    return ctx;
+}
+
+EXPORT_VISIBILITY_HIDDEN
+const char* kpep_seeding_get_description(KPEP_SEEDING_CTX *ctx)
+{
+    return ctx ? ctx->seed_description : "";
+}
+
+EXPORT_VISIBILITY_HIDDEN
+int kpep_seeding_get_restricted_mode(KPEP_SEEDING_CTX *ctx)
+{
+    int result;
+
+    if (!ctx || !ctx->lock)
+        return 0;
+    ossl_crypto_mutex_lock(ctx->lock);
+    result = seed_control_get_restricted_mode(ctx->ctrl_ctx);
+    ossl_crypto_mutex_unlock(ctx->lock);
+    return result;
+}
+
+// Context must be locked before calling this function
+static KPEP_RESULT seed_service_instantiate(KPEP_SEEDING_CTX *service)
+{
+    KPEP_RESULT rv;
+
+    if (service->drbg_instantiated)
+        return KPEP_R_SUCCESS;
+
+    rv = drbg_instantiate(service->drbg_ctx, KPEP_SECURITY_STRENGTH_BITS,
+                          (const uint8_t *)service->perso_string,
+                          service->perso_string ? (uint32_t)strlen(service->perso_string) : 0);
+    if (rv == KPEP_R_SUCCESS)
+        service->drbg_instantiated = 1;
     return rv;
 }
 
-EXPORT_VISIBILITY_HIDDEN
-const char* kpep_seeding_get_description(void)
+// Context must be locked before calling this function
+static int seed_service_verify_ready(KPEP_SEEDING_CTX* service) 
 {
-    ossl_crypto_mutex_lock(lock);
-    seed_control_get_description(ctrl_ctx, seed_description);
-    ossl_crypto_mutex_unlock(lock);
-    return seed_description;
-}
+    int32_t state;
 
-EXPORT_VISIBILITY_HIDDEN
-int kpep_seeding_get_restricted_mode(void)
-{
-    int result;
-    ossl_crypto_mutex_lock(lock);
-    result = seed_control_get_restricted_mode(ctrl_ctx);
-    ossl_crypto_mutex_unlock(lock);
-    return result;
+    // FIPS: Ensure provider is not in error state
+    if (!ossl_prov_is_running())
+        return 0;
+
+    // DRBG Instantiated?
+    if (!service->drbg_instantiated) {
+        KPEP_RESULT rv;
+        rv = drbg_instantiate(service->drbg_ctx, KPEP_SECURITY_STRENGTH_BITS,
+                            (const uint8_t *)service->perso_string,
+                            service->perso_string ? (uint32_t)strlen(service->perso_string) : 0);
+        if (rv == KPEP_R_SUCCESS)
+            service->drbg_instantiated = 1;
+        else
+            return 0;
+    }
+
+    // Sources ready?
+    state = seed_control_get_state(service->ctrl_ctx);
+    if (state != KPEP_RAND_STATE_READY) {
+        RAISE_ERROR(state == KPEP_RAND_STATE_ERROR ? PROV_R_IN_ERROR_STATE
+                                                   : PROV_R_NOT_INSTANTIATED);
+        return 0;
+    }
+
+    return 1;
 }
 
 /* ***********************************************************************************************
  * ***********************************************************************************************
- * DRBG INTERFACE
+ * OpenSSL EVP_RAND API
  * ***********************************************************************************************
  * ***********************************************************************************************/
 
-static void *kpep_seed_new(void *provctx, void *parent,
+static void kpep_rand_free(void *seed_ctx)
+{
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
+    kpep_cleanse(seed_ctx, sizeof(KPEP_RAND_CTX));
+}
+
+static void *kpep_rand_new(void *provctx, void *parent,
                         const OSSL_DISPATCH *parent_dispatch)
 {
+    KPEP_RAND_CTX *ctx;
+
     if (kpep_trace_seed_enabled) {
         TRACE_START;
     }
@@ -183,150 +248,229 @@ static void *kpep_seed_new(void *provctx, void *parent,
         return NULL;
     }
 
-    return dummy_hnd;
+    ctx = kpep_zalloc(sizeof(*ctx));
+    if (!ctx)
+        return NULL;
+    ctx->service = kpep_provider_get_seeding(provctx);
+    if (!ctx->service) {
+        kpep_free(ctx);
+        return NULL;
+    }
+    return ctx;
 }
 
-static void kpep_seed_free(void *seed_ctx)
+static int kpep_rand_instantiate(void *seed_ctx, unsigned int strength,
+                                 ossl_unused int prediction_resistance,
+                                 ossl_unused const unsigned char *pstr,
+                                 ossl_unused size_t pstr_len,
+                                 ossl_unused const OSSL_PARAM params[])
 {
+    KPEP_RAND_CTX *ctx = (KPEP_RAND_CTX *)seed_ctx;
+
     if (kpep_trace_seed_enabled) {
         TRACE_START;
     }
+
+    if (!ctx || !ctx->service || !ctx->service->lock ||
+        strength > KPEP_SECURITY_STRENGTH_BITS)
+        return 0;
+
+    ossl_crypto_mutex_lock(ctx->service->lock);
+    ctx->instantiated = seed_service_verify_ready(ctx->service);
+    ossl_crypto_mutex_unlock(ctx->service->lock);
+    return ctx->instantiated;  // Instantiated and resdy
 }
 
-static int kpep_seed_instantiate(void *seed_ctx, unsigned int strength,
-                              int prediction_resistance,
-                              const unsigned char *pstr,
-                              size_t pstr_len,
-                              ossl_unused const OSSL_PARAM params[])
+static int kpep_rand_uninstantiate(void *seed_ctx)
 {
+    KPEP_RAND_CTX *ctx = (KPEP_RAND_CTX *)seed_ctx;
+
     if (kpep_trace_seed_enabled) {
         TRACE_START;
     }
 
+    if (!ctx || !ctx->service || !ctx->service->lock)
+        return 0;
+
+    ossl_crypto_mutex_lock(ctx->service->lock);
+    ctx->instantiated = 0;
+    ossl_crypto_mutex_unlock(ctx->service->lock);
     return 1;
 }
 
-static int kpep_seed_uninstantiate(void *seed_ctx)
-{
-    if (kpep_trace_seed_enabled) {
-        TRACE_START;
-    }
-
-    return 1;
-}
-
-static int kpep_seed_generate(void *seed_ctx, unsigned char *out, size_t outlen,
-                           unsigned int strength,
-                           ossl_unused int prediction_resistance,
-                           ossl_unused const unsigned char *adin,
-                           ossl_unused size_t adin_len)
-{
-    KPEP_RESULT rv = KPEP_R_SUCCESS;
-    uint32_t state;
-    
-    if (kpep_trace_seed_enabled) {
-        kpep_trace_fmt(MODULE_NAME, "%s (req %lu)", __func__, outlen<<3);
-    }
-
-    // Initialize seed lock mechanism
-
-    
-
-    if (!drbg_instantiated) {
-        ossl_crypto_mutex_lock(lock);
-        rv = drbg_instantiate(drbg_ctx, KPEP_SECURITY_STRENGTH_BITS, 
-                            (uint8_t*)perso_string, perso_string?strlen(perso_string):0);
-        ossl_crypto_mutex_unlock(lock);
-        if (rv) {
-            LOG_KPEP_ERROR(MODULE_NAME, rv);
-            return 0;
-        }
-        drbg_instantiated = 1;  // Only once
-    }
-
-    // Ensure provider is not in error state
-    if (!ossl_prov_is_running())
-        return 0;
-
-    // Check seed state
-    ossl_crypto_mutex_lock(lock);
-    state = seed_control_get_state(ctrl_ctx);
-    ossl_crypto_mutex_unlock(lock);
-    if (state != KPEP_RAND_STATE_READY) {
-        RAISE_ERROR(state == KPEP_RAND_STATE_ERROR ? PROV_R_IN_ERROR_STATE
-                                                   : PROV_R_NOT_INSTANTIATED);
-        return 0;
-    }
-
-    // Generate
-    ossl_crypto_mutex_lock(lock);
-    rv = drbg_generate(drbg_ctx, out, outlen);
-    ossl_crypto_mutex_unlock(lock);
-
-    if (rv) {
-        // Error logged in DRBG/Seed-source
-        RAISE_ERROR(rv);
-        return 0;
-    }
-
-    return outlen;
-}
-
-static int kpep_seed_reseed(ossl_unused void *seed_ctx,
+// TODO: Can we remove rand_reseed (don't declare reseed service)
+static int kpep_rand_reseed(ossl_unused void *seed_ctx,
                             ossl_unused int prediction_resistance,
                             ossl_unused const unsigned char *ent,
                             ossl_unused size_t ent_len,
                             ossl_unused const unsigned char *adin,
                             ossl_unused size_t adin_len)
 {
+    KPEP_RAND_CTX *ctx = (KPEP_RAND_CTX *)seed_ctx;
     uint32_t state;
+
+    if (!ctx || !ctx->service || !ctx->service->lock)
+        return 0;
 
     if (kpep_trace_seed_enabled) {
         TRACE_START;
     }
 
-    // Ensure provider is not in error state
+    // FIPS: Ensure provider is not in error state
     if (!ossl_prov_is_running())
         return 0;
 
-    // Check seed state
-    ossl_crypto_mutex_lock(lock);
-    state = seed_control_get_state(ctrl_ctx);
-    ossl_crypto_mutex_unlock(lock);
-    if (state != KPEP_RAND_STATE_READY) {
-        RAISE_ERROR(state == KPEP_RAND_STATE_ERROR ? PROV_R_IN_ERROR_STATE
-                                                   : PROV_R_NOT_INSTANTIATED);
-        return 0;
-    }
+    // Ignore; Reseed is handled internally
     return 1;
 }
 
-static int kpep_seed_get_ctx_params(ossl_unused void *seed_ctx, OSSL_PARAM params[])
+static size_t kpep_rand_generate(void *seed_ctx, unsigned char *out, size_t outlen,
+                                 ossl_unused unsigned int strength,
+                                 ossl_unused int prediction_resistance,
+                                 ossl_unused const unsigned char *adin,
+                                 ossl_unused size_t adin_len)
 {
+    KPEP_RAND_CTX *ctx = (KPEP_RAND_CTX *)seed_ctx;
+    KPEP_RESULT rv = KPEP_R_SUCCESS;
+    int ok;
+    
+    if (kpep_trace_seed_enabled) {
+        kpep_trace_fmt(MODULE_NAME, "%s (req %lu) bits", __func__, outlen);
+    }
+
+    if (!ctx || !ctx->service || !ctx->service->lock || !out || outlen == 0)
+        return 0;
+
+    if (!seed_service_verify_ready(ctx->service))
+        return 0;
+    
+    // Generate
+    ossl_crypto_mutex_lock(ctx->service->lock);
+    rv = drbg_generate(ctx->service->drbg_ctx, out, outlen);
+    ossl_crypto_mutex_unlock(ctx->service->lock);
+
+    if (rv != KPEP_R_SUCCESS) {
+        // Error logged in DRBG/Seed-source
+        RAISE_ERROR(rv);
+        return 0;
+    }
+
+    return outlen; // Return bytes!
+}
+
+static size_t kpep_rand_get_seed(void *seed_ctx, unsigned char **pout,
+                                 int entropy, size_t min_len,
+                                 size_t max_len,
+                                 ossl_unused int prediction_resistance,
+                                 ossl_unused const unsigned char *adin,
+                                 ossl_unused size_t adin_len)
+{
+    KPEP_RAND_CTX *ctx = (KPEP_RAND_CTX *)seed_ctx;
+    KPEP_RESULT rv = KPEP_R_SUCCESS;
+
+    unsigned char *buffer = NULL;
+    size_t         buf_bytes = 0, buf_bits = 0;
+    size_t         requested = (size_t) entropy;
+    size_t         result_bytes = 0;
+
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
+
+    if (!ctx || !ctx->service || !ctx->service->lock || !pout || *pout || entropy==0)
+        return 0;
+
+    // Set requested length with min/max enforcement
+    buf_bits = (requested < min_len)?min_len:
+               (requested > max_len)?max_len:requested;
+    buf_bytes = buf_bits >> 3;
+
+    if (kpep_trace_seed_enabled) {
+        kpep_trace_fmt(MODULE_NAME, "request (%lu<%lu<%lu=%lu) bits", min_len, requested, max_len, buf_bits);
+    }
+
+    buffer = kpep_zalloc(buf_bytes);
+    if (!buffer) {
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_MALLOC_FAIL);
+        RAISE_ERROR(KPEP_R_MALLOC_FAIL);
+        return 0;
+    }
+
+    // Generate
+    result_bytes = kpep_rand_generate(seed_ctx, buffer, buf_bytes, 0, 0, NULL, 0);
+    if (result_bytes) {
+        *pout = buffer;
+    }
+    else {
+        kpep_cleanse(buffer, buf_bytes);
+    }
+
+    return result_bytes;  // Return bytes!
+}
+ 
+static void kpep_rand_clear_seed(ossl_unused void *seed_ctx,
+                               unsigned char *out, size_t outlen)
+{
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
+    if (!out)
+        return;
+    kpep_cleanse(out, outlen);
+}
+
+static int kpep_rand_verify_zeroization(void *seed_ctx)
+{
+    KPEP_RAND_CTX *ctx = (KPEP_RAND_CTX *)seed_ctx;
+    int rv;
+
+    if (kpep_trace_seed_enabled) {
+        TRACE_START;
+    }
+
+    if (!ctx || !ctx->service || !ctx->service->lock || !ctx->service->drbg_ctx)
+        return 1;
+
+    // The Seeding DRBG doesn't uninstantiate until the provider is unloaded.
+    // As a result, this call to verify_zeroization should always fail.  
+    // TODO: Validate this zeroization check under OpTest scenarios.
+    ossl_crypto_mutex_lock(ctx->service->lock);
+    rv = drbg_verify_zeroization(ctx->service->drbg_ctx);
+    ossl_crypto_mutex_unlock(ctx->service->lock);
+    return rv;
+}
+ 
+
+static int kpep_rand_get_ctx_params(void *seed_ctx, OSSL_PARAM params[])
+{
+    KPEP_RAND_CTX *ctx = (KPEP_RAND_CTX *)seed_ctx;
     uint32_t state;
     OSSL_PARAM *p;
 
     if (kpep_trace_seed_enabled) {
         TRACE_START;
     }
+    if (!ctx || !ctx->service || !ctx->service->lock)
+        return 0;
 
-    state = seed_control_get_state(ctrl_ctx);
+    ossl_crypto_mutex_lock(ctx->service->lock);
+    state = ctx->instantiated ? seed_control_get_state(ctx->service->ctrl_ctx)
+                              : KPEP_RAND_STATE_UNINITIALISED;
+    ossl_crypto_mutex_unlock(ctx->service->lock);
 
     p = OSSL_PARAM_locate(params, OSSL_RAND_PARAM_STATE);
-    if (p != NULL && !OSSL_PARAM_set_int(p, state))
+    if (p && !OSSL_PARAM_set_int(p, state))
         return 0;
-
     p = OSSL_PARAM_locate(params, OSSL_RAND_PARAM_STRENGTH);
-    if (p != NULL && !OSSL_PARAM_set_int(p, KPEP_SECURITY_STRENGTH_BITS))
+    if (p && !OSSL_PARAM_set_uint(p, KPEP_SECURITY_STRENGTH_BITS))
         return 0;
-
     p = OSSL_PARAM_locate(params, OSSL_RAND_PARAM_MAX_REQUEST);
-    if (p != NULL && !OSSL_PARAM_set_size_t(p, DRBG_MAX_BYTES_PER_REQUEST))
+    if (p && !OSSL_PARAM_set_size_t(p, DRBG_MAX_BYTES_PER_REQUEST))
         return 0;
     return 1;
 }
 
-static const OSSL_PARAM *kpep_seed_gettable_ctx_params(ossl_unused void *seed_ctx,
+static const OSSL_PARAM *kpep_rand_gettable_ctx_params(ossl_unused void *seed_ctx,
                                                        ossl_unused void *provctx)
 {
     static const OSSL_PARAM known_gettable_ctx_params[] = {
@@ -343,112 +487,7 @@ static const OSSL_PARAM *kpep_seed_gettable_ctx_params(ossl_unused void *seed_ct
     return known_gettable_ctx_params;
 }
 
-static int kpep_seed_verify_zeroization(ossl_unused void *seed_ctx)
-{
-    int rv;
-    if (kpep_trace_seed_enabled) {
-        TRACE_START;
-    }
-
-    if (!drbg_ctx)
-        return 1;
-    ossl_crypto_mutex_lock(lock);
-    rv = drbg_verify_zeroization(drbg_ctx);
-    ossl_crypto_mutex_unlock(lock);
-    return rv;
-}
- 
-static size_t kpep_seed_get_seed(ossl_unused void *seed_ctx, unsigned char **pout,
-                               int entropy, size_t min_len,
-                               size_t max_len,
-                               int prediction_resistance,
-                               const unsigned char *adin,
-                               size_t adin_len)
-{
-    KPEP_RESULT rv = KPEP_R_SUCCESS;
-
-    unsigned char *buffer = NULL;
-    size_t         buflen = 0;
-    size_t         requested = (size_t) entropy;
-    uint32_t       state;
-    
-    if (kpep_trace_seed_enabled) {
-        TRACE_START;
-    }
-
-    if (!ctrl_ctx || !drbg_ctx || !pout)
-        return 0;
-    if (!entropy)
-        return 0;
-
-    if (!drbg_instantiated) {
-        ossl_crypto_mutex_lock(lock);
-        rv = drbg_instantiate(drbg_ctx, KPEP_SECURITY_STRENGTH_BITS, 
-                            (uint8_t*)perso_string, perso_string?strlen(perso_string):0);
-        ossl_crypto_mutex_unlock(lock);
-        if (rv) {
-            LOG_KPEP_ERROR(MODULE_NAME, rv);
-            return 0;
-        }
-        drbg_instantiated = 1;  // Only once
-    }
-
-    // Ensure provider is not in error state
-    if (!ossl_prov_is_running())
-        return 0;
-
-    // Check seed state
-    ossl_crypto_mutex_lock(lock);
-    state = seed_control_get_state(ctrl_ctx);
-    ossl_crypto_mutex_unlock(lock);
-    if (state != KPEP_RAND_STATE_READY) {
-        RAISE_ERROR(state == KPEP_RAND_STATE_ERROR ? PROV_R_IN_ERROR_STATE
-                                                   : PROV_R_NOT_INSTANTIATED);
-        return 0;
-    }
-
-    // Set requested length with min/max enforcement
-    buflen = (requested < min_len)?min_len:
-             (requested > max_len)?max_len:requested;
-
-    if (kpep_trace_seed_enabled) {
-        kpep_trace_fmt(MODULE_NAME, "request (%lu<%lu<%lu=%lu)", min_len, requested, max_len, buflen);
-    }
-
-    buffer = kpep_zalloc(buflen);
-    if (!buffer) {
-        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_MALLOC_FAIL);
-        RAISE_ERROR(KPEP_R_MALLOC_FAIL);
-        return 0;
-    }
-
-    // Generate
-    ossl_crypto_mutex_lock(lock);
-    rv = drbg_generate(drbg_ctx, buffer, buflen);
-    ossl_crypto_mutex_unlock(lock);
-    
-    if (rv) {
-        // Error logged in DRBG/Seed-source
-        kpep_cleanse(buffer, buflen);
-        RAISE_ERROR(rv);
-        return 0;
-    }
-
-    *pout = buffer;
-    return buflen;
-}
- 
-static void kpep_seed_clear_seed(ossl_unused void *seed_ctx,
-                               unsigned char *out, size_t outlen)
-{
-    if (kpep_trace_seed_enabled) {
-        TRACE_START;
-    }
-
-    OPENSSL_cleanse(out, outlen);
-}
- 
-static int kpep_seed_enable_locking(void *seed_ctx)
+static int kpep_rand_enable_locking(ossl_unused void *seed_ctx)
 {
     if (kpep_trace_seed_enabled) {
         TRACE_START;
@@ -456,39 +495,45 @@ static int kpep_seed_enable_locking(void *seed_ctx)
     return 1;
 }
 
-static int kpep_seed_lock(void *seed_ctx)
+static int kpep_rand_lock(ossl_unused void *seed_ctx)
 {
     if (kpep_trace_seed_enabled) {
         TRACE_START;
     }
-        return 1;
+    /* Operations synchronize on the shared provider-owned service lock. */
+    return 1;
 }
 
-static void kpep_seed_unlock(void *seed_ctx)
+static void kpep_rand_unlock(ossl_unused void *seed_ctx)
 {
     if (kpep_trace_seed_enabled) {
         TRACE_START;
     }
-    return;
 }
 
 const OSSL_DISPATCH kpep_seeding_functions[] = {
-    { OSSL_FUNC_RAND_NEWCTX,              (void(*)(void)) kpep_seed_new },
-    { OSSL_FUNC_RAND_FREECTX,             (void(*)(void)) kpep_seed_free },
-    { OSSL_FUNC_RAND_INSTANTIATE,         (void(*)(void)) kpep_seed_instantiate },
-    { OSSL_FUNC_RAND_UNINSTANTIATE,       (void(*)(void)) kpep_seed_uninstantiate }, 
-    { OSSL_FUNC_RAND_GENERATE,            (void(*)(void)) kpep_seed_generate },
-    { OSSL_FUNC_RAND_RESEED,              (void(*)(void)) kpep_seed_reseed },
-    { OSSL_FUNC_RAND_ENABLE_LOCKING,      (void(*)(void)) kpep_seed_enable_locking },
-    { OSSL_FUNC_RAND_LOCK,                (void(*)(void)) kpep_seed_lock },
-    { OSSL_FUNC_RAND_UNLOCK,              (void(*)(void)) kpep_seed_unlock },
-    { OSSL_FUNC_RAND_GETTABLE_CTX_PARAMS, (void(*)(void)) kpep_seed_gettable_ctx_params },
-    { OSSL_FUNC_RAND_GET_CTX_PARAMS,      (void(*)(void)) kpep_seed_get_ctx_params },
-    { OSSL_FUNC_RAND_VERIFY_ZEROIZATION,  (void(*)(void)) kpep_seed_verify_zeroization },
-    { OSSL_FUNC_RAND_GET_SEED,            (void(*)(void)) kpep_seed_get_seed },
-    { OSSL_FUNC_RAND_CLEAR_SEED,          (void(*)(void)) kpep_seed_clear_seed },
+    { OSSL_FUNC_RAND_NEWCTX,              (void(*)(void)) kpep_rand_new },
+    { OSSL_FUNC_RAND_FREECTX,             (void(*)(void)) kpep_rand_free },
+    { OSSL_FUNC_RAND_INSTANTIATE,         (void(*)(void)) kpep_rand_instantiate },
+    { OSSL_FUNC_RAND_UNINSTANTIATE,       (void(*)(void)) kpep_rand_uninstantiate }, 
+    { OSSL_FUNC_RAND_GENERATE,            (void(*)(void)) kpep_rand_generate },
+    { OSSL_FUNC_RAND_RESEED,              (void(*)(void)) kpep_rand_reseed },
+    { OSSL_FUNC_RAND_ENABLE_LOCKING,      (void(*)(void)) kpep_rand_enable_locking },
+    { OSSL_FUNC_RAND_LOCK,                (void(*)(void)) kpep_rand_lock },
+    { OSSL_FUNC_RAND_UNLOCK,              (void(*)(void)) kpep_rand_unlock },
+    { OSSL_FUNC_RAND_GETTABLE_CTX_PARAMS, (void(*)(void)) kpep_rand_gettable_ctx_params },
+    { OSSL_FUNC_RAND_GET_CTX_PARAMS,      (void(*)(void)) kpep_rand_get_ctx_params },
+    { OSSL_FUNC_RAND_VERIFY_ZEROIZATION,  (void(*)(void)) kpep_rand_verify_zeroization },
+    { OSSL_FUNC_RAND_GET_SEED,            (void(*)(void)) kpep_rand_get_seed },
+    { OSSL_FUNC_RAND_CLEAR_SEED,          (void(*)(void)) kpep_rand_clear_seed },
     OSSL_DISPATCH_END
 };
+
+/* ***********************************************************************************************
+ * ***********************************************************************************************
+ * "Core" API for interop
+ * ***********************************************************************************************
+ * ***********************************************************************************************/
 /*
 EXPORT_VISIBILITY_HIDDEN
 size_t kpep_core_get_entropy(void *provctx, unsigned char **pout,
@@ -542,26 +587,28 @@ const OSSL_DISPATCH kpep_core_seed_functions[] = {
     OSSL_DISPATCH_END
 };
 */
+
 /* ***********************************************************************************************
  * ***********************************************************************************************
  * Parameters from 'kpepmodule.cnf'
  * ***********************************************************************************************
  * ***********************************************************************************************/
 
-static KPEP_RESULT load_params(void* prov_ctx)
+static KPEP_RESULT load_params(void* prov_ctx, KPEP_SEEDING_CTX *ctx)
 {
     const char *rbg_value = NULL;
-
-    // Configuration items to read
+    const char *perso_value = NULL;
     OSSL_PARAM params[3], *p = params;
-    *p++ = OSSL_PARAM_construct_utf8_ptr(
-        KPEP_PROV_PARAM_SEED_PERSO,
-        (char **) &perso_string,
-        sizeof(perso_string));
-    *p++ = OSSL_PARAM_construct_utf8_ptr(
-        KPEP_PROV_PARAM_RBG_ENTROPY_MODE, 
-        (char **) &rbg_value, 
-        sizeof(rbg_value));
+
+    if (!prov_ctx || !ctx)
+        return KPEP_R_NULL_ARG;
+
+    *p++ = OSSL_PARAM_construct_utf8_ptr(KPEP_PROV_PARAM_SEED_PERSO,
+                                        (char **)&perso_value,
+                                        sizeof(perso_value));
+    *p++ = OSSL_PARAM_construct_utf8_ptr(KPEP_PROV_PARAM_RBG_ENTROPY_MODE,
+                                        (char **) &rbg_value, 
+                                        sizeof(rbg_value));
     *p = OSSL_PARAM_construct_end();
 
     // Load from OpenSSL Core
@@ -569,25 +616,21 @@ static KPEP_RESULT load_params(void* prov_ctx)
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_LOOKUP_FAILURE);
         return KPEP_R_CONFIG_LOOKUP_FAILURE;
     }
+    ctx->perso_string = perso_value;
 
-    if (rbg_value) {
-        if (!strncmp(rbg_value, "RBG2", 4)) {
-            kpep_log(LOG_LVL_INFO, MODULE_NAME, "Entropy mode set to RBG2");
-            rbg_entropy_mode = ENTROPY_MODE_RBG2;
-        }
-        else if (!strncmp(rbg_value, "RBG3", 4)) {
+    if (!rbg_value) {
+        kpep_log(LOG_LVL_INFO, MODULE_NAME, "Entropy mode set to RBG3 (default)");
+        ctx->rbg_entropy_mode = ENTROPY_MODE_RBG3;
+    } else if (strncmp(rbg_value, "RBG3", 4) == 0) {
             kpep_log(LOG_LVL_INFO, MODULE_NAME, "Entropy mode set to RBG3");
-            rbg_entropy_mode = ENTROPY_MODE_RBG3;
-        }
-        else {
+        ctx->rbg_entropy_mode = ENTROPY_MODE_RBG3;
+    } else if (strncmp(rbg_value, "RBG2", 4) == 0) {
+            kpep_log(LOG_LVL_INFO, MODULE_NAME, "Entropy mode set to RBG2");
+        ctx->rbg_entropy_mode = ENTROPY_MODE_RBG2;
+    } else {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }
-    }
-    else {
-        kpep_log(LOG_LVL_INFO, MODULE_NAME, "Entropy mode set to RBG3 (default)");
-    }
-
     return KPEP_R_SUCCESS;
 }
 
