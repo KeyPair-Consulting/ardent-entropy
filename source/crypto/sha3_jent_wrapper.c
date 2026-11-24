@@ -89,7 +89,7 @@ int sha3_oneshot(const unsigned char *message, unsigned int len, unsigned char *
 {
     SHA3_CTX ctx;
 
-    if (!digest)
+    if (!digest || (!message && len > 0))
         return 0;
     jent_sha3_256_init(&ctx);
     jent_sha3_update(&ctx, message, len);

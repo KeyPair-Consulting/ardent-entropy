@@ -15,12 +15,14 @@
  * ***********************************************************************************************/
 /*
  * This file not used internally, but is created and maintained for use in ACVP testing. The "_ex" 
- * functions are only exported when  is compiled with the "FIPS_ACVP" preprocessor definition. 
+ * functions are only exported when ARDent is compiled with the "FIPS_ACVP" preprocessor definition. 
  * They allow the entropy to be directly supplied to as required by testing.  This file 
  * intentionally uses the save exclusive name as kpep_drbg.h to ensure they are not both used.
  */
 
-#ifndef KPEP_DRBG_H
+#ifdef KPEP_DRBG_H
+#error "This file must be included *instead* of drbg.h; All defs needed for ACVP are here"
+#else
 #define KPEP_DRBG_H
 # pragma once
 
@@ -58,5 +60,5 @@ KPEP_RESULT drbg_generate_ex    (KPEP_DRBG_CTX* ctx,
 #ifdef __cplusplus
 }
 #endif
-#endif /* KPEP_DRBG_ACVP_H */
+#endif /* KPEP_DRBG_H */
 

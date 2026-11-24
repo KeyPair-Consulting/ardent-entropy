@@ -46,7 +46,7 @@
 
 /* ************************************************************************************************
 * ************************************************************************************************
-* HMAC-SHA3-256 functions
+* HMAC-SHA2-256 functions
 * ************************************************************************************************
 * ***********************************************************************************************/
 
@@ -81,6 +81,8 @@ EXPORT_VISIBILITY_HIDDEN
 void hmac_ctx_free (HMAC_CTX* ctx)
 {
     if (!ctx) return;
+    kpep_zeroize(ctx->ipad, HASH_BLOCK_SIZE);
+    kpep_zeroize(ctx->opad, HASH_BLOCK_SIZE);
     hash_ctx_free(ctx->ictx);
     hash_ctx_free(ctx->octx);
     kpep_free(ctx);
@@ -165,22 +167,28 @@ int hmac_final(HMAC_CTX *ctx,
     unsigned char inner_digest[HASH_DIGEST_SIZE];
     unsigned char mac_temp[HASH_DIGEST_SIZE];
     size_t tmp_len = HASH_DIGEST_SIZE;
+    int ret = 0;
 
     if (!ctx || !mac)
         return 0;
+    if (mac_size == 0 || mac_size > HASH_DIGEST_SIZE)
+        return 0;
+    if (mac_len) { 
+        if (*mac_len == 0 || *mac_len > HASH_DIGEST_SIZE)
+            return 0;
+        if (*mac_len < mac_size)
+            mac_size = *mac_len;
+    }
 
-    // Finalize steps 6
-    hash_final(ctx->ictx, inner_digest, &tmp_len);
-    // Step 8
-    hash_update(ctx->octx, inner_digest, HASH_DIGEST_SIZE);
-    // Step 9
-    hash_final(ctx->octx, mac_temp, mac_len);
-    // Copy result
-    memcpy(mac, mac_temp, mac_size);
-    // If result mac length is requested, provide it
-    //if (mac_len)
-    //    *mac_len = HASH_DIGEST_SIZE;
-    return 1;
+    ret = (hash_final(ctx->ictx, inner_digest, &tmp_len) && 
+           hash_update(ctx->octx, inner_digest, HASH_DIGEST_SIZE) && 
+           hash_final(ctx->octx, mac_temp, &tmp_len) && 
+           (memcpy(mac, mac_temp, mac_size) != NULL));
+    if (mac_len)
+        *mac_len = mac_size;
+    kpep_zeroize(inner_digest, sizeof(inner_digest));
+    kpep_zeroize(mac_temp, sizeof(mac_temp));
+    return ret;
 }
 
 EXPORT_VISIBILITY_HIDDEN

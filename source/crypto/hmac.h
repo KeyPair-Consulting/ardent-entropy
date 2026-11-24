@@ -33,8 +33,6 @@ int  hmac_init (HMAC_CTX *ctx,
                 unsigned int key_size,
                 void* params);  // ossl_unused const OSSL_PARAM params[]);
 
-void hmac_reinit(HMAC_CTX *ctx);
-
 int  hmac_update(HMAC_CTX *ctx, 
                 const unsigned char *message,
                 unsigned int message_len);
