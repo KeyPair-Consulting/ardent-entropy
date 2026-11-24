@@ -455,6 +455,10 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
                          def->desc);
             }
             seed_cnt = &ctx->v_count;
+            if (*seed_cnt >= SEED_COUNT_MAX) {
+                LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_NO_SLOTS);
+                return KPEP_R_NO_SLOTS;
+            }
             seed = &ctx->valid[*seed_cnt];
             if (def->force_hardware || (hard_value && !strncmp(hard_value, "1", 1))) {
                 seed->hardware_source = 1;
@@ -462,6 +466,10 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
         }
         else {
             seed_cnt = &ctx->a_count;
+            if (*seed_cnt >= SEED_COUNT_MAX) {
+                LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_NO_SLOTS);
+                return KPEP_R_NO_SLOTS;
+            }
             seed = &ctx->addl[*seed_cnt];
         }
 

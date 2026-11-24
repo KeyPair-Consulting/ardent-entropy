@@ -304,7 +304,7 @@ int drbg_cast(SELF_TEST_PARAMS *st, OSSL_SELF_TEST *ev)
     OSSL_SELF_TEST_onbegin(ev, OSSL_SELF_TEST_TYPE_DRBG, 
                                OSSL_SELF_TEST_DESC_DRBG_HASH);
 
-    if ((ctx = drbg_new(NULL)) != NULL && 
+    if ((ctx = drbg_new(NULL, 0 /*ENTROPY_MODE_RBG3*/, NULL)) != NULL && 
         !drbg_instantiate_ex(ctx, 128, 
                             drbg_inst_entropy, entropy_len,
                             drbg_inst_nonce, nonce_len, 

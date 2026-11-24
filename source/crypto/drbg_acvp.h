@@ -26,26 +26,25 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include "drbg.h"  // Req'd functions and declarations for DRBG context management
 
 # ifdef __cplusplus
 extern "C" {
 # endif
 
-// Output MAX at 8192 bits (1024 bytes)
-#define DRBG_MAX_BYTE_COUNT_PER_REQUEST  1024
-
-// Default DRBG strength (256)
-#define DRBG_DEFAULT_STRENGTH  256
-
 typedef uint32_t KPEP_RESULT;
 
+// Opaque context structure
 typedef struct kpep_drbg_ctx_st KPEP_DRBG_CTX;
 
-void* drbg_new (void* vctx);
+void* drbg_new (void* seed_ctx, uint32_t entropy_mode, KPEP_RESULT *errnum);
 void  drbg_free(KPEP_DRBG_CTX* ctx);
 int   drbg_verify_zeroization(KPEP_DRBG_CTX* ctx);
 
-void        drbg_uninstantiate  (KPEP_DRBG_CTX* ctx);
+// Callable functions for DRBG operations
+void        drbg_uninstantiate (KPEP_DRBG_CTX* ctx);
+
+// Low-level DRBG functions for ACVP testing
 KPEP_RESULT drbg_instantiate_ex (KPEP_DRBG_CTX* ctx, int strength,
 								 const uint8_t* entropy, uint32_t entropy_len, 
                                  const uint8_t* nonce, uint32_t nonce_len, 

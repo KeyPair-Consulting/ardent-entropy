@@ -26,22 +26,20 @@
 extern "C" {
 # endif
 
-// Output MAX at 8192 bits (1024 bytes)
-#define DRBG_MAX_BYTES_PER_REQUEST  1024
+typedef enum {
+    ENTROPY_MODE_RBG3 = 0,
+    ENTROPY_MODE_RBG2
+} RBG_ENTROPY_MODE;
+
+#define DRBG_MAX_BYTES_PER_REQUEST (8192)   // 65536 bits
+#define RBG2_RESEED_MAX_BITS       (1<<17)  // By standard
+#define RBG2_RESEED_MAX_BYTES      (RBG2_RESEED_MAX_BITS>>3)
 
 // Max lengths of various inputs (1MB for most)
 #define MAX_ENTROPY_LEN  (1024*1024)
 #define MAX_NONCE_LEN    (1024*1024)
 #define MAX_ADDL_LEN     (1024*1024)
 #define MAX_PERS_LEN      1024
-
-// Values for RBG construction mode
-#define ENTROPY_MODE_RBG2_OVERFLOW (1<<17)
-
-typedef enum {
-    ENTROPY_MODE_RBG3 = 0,
-    ENTROPY_MODE_RBG2
-} RBG_ENTROPY_MODE;
 
 // Opaque context structure
 typedef struct kpep_drbg_ctx_st KPEP_DRBG_CTX;

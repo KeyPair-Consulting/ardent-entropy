@@ -226,7 +226,7 @@ EXPORT_VISIBILITY_HIDDEN
 KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_len, size_t nbits)
 {
     KPEP_RESULT rv = KPEP_R_SUCCESS;
-    uint32_t gather_bits, gather_bytes;
+    size_t gather_bits, gather_bytes;
 
     if (kpep_trace_seed_enabled) {
         TRACE_START;

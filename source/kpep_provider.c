@@ -394,8 +394,8 @@ static void kpep_ctx_free(KPEP_PROVIDER_CTX *ctx)
     if (!ctx) 
         return;
     
-    OPENSSL_clear_free(ctx->st, sizeof(SELF_TEST_PARAMS));
-    OPENSSL_clear_free(ctx, sizeof(KPEP_PROVIDER_CTX));
+    kpep_cleanse(ctx->st, sizeof(SELF_TEST_PARAMS));
+    kpep_cleanse(ctx, sizeof(KPEP_PROVIDER_CTX));
     kpep_log(LOG_LVL_INFO, MODULE_NAME, "Provider teardown complete");
 }
 
@@ -498,6 +498,7 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
          ((libctx = OSSL_LIB_CTX_new_child(handle, orig_in)) == NULL) ||
          ((newctx = kpep_ctx_new(libctx, handle, corebiometh)) == NULL ) ) { 
         kpep_log(LOG_LVL_ERR, MODULE_NAME, "Error creating new provider context\n");
+        OSSL_LIB_CTX_free(libctx);
     	goto err;
     }
 
@@ -520,6 +521,11 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
         goto err;
     }
     newctx->seeding = kpep_seeding_new(newctx);
+    if (!newctx->seeding) {
+        kpep_log(LOG_LVL_ERR, MODULE_NAME, "Error initializing seeding subsystem\n");
+        ERR_raise(ERR_LIB_KPEP, KPEP_R_SEED_INIT_FAIL);
+        goto err;
+    }
 	// TODO: Log error "some subsystems failed to start"?
 
     // Start the immutable-configured runtime debug listener after provider startup.

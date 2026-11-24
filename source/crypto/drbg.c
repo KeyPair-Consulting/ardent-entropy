@@ -38,7 +38,7 @@
 struct kpep_drbg_ctx_st {
 	// State
 	uint32_t         running;
-	uint32_t         entropy_counter;
+	uint32_t         reseed_counter;
 	RBG_ENTROPY_MODE entropy_mode;
 
 	// External Contexts
@@ -49,6 +49,15 @@ struct kpep_drbg_ctx_st {
 	uint8_t V[SEED_BYTE_LENGTH];
 	uint8_t C[SEED_BYTE_LENGTH];
 };
+
+// "Static Additional Data for DRBG", R.Dent
+static uint8_t static_addl[] = {
+	0x52, 0x61, 0x6D, 0x64, 0x6F, 0x6D,             // Random
+	0x46, 0x72, 0x65, 0x71, 0x75, 0x65, 0x6E, 0x74, // Frequent
+	0x46, 0x6C, 0x79, 0x65, 0x72,                   // Flyer
+	0x44, 0x65, 0x6E, 0x74                          // Dent
+};
+static size_t static_addl_len = sizeof(static_addl);
 
 #ifdef DEBUG_DRBG
 static void print_bytes(const uint8_t *buf, const uint32_t len, const uint32_t indent)
@@ -208,6 +217,8 @@ KPEP_RESULT drbg_instantiate_ex(KPEP_DRBG_CTX* ctx, int strength_bits,
 	KPEP_RESULT rv = KPEP_R_SUCCESS; // Assume success
 	uint32_t buffer_len;
 	uint8_t *p, *buffer = NULL;
+	SHA2_CTX *new_hash_ctx = NULL;
+
 
 #ifdef DEBUG_DRBG
 	kpep_trace(MODULE_NAME, "INSTANTIATE_EX");
@@ -220,20 +231,22 @@ KPEP_RESULT drbg_instantiate_ex(KPEP_DRBG_CTX* ctx, int strength_bits,
 #endif
 
 	// Validate inputs
-	if (!ctx 
-		|| (strength_bits > 256) 
-		|| (pers_len > MAX_PERS_LEN) 
-		|| (nonce_len > MAX_NONCE_LEN)
-		|| (entropy_len > MAX_ENTROPY_LEN)) {
+	if (!ctx || (strength_bits <= 0) || (strength_bits > KPEP_SECURITY_STRENGTH_BITS))
 		return KPEP_R_INVALID_ARG;
-	}
+	if (!entropy || (entropy_len < KPEP_SECURITY_STRENGTH_BYTES) || (entropy_len > MAX_ENTROPY_LEN))
+		return KPEP_R_INVALID_ARG;
+	if ((pers && !pers_len) || (!pers && pers_len) || (pers_len > MAX_PERS_LEN))
+		return KPEP_R_INVALID_ARG;
+	if ((nonce && !nonce_len) || (!nonce && nonce_len) || (nonce_len > MAX_NONCE_LEN))
+		return KPEP_R_INVALID_ARG;
 
 	// Refresh the Hash context
-	sha2_ctx_free(ctx->hash_ctx);
-	ctx->hash_ctx = sha2_ctx_new();
-	if (!ctx->hash_ctx) {
+	new_hash_ctx = sha2_ctx_new();
+	if (!new_hash_ctx) {
 		return KPEP_R_MALLOC_FAIL;
 	}
+	sha2_ctx_free(ctx->hash_ctx);
+	ctx->hash_ctx = new_hash_ctx;
 
 	// C-style Try/Finally block
 	do {
@@ -278,7 +291,7 @@ KPEP_RESULT drbg_instantiate_ex(KPEP_DRBG_CTX* ctx, int strength_bits,
 		if (rv) {
 			break;
 		}
-		// kpmmp_cleanse(buffer, buffer_len); performed below!
+		// Cleanse performed below!
 		
 		// 5. reseed_counter = 1.
 		// Prediction Resistance is always ON, so we don't maintain a reseed counter
@@ -294,6 +307,7 @@ KPEP_RESULT drbg_instantiate_ex(KPEP_DRBG_CTX* ctx, int strength_bits,
 #endif
 
 		// Success
+		ctx->reseed_counter = 0;
 		ctx->running = 1;
 	} while (0);
 
@@ -303,8 +317,9 @@ KPEP_RESULT drbg_instantiate_ex(KPEP_DRBG_CTX* ctx, int strength_bits,
 	// Reset/Zeroize state on failure
 	if (rv) {
 		// Zeroize state
-		memset(ctx->C, 0, sizeof(SEED_BYTE_LENGTH));
-		memset(ctx->V, 0, sizeof(SEED_BYTE_LENGTH));
+		memset(ctx->C, 0, SEED_BYTE_LENGTH);
+		memset(ctx->V, 0, SEED_BYTE_LENGTH);
+		ctx->running = 0;
 	}
 	return rv;  
 }
@@ -320,6 +335,7 @@ void drbg_uninstantiate(KPEP_DRBG_CTX* ctx)
 		TRACE_START;
 	}
 	if (ctx) {
+		ctx->reseed_counter = 0;
 		ctx->running = 0;
 		/* ZEROIZE */
 		memset(ctx->C, 0, SEED_BYTE_LENGTH);
@@ -356,20 +372,28 @@ KPEP_RESULT drbg_reseed_ex(KPEP_DRBG_CTX* ctx,
 				        	const uint8_t *addl, size_t addl_len)
 {
 	KPEP_RESULT rv = 0;  // Assume success
-	uint32_t buffer_len;
+	size_t buffer_len;
 	uint8_t *p, *buffer = NULL;
+	uint8_t tmpV[SEED_BYTE_LENGTH], *v = tmpV;
+	uint8_t tmpC[SEED_BYTE_LENGTH], *c = tmpC;
 
 	if (kpep_trace_seed_enabled) {
 		TRACE_START;
 	}
 
-	if (!ctx || (addl_len > MAX_ADDL_LEN)) {
+	if (!ctx || (entropy_len > MAX_ENTROPY_LEN) || (addl_len > MAX_ADDL_LEN)) {
 		return KPEP_R_INVALID_ARG;
 	}
-	if (!entropy && ctx->entropy_mode == ENTROPY_MODE_RBG2) {
-		return KPEP_R_SUCCESS;
+	if ((!addl && addl_len) || (addl && !addl_len)) {
+		return KPEP_R_INVALID_ARG;
 	}
-	if (!entropy || (entropy_len < KPEP_SECURITY_STRENGTH_BITS>>3)) {
+	if (!entropy) {
+		if ((ctx->entropy_mode == ENTROPY_MODE_RBG3) || 
+			(!addl || !addl_len || entropy_len)) {
+			return KPEP_R_DRBG_INSUFFICIENT_ENTROPY;
+		}
+	}
+	else if (entropy_len < KPEP_SECURITY_STRENGTH_BYTES) {
 		return KPEP_R_DRBG_INSUFFICIENT_ENTROPY;
 	}
 	if (!ctx->running) {
@@ -398,12 +422,14 @@ KPEP_RESULT drbg_reseed_ex(KPEP_DRBG_CTX* ctx,
 		p = buffer+1;
 		memcpy(p, ctx->V, SEED_BYTE_LENGTH);
 		p += SEED_BYTE_LENGTH;
-		memcpy(p, entropy, entropy_len);
-		p += entropy_len;
+		if (entropy_len > 0) {
+			memcpy(p, entropy, entropy_len);
+			p += entropy_len;
+		}
 		if (addl_len > 0) {
 			memcpy(p, addl, addl_len);
 		}
-		rv = hash_df(ctx, ctx->V, SEED_BYTE_LENGTH, buffer, buffer_len); 
+		rv = hash_df(ctx, v, SEED_BYTE_LENGTH, buffer, buffer_len); 
 		if (rv) {
 			break;
 		}
@@ -420,8 +446,8 @@ KPEP_RESULT drbg_reseed_ex(KPEP_DRBG_CTX* ctx,
 			break;
 		}
 		buffer[0] = 0x00;
-		memcpy(buffer+1, ctx->V, SEED_BYTE_LENGTH);
-		rv = hash_df(ctx, ctx->C, SEED_BYTE_LENGTH, buffer, buffer_len);
+		memcpy(buffer+1, v, SEED_BYTE_LENGTH);
+		rv = hash_df(ctx, c, SEED_BYTE_LENGTH, buffer, buffer_len);
 		if (rv) {
 			break;
 		}
@@ -432,6 +458,10 @@ KPEP_RESULT drbg_reseed_ex(KPEP_DRBG_CTX* ctx,
 
 		// 6. Return (V, C, and reseed_counter).
 		// N/A: Values saved inside the context
+
+		// Update internal (V,C) and zeroize temps
+		memcpy(ctx->V, v, SEED_BYTE_LENGTH);
+		memcpy(ctx->C, c, SEED_BYTE_LENGTH);
 	} while(0);
 
 #ifdef DEBUG_DRBG
@@ -442,6 +472,8 @@ KPEP_RESULT drbg_reseed_ex(KPEP_DRBG_CTX* ctx,
 #endif
 
 	// Cleanup
+	kpep_zeroize(v, SEED_BYTE_LENGTH);
+	kpep_zeroize(c, SEED_BYTE_LENGTH);
 	kpep_cleanse(buffer, buffer_len);
 
 	return rv;
@@ -500,11 +532,6 @@ KPEP_RESULT hash_gen(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 	uint32_t remaining;
 	uint8_t *w = rand;  // rand is 'W', this 'w' starts at [0]
 
-	remaining = rand_len;
-	if (remaining > DRBG_MAX_BYTES_PER_REQUEST) {
-		return KPEP_R_DRBG_REQUEST_TOO_LARGE;
-	}
-
 	if (!ctx || !rand || !rand_len) {
 		return KPEP_R_INVALID_ARG;
 	}
@@ -512,6 +539,8 @@ KPEP_RESULT hash_gen(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 	if (!ctx->running) {
 		return KPEP_R_DRBG_INVALID_STATE;
 	}
+
+	remaining = rand_len;
 
 	// 1. m = ciel(nbits/outlen)
 	// N/A; we're doing a while()
@@ -568,12 +597,11 @@ KPEP_RESULT drbg_generate_ex(KPEP_DRBG_CTX* ctx,
 		TRACE_START;
 	}
 
-	if (!ctx)
-		return KPEP_R_NULL_ARG;
-	if (!rand || rand_len == 0)
+	if (!ctx || !rand || !rand_len)
 		return KPEP_R_INVALID_ARG;
-
-	if (!ctx->running) {
+	if (rand_len > DRBG_MAX_BYTES_PER_REQUEST) {
+		return KPEP_R_DRBG_REQUEST_TOO_LARGE;
+	}	if (!ctx->running) {
 		return KPEP_R_DRBG_INVALID_STATE;
 	}
 
@@ -604,7 +632,10 @@ KPEP_RESULT drbg_generate_ex(KPEP_DRBG_CTX* ctx,
 		}
 		buffer[0] = 0x03;
 		memcpy(buffer+1, ctx->V, SEED_BYTE_LENGTH);
-		sha2_oneshot(buffer, SEED_BYTE_LENGTH+1, H); 
+		if (!sha2_oneshot(buffer, SEED_BYTE_LENGTH+1, H)) {
+			rv = KPEP_R_INTERNAL_HASH_FAIL;
+			break;
+		}
 
 		// 5. V = (V + H + C + reseed_counter) mod 2^seedlen.
 		drbg_add_buf(ctx->V, SEED_BYTE_LENGTH, H,SHA2_256_DIGEST_SIZE);
@@ -626,6 +657,10 @@ KPEP_RESULT drbg_generate_ex(KPEP_DRBG_CTX* ctx,
 		printf("C: \n");
 		print_bytes(ctx->C, SEED_BYTE_LENGTH, 4); printf("\n");
 #endif
+
+	// Zeroize on error
+	if (rv)
+		kpep_cleanse(rand, rand_len);
 
 	// Cleanup state and temp
 	kpep_cleanse(buffer, SEED_BYTE_LENGTH+1);  // NULL safe
@@ -692,39 +727,45 @@ EXPORT_VISIBILITY_HIDDEN
 KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 {
 	KPEP_RESULT rv = KPEP_R_SUCCESS;
-	uint8_t    *entropy = NULL;
-	uint8_t    *addl = NULL;
- 
-	uint32_t    RBG2_event = 0;
-	size_t      ent_len = 0, addl_len = 0;
-	size_t      cur_len = 0;
-	uint8_t     drbg_out[KPEP_SECURITY_STRENGTH_BYTES];
 
+	uint8_t    *entropy = NULL, *addl = NULL;  // From CTRL
+	size_t      ent_len = 0, addl_len = 0;
+
+	uint8_t     drbg_buf[KPEP_SECURITY_STRENGTH_BYTES];
+	uint8_t    *drbg_out = rand;
+	uint32_t    idx = 0;
+	uint32_t    gen_size, gen_needed = rand_len;
+	uint32_t    rbg2_no_reseed = 0;
+	uint32_t    addl_no_free = 0;
+ 
 	if (kpep_trace_seed_enabled) {
 		kpep_trace_fmt(MODULE_NAME, "%s (req %u)", __func__, rand_len<<3);
 	}
 
 	// Validate
-	if (!ctx) {
-		rv = KPEP_R_NULL_ARG;
-	}
-	if (!rand) {
-		rv = KPEP_R_INVALID_ARG;
+	if (!ctx || !rand) {
+		return KPEP_R_INVALID_ARG;
 	}
 	if (!rand_len) {
 		return KPEP_R_SUCCESS;
 	}
-	if (rv) {
-		LOG_KPEP_ERROR(MODULE_NAME, rv);
-		return rv;
+
+	if  (ctx->entropy_mode == ENTROPY_MODE_RBG2) {
+		// For RBG2, gather as much as requested
+		gen_size = rand_len;
+		// Output to argument
+		drbg_out = rand;
+	}
+	else {
+		// For RBG3, gather no more than SECURITY_STRENGTH bytes per request
+		//     (see SP 800-90C section 6.5.1.2, step 3.2)
+		gen_size = KPEP_SECURITY_STRENGTH_BYTES;
+		// Output to array, Accum to argument
+		drbg_out = drbg_buf;
 	}
 
-	// Gather entropy
 	do {
-		// Calculate size of the current block to generate
-		// Truncate the last block as required (see SP 800-90C section 6.5.1.2, step 4)
-		cur_len = (rand_len<KPEP_SECURITY_STRENGTH_BYTES)?rand_len:KPEP_SECURITY_STRENGTH_BYTES;
-
+		// Get valid entropy
 		// Need to pull in STRENGTH_BITS + 64 bits for RBGC(RS) (see SP 800-90C section 6.5.1.2, in particular step 3.1)
 		rv = seed_control_gather(ctx->seed_ctx, &entropy, &ent_len, KPEP_SECURITY_STRENGTH_BITS+64, 1); // Validated
 #ifdef FIPS_OPTEST
@@ -739,41 +780,40 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 			}
 		}
 #endif
+
 		if (rv) {
-			// Logged in seed_control.c with better context
-			//LOG_KPEP_ERROR(MODULE_NAME, rv);
-
-			// Abort for all cases except insufficient entropy with RBG2 mode
-			if (rv == KPEP_R_SEED_INSUFFICIENT_ENTROPY && ctx->entropy_mode == ENTROPY_MODE_RBG2) {
-#ifdef FIPS_OPTEST
-				{
-					const char* debug = getenv(ENV_OPTEST_RBG2_OVERFLOW);
-					if (debug) {
-						LOG_SIMPLE_ERROR(MODULE_NAME, "DRBG-RBG2 Overflow (optest)");
-						rv = KPEP_R_DRBG_RBG2_OVERFLOW;
-						break;
-					}
-				}
-#endif
-
-				// Check overflow on the next drbg_generate_ex() below
-				if ((ctx->entropy_counter + (cur_len<<3)) > ENTROPY_MODE_RBG2_OVERFLOW) {
-					rv = KPEP_R_DRBG_RBG2_OVERFLOW; // Fatal?
-					break;
-				}
-				RBG2_event = 1; // We need to account for the returned bits
+			if (ctx->entropy_mode == ENTROPY_MODE_RBG3) {
+				LOG_KPEP_ERROR(MODULE_NAME, rv); // Log real error
+				rv = KPEP_R_SEED_INSUFFICIENT_ENTROPY;
+				break;
 			}
-			else {
+			if (rv != KPEP_R_SEED_INSUFFICIENT_ENTROPY) {
+				LOG_KPEP_ERROR(MODULE_NAME, rv);
+				break;
+			}
+
+			rbg2_no_reseed = 1;
+			if (ctx->reseed_counter + rand_len > RBG2_RESEED_MAX_BYTES) {
+				LOG_SIMPLE_ERROR(MODULE_NAME, "RBG2 reseed required");
+				rv = KPEP_R_SEED_INSUFFICIENT_ENTROPY;
 				break;
 			}
 		}
+
 		// Gather additional input (We don't abort for additional input gathering failures)
 		seed_control_gather(ctx->seed_ctx, &addl, &addl_len, KPEP_SECURITY_STRENGTH_BITS+64, 0); // Non-Validated
 
-		// Call the generate function, gathering no more than SECURITY_STRENGTH bytes per request
-		// (see SP 800-90C section 6.5.1.2, step 3.2)
+		// Use static additional if none is provided; We need an extra HMAC_DRBG_update to run,
+		// Per Woodage and Shumow paper (https://eprint.iacr.org/2018/349.pdf)
+		if (rbg2_no_reseed && !addl) {
+			addl = static_addl;
+			addl_len = static_addl_len;
+			addl_no_free = 1;
+		}
+
+		// Call the generate function
 		rv = drbg_generate_ex(  ctx, 
-			                    drbg_out, KPEP_SECURITY_STRENGTH_BYTES,
+			                    drbg_out, gen_size,
 			                    entropy, ent_len,
 								addl, addl_len);
 		if (rv) {
@@ -781,25 +821,37 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 			break;
 		}
 
-		// Account for the bits we're returning for the RBG2 construction
+		// Cleanup for this iteration
 		if (ctx->entropy_mode == ENTROPY_MODE_RBG2) {
-			ctx->entropy_counter = (RBG2_event)?ctx->entropy_counter + (cur_len<<3):0; // Accum or reset
-			RBG2_event = 0;
+		 	if (rbg2_no_reseed)
+				ctx->reseed_counter += gen_size;
+			else
+				ctx->reseed_counter = 0;
 		}
+		else {
+			// Only take what we need
+			if (gen_needed < gen_size)
+				gen_size = gen_needed;
+			memcpy(rand+idx, drbg_buf, gen_size);
+			idx += gen_size;
+		}
+		gen_needed -= gen_size;
 
-		// Copy out and update
-		memcpy(rand, drbg_out, cur_len);
-		rand += cur_len;
-		rand_len -= cur_len;
-	} while (rand_len > 0);
-									
-	// Free the seed buffers
-	kpep_cleanse(entropy, ent_len);
-	kpep_cleanse(addl, addl_len);
+		// Cleanup for next iteration
+		kpep_cleanse(entropy, ent_len);
+		if (!addl_no_free) 
+			kpep_cleanse(addl, addl_len);
+	} while (gen_needed > 0); // Loop if necessay
 
-	if (rv == KPEP_R_SEED_CONTROL_FATAL) {
-		drbg_uninstantiate(ctx);
+	// Zeroize output on failure
+	if (rv) {
+		kpep_zeroize(rand, rand_len);
+		kpep_cleanse(entropy, ent_len);
+		if (!addl_no_free) 
+			kpep_cleanse(addl, addl_len);
 	}
-	
+	kpep_zeroize(drbg_buf, sizeof(drbg_buf));
+
 	return rv;
 }
+
