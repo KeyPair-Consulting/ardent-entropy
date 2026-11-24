@@ -125,8 +125,9 @@ req-hardware-source = 0
 
 ############################################################################################
 # JITTER ENTROPY seed source
-# Built-in 'libjitterentropy' that complies with all technical/compilation requirements
-# of the KeyPair ESV Certificate E239.  The operational environment must be listed on the
+# Jitterentropy is statically linked into the provider from an externally supplied archive.
+# It must comply with all technical/compilation requirements of the KeyPair ESV Certificate
+# E239. The operational environment must be listed on the
 # certificate (or a rebranded certificate) for this source to be considered ESV-compliant.
 # These values should not be altered by vendors unless done in consultation with KeyPair.
 

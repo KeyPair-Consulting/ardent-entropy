@@ -100,9 +100,42 @@ Relevant files:
 
 #### Jitter Entropy
 
-The built-in jitter source derives entropy from timing jitter using the bundled
-jitterentropy implementation. It is represented by the `seed.jitter` source
-configuration and has one instance per machine.
+The jitter entropy source derives entropy from timing jitter using Jitterentropy,
+statically linked into the provider from an externally supplied `libjitterentropy.a`.
+It is represented by the `seed.jitter` source configuration and has one instance
+per machine. KPEP does not compile or bundle the Jitterentropy implementation;
+its archive and headers are build dependencies.
+
+Configure the dependency using exactly one of these forms:
+
+- `-Djitter-source=/path/to/jitterentropy-library` uses a source checkout with a
+  prebuilt `libjitterentropy.a` at its root. CMake uses headers from the checkout
+  root and its `src/` directory.
+- `-Djitter-lib=/path/to/libjitterentropy.a` together with
+  `-Djitter-include=/path/to/flat/headers` uses a separately located archive and
+  one directory containing all required headers (including
+  `jitterentropy.h`, `jitterentropy-base-user.h`, `jitterentropy-sha3.h`, and
+  `jitterentropy-internal.h`). The header directory must be flat; CMake does not
+  search a `src/` subdirectory in this mode.
+
+The two modes are mutually exclusive, and `jitter-lib` and `jitter-include`
+must be supplied together. CMake does not build Jitterentropy. The supplied
+archive must be suitable for static linking into the KPEP provider shared
+object; compiler and linker diagnostics report archive compatibility issues.
+
+For example, using a checkout:
+
+```sh
+cmake -S . -B build -Djitter-source=/path/to/jitterentropy-library
+```
+
+Or using a separate archive and flat header directory:
+
+```sh
+cmake -S . -B build \
+  -Djitter-lib=/path/to/libjitterentropy.a \
+  -Djitter-include=/path/to/flat/headers
+```
 
 #### Intel/AMD RDSEED
 

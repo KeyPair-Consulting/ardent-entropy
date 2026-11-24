@@ -6,7 +6,7 @@ to be fully compliant with SP 800-90C and has a variety of notable features:
 
 1) Gather from multiple entropy sources; combine according to 800-90C requirements
 2) Gracefully handle temporary or permanent failues of entropy sources
-3) Built-in [Jitter entropy](https://github.com/smuellerDD/jitterentropy-library) source
+3) Built-in support for [Jitter entropy](https://github.com/smuellerDD/jitterentropy-library) source, linked from an externally supplied static archive
 4) Built-in support for Intel/AMD RdSeed and RdRand entropy sources
 5) Full runtime configuration from OpenSSL configuration file
 6) Operate as RBG2 or RBG3 construction

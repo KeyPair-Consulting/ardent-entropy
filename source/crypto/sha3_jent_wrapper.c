@@ -20,7 +20,7 @@
 #include "openssl/core_names.h"
 #include "openssl/core_dispatch.h"    /* OSSL Functions */
 
-#include "../jitterentropy/jitterentropy-sha3.h"
+#include "jitterentropy-sha3.h"
 #include "sha3.h"
 
 /* ************************************************************************************************

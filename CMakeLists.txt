@@ -169,6 +169,53 @@ IF (tests)
 ENDIF (tests)
 
 # ##################################################
+# Jitterentropy dependency
+SET(jitter-source "" CACHE PATH "Jitterentropy source checkout containing a prebuilt libjitterentropy.a")
+SET(jitter-lib "" CACHE FILEPATH "Path to an external libjitterentropy.a archive")
+SET(jitter-include "" CACHE PATH "Flat directory containing the Jitterentropy headers")
+
+IF (jitter-source)
+    IF (jitter-lib OR jitter-include)
+        MESSAGE(FATAL_ERROR "Specify either -Djitter-source=... or both -Djitter-lib=... and -Djitter-include=..., not both modes.")
+    ENDIF ()
+
+    SET(JITTER_SOURCE_DIR "${jitter-source}")
+    SET(JITTER_LIB "${JITTER_SOURCE_DIR}/libjitterentropy.a")
+    SET(JITTER_INCLUDE_DIRS "${JITTER_SOURCE_DIR}" "${JITTER_SOURCE_DIR}/src")
+
+    IF (NOT EXISTS "${JITTER_LIB}")
+        MESSAGE(FATAL_ERROR "Jitterentropy archive not found: '${JITTER_LIB}'. Build libjitterentropy.a in the source checkout or specify -Djitter-lib=... with -Djitter-include=....")
+    ENDIF ()
+    IF (NOT EXISTS "${JITTER_SOURCE_DIR}/jitterentropy.h" OR
+        NOT EXISTS "${JITTER_SOURCE_DIR}/jitterentropy-base-user.h" OR
+        NOT EXISTS "${JITTER_SOURCE_DIR}/src/jitterentropy-sha3.h" OR
+        NOT EXISTS "${JITTER_SOURCE_DIR}/src/jitterentropy-internal.h")
+        MESSAGE(FATAL_ERROR "Required Jitterentropy headers were not found in '${JITTER_SOURCE_DIR}' and '${JITTER_SOURCE_DIR}/src'.")
+    ENDIF ()
+ELSEIF (jitter-lib OR jitter-include)
+    IF (NOT jitter-lib OR NOT jitter-include)
+        MESSAGE(FATAL_ERROR "The separate Jitterentropy mode requires both -Djitter-lib=... and -Djitter-include=....")
+    ENDIF ()
+
+    SET(JITTER_LIB "${jitter-lib}")
+    SET(JITTER_INCLUDE_DIRS "${jitter-include}")
+
+    IF (NOT EXISTS "${JITTER_LIB}")
+        MESSAGE(FATAL_ERROR "Jitterentropy archive not found: '${JITTER_LIB}'.")
+    ENDIF ()
+    IF (NOT IS_DIRECTORY "${jitter-include}")
+        MESSAGE(FATAL_ERROR "Jitterentropy include directory not found: '${jitter-include}'.")
+    ENDIF ()
+    FOREACH (JITTER_HEADER jitterentropy.h jitterentropy-base-user.h jitterentropy-sha3.h jitterentropy-internal.h)
+        IF (NOT EXISTS "${jitter-include}/${JITTER_HEADER}")
+            MESSAGE(FATAL_ERROR "Jitterentropy header not found: '${jitter-include}/${JITTER_HEADER}'. The separate include directory must contain all required headers in one flat directory.")
+        ENDIF ()
+    ENDFOREACH ()
+ELSE ()
+    MESSAGE(FATAL_ERROR "Jitterentropy is required. Specify -Djitter-source=... or both -Djitter-lib=... and -Djitter-include=....")
+ENDIF ()
+
+# ##################################################
 # Should we build the EXAMPLE external jitter source?
 SET(example-external-jitter OFF CACHE BOOL "Specify to build the example external library using the built-in libjitterentropy.a (default: OFF)")
 IF (example-external-jitter)
@@ -319,6 +366,7 @@ ENDIF ()
 INCLUDE_DIRECTORIES(${KPEP_SOURCE_DIR}/include)
 INCLUDE_DIRECTORIES(${KPEP_SOURCE_DIR}/include/openssl)
 INCLUDE_DIRECTORIES(${OPENSSL_ROOT}/include)
+INCLUDE_DIRECTORIES(${JITTER_INCLUDE_DIRS})
 
 # ##################################################################################################
 # Source  Paths
@@ -335,7 +383,6 @@ ADD_SUBDIRECTORY ("source/thread")
 ADD_SUBDIRECTORY ("source/seeding")
 ADD_SUBDIRECTORY ("source/logging")
 ADD_SUBDIRECTORY ("source/debug")
-ADD_SUBDIRECTORY ("source/jitterentropy")
 
 # Subdirectories containing  support applications
 ADD_SUBDIRECTORY ("app")

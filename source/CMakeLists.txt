@@ -28,7 +28,6 @@ LIST (APPEND KPEP_sources kpep_seeding.c kpep_cpuinfo.c kpep_bio.c)
 # Subsystems added by 'objects' instead of static libraries
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_crypto>)
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_thread>)
-LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_jitter>)
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_debug>)
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_logging>)
 LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_seeding>)
@@ -48,6 +47,7 @@ TARGET_LINK_OPTIONS    (KPEP_provider PRIVATE ${KPEP_LIB_LDFLAGS})
 
 #TARGET_LINK_LIBRARIES  (KPEP_provider PRIVATE ${OPENSSL_LIB})
 TARGET_LINK_LIBRARIES  (KPEP_provider PRIVATE ${OPENSSL_LIB_PATH}/libcrypto${CMAKE_SHARED_LIBRARY_SUFFIX})
+TARGET_LINK_LIBRARIES  (KPEP_provider PRIVATE "${JITTER_LIB}")
 
 IF (external)
 TARGET_LINK_LIBRARIES  (KPEP_provider PRIVATE ${CMAKE_DL_LIBS})
