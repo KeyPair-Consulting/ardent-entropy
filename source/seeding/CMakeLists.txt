@@ -19,20 +19,20 @@
 # ##################################################################################################
 
 # Set project source files
-SET  (KPEP_seeding_sources seed_control.c async_seed.c ringbuffer.c)
-LIST (APPEND KPEP_seeding_sources seed_stub_jitter.c)
-LIST (APPEND KPEP_seeding_sources seed_stub_rdseed.c seed_stub_rdrand.c rdcpu_toolbox.c)
-LIST (APPEND KPEP_seeding_sources seed_stub_osrand.c)
-LIST (APPEND KPEP_seeding_sources seed_stub_extern.c)
+SET  (ARDent_seeding_sources seed_control.c async_seed.c ringbuffer.c)
+LIST (APPEND ARDent_seeding_sources seed_stub_jitter.c)
+LIST (APPEND ARDent_seeding_sources seed_stub_rdseed.c seed_stub_rdrand.c rdcpu_toolbox.c)
+LIST (APPEND ARDent_seeding_sources seed_stub_osrand.c)
+LIST (APPEND ARDent_seeding_sources seed_stub_extern.c)
 
 # ##################################################################################################
 # STATIC Compilation for linking
 # ##################################################################################################
 
-ADD_LIBRARY (KPEP_seeding OBJECT ${KPEP_seeding_sources})
-TARGET_COMPILE_OPTIONS (KPEP_seeding PRIVATE ${KPEP_LIB_CFLAGS} "-fPIC")
+ADD_LIBRARY (ARDent_seeding OBJECT ${ARDent_seeding_sources})
+TARGET_COMPILE_OPTIONS (ARDent_seeding PRIVATE ${ARDent_LIB_CFLAGS} "-fPIC")
 IF(CMAKE_VERSION GREATER_EQUAL 3.13.0)
-    TARGET_LINK_OPTIONS(KPEP_seeding PRIVATE ${KPEP_LIB_LDFLAGS})
+    TARGET_LINK_OPTIONS(ARDent_seeding PRIVATE ${ARDent_LIB_LDFLAGS})
 ENDIF ()
 
 

@@ -19,18 +19,18 @@
 # ##################################################################################################
 
 # Set project source files
-SET  (KPEP_thread_sources arch.c)
-LIST (APPEND KPEP_thread_sources arch/thread_win.c)
-LIST (APPEND KPEP_thread_sources arch/thread_none.c)
-LIST (APPEND KPEP_thread_sources arch/thread_posix.c)
+SET  (ARDent_thread_sources arch.c)
+LIST (APPEND ARDent_thread_sources arch/thread_win.c)
+LIST (APPEND ARDent_thread_sources arch/thread_none.c)
+LIST (APPEND ARDent_thread_sources arch/thread_posix.c)
 
 # ##################################################################################################
 # STATIC Compilation for linking
 # ##################################################################################################
 
-ADD_LIBRARY (KPEP_thread OBJECT ${KPEP_thread_sources})
-TARGET_COMPILE_OPTIONS (KPEP_thread PRIVATE ${KPEP_LIB_CFLAGS} "-fPIC")
+ADD_LIBRARY (ARDent_thread OBJECT ${ARDent_thread_sources})
+TARGET_COMPILE_OPTIONS (ARDent_thread PRIVATE ${ARDent_LIB_CFLAGS} "-fPIC")
 IF(CMAKE_VERSION GREATER_EQUAL 3.13.0)
-    TARGET_LINK_OPTIONS(KPEP_thread PRIVATE ${KPEP_LIB_LDFLAGS})
+    TARGET_LINK_OPTIONS(ARDent_thread PRIVATE ${ARDent_LIB_LDFLAGS})
 ENDIF ()
 

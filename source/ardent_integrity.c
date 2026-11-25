@@ -18,9 +18,9 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "kpep/kpep.h"
-#include "kpep_internal.h"
-#include "kpep_integrity.h"
+#include "ardent/ardent.h"
+#include "ardent_internal.h"
+#include "ardent_integrity.h"
 
 /* ************************************************************************************************
  * ************************************************************************************************
@@ -53,15 +53,15 @@
 # define S_IFCHR 0020000
 #endif
 
-// TODO: CHANGE ME!
 EXPORT_VISIBILITY_HIDDEN
-const unsigned char kpep_integrity_key[] = { 
-    0x4B,0x65,0x79,0x50,0x61,0x69,0x72,0x20,   // "KeyPair "
-    0x46,0x49,0x50,0x53,0x20,                  // "FIPS "
-    0x4D,0x61,0x6E,0x61,0x67,0x65,0x72         // "Manager"
+const unsigned char ardent_integrity_key[] = { 
+	0x52, 0x61, 0x6D, 0x64, 0x6F, 0x6D,             // Random
+	0x46, 0x72, 0x65, 0x71, 0x75, 0x65, 0x6E, 0x74, // Frequent
+	0x46, 0x6C, 0x79, 0x65, 0x72,                   // Flyer
+	0x44, 0x65, 0x6E, 0x74                          // Dent
 };
 EXPORT_VISIBILITY_HIDDEN
-const size_t kpep_integrity_key_len = sizeof(kpep_integrity_key);
+const size_t ardent_integrity_key_len = sizeof(ardent_integrity_key);
 
 #define FILE_BUFFER_SIZE 4096
 
@@ -107,11 +107,11 @@ static const char* is_valid_file(const char *filename)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-KPEP_RESULT integrity_check_file(const char* filename, 
+ARDENT_RESULT integrity_check_file(const char* filename, 
                             	 const unsigned char *key, size_t key_len,
                             	 unsigned char *mac, size_t *mac_len) 
 {
-    KPEP_RESULT rv = KPEP_R_SUCCESS; // Assume success
+    ARDENT_RESULT rv = ARDENT_R_SUCCESS; // Assume success
 
     FILE *fp = NULL;
     unsigned char *buffer = NULL;
@@ -122,24 +122,24 @@ KPEP_RESULT integrity_check_file(const char* filename,
     // Validate arguments
     if (!mac) {
         if (mac_len) {
-            *mac_len = KPEP_GLOBAL_DIGEST_SIZE;
-            return KPEP_R_SUCCESS; // ok
+            *mac_len = ARDENT_GLOBAL_DIGEST_SIZE;
+            return ARDENT_R_SUCCESS; // ok
         }
         else 
-            return KPEP_R_NULL_ARG;  // !mac and !mac_len... what do you want?
+            return ARDENT_R_NULL_ARG;  // !mac and !mac_len... what do you want?
     }
 
-    if (!filename || !mac_len || *mac_len < KPEP_GLOBAL_DIGEST_SIZE) {
-        return KPEP_R_INVALID_ARG;
+    if (!filename || !mac_len || *mac_len < ARDENT_GLOBAL_DIGEST_SIZE) {
+        return ARDENT_R_INVALID_ARG;
     }
     if (is_valid_file(filename) != NULL) {
-        return KPEP_R_FILE_NOT_VALID;
+        return ARDENT_R_FILE_NOT_VALID;
     }
 
     // Default Key
     if (!key || !key_len) {
-        key = (unsigned char*) kpep_integrity_key;
-        key_len = kpep_integrity_key_len;
+        key = (unsigned char*) ardent_integrity_key;
+        key_len = ardent_integrity_key_len;
     }
 
     // Open file
@@ -147,13 +147,13 @@ KPEP_RESULT integrity_check_file(const char* filename,
     if (!fp) {
         switch (errno) {
             case EACCES:
-                rv = KPEP_R_FILE_BAD_PERMISSIONS;
+                rv = ARDENT_R_FILE_BAD_PERMISSIONS;
                 break;
             case ENOENT:
-                rv = KPEP_R_FILE_NOT_FOUND;
+                rv = ARDENT_R_FILE_NOT_FOUND;
                 break;
             default:
-                rv = KPEP_R_FILE_UNEXPECTED;
+                rv = ARDENT_R_FILE_UNEXPECTED;
         }
         goto err;
     }
@@ -161,14 +161,14 @@ KPEP_RESULT integrity_check_file(const char* filename,
     // Initialize the HMAC
     hctx = hmac_ctx_new();
     if (!hctx) {
-        rv = KPEP_R_MALLOC_FAIL;
+        rv = ARDENT_R_MALLOC_FAIL;
         goto err;
     }
 
     // Initialize the read buffer
-    buffer = kpep_zalloc(FILE_BUFFER_SIZE);
+    buffer = ardent_zalloc(FILE_BUFFER_SIZE);
     if (!buffer) {
-        rv = KPEP_R_MALLOC_FAIL;
+        rv = ARDENT_R_MALLOC_FAIL;
         goto err;
     }
 
@@ -178,31 +178,31 @@ KPEP_RESULT integrity_check_file(const char* filename,
 
     // Iterate through the file by block size
     if (!hmac_init(hctx, key, key_len, NULL)) {
-        rv = KPEP_R_INTEGRITY_FAIL;
+        rv = ARDENT_R_INTEGRITY_FAIL;
         goto err;
     }
     while ((bytes_read = fread(buffer, 1, FILE_BUFFER_SIZE, fp)) > 0) {
         if (!hmac_update(hctx, buffer, bytes_read)) {
-            rv = KPEP_R_INTEGRITY_FAIL;
+            rv = ARDENT_R_INTEGRITY_FAIL;
             goto err;
         }
     }
     if (ferror(fp) || !feof(fp)) {
-        rv = KPEP_R_FILE_UNEXPECTED;
+        rv = ARDENT_R_FILE_UNEXPECTED;
         clearerr(fp);
         goto err;
     }
-    if (!hmac_final(hctx, mac, NULL, KPEP_GLOBAL_DIGEST_SIZE)) {
-        rv = KPEP_R_INTEGRITY_FAIL;
+    if (!hmac_final(hctx, mac, NULL, ARDENT_GLOBAL_DIGEST_SIZE)) {
+        rv = ARDENT_R_INTEGRITY_FAIL;
         goto err;
     }
-    *mac_len = KPEP_GLOBAL_DIGEST_SIZE;
+    *mac_len = ARDENT_GLOBAL_DIGEST_SIZE;
 
     // If we got here, rv is still zero and we have SUCCESS!
 
 err:
     if (fp) fclose(fp);
-    kpep_cleanse(buffer, FILE_BUFFER_SIZE);  // Zeroize; NULL safe
+    ardent_cleanse(buffer, FILE_BUFFER_SIZE);  // Zeroize; NULL safe
     hmac_ctx_free(hctx);                     // Zeroize; NULL safe
     return rv;
 }

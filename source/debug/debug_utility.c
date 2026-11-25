@@ -32,7 +32,7 @@
 # include <windows.h>
 #endif
 
-#include "kpep/kpep.h"
+#include "ardent/ardent.h"
 
 #include "openssl/conf.h"
 #include "openssl/err.h"
@@ -45,7 +45,7 @@
  * ************************************************************************************************
  * ***********************************************************************************************/
 
-static void kpep_debug_set_error_text(char *buf, size_t buf_len, const char *fmt, ...)
+static void ardent_debug_set_error_text(char *buf, size_t buf_len, const char *fmt, ...)
 {
     va_list args;
 
@@ -58,7 +58,7 @@ static void kpep_debug_set_error_text(char *buf, size_t buf_len, const char *fmt
     buf[buf_len - 1] = '\0';
 }
 
-static void kpep_debug_get_os_error(char *buf, size_t buf_len)
+static void ardent_debug_get_os_error(char *buf, size_t buf_len)
 {
     if (!buf || buf_len == 0)
         return;
@@ -70,7 +70,7 @@ static void kpep_debug_get_os_error(char *buf, size_t buf_len)
         DWORD len = FormatMessageA(flags, NULL, err, 0, buf, (DWORD)buf_len, NULL);
 
         if (len == 0) {
-            kpep_debug_set_error_text(buf, buf_len, "system error %lu", (unsigned long)err);
+            ardent_debug_set_error_text(buf, buf_len, "system error %lu", (unsigned long)err);
             return;
         }
 
@@ -80,11 +80,11 @@ static void kpep_debug_get_os_error(char *buf, size_t buf_len)
         }
     }
 #else
-    kpep_debug_set_error_text(buf, buf_len, "%s", strerror(errno));
+    ardent_debug_set_error_text(buf, buf_len, "%s", strerror(errno));
 #endif
 }
 
-static int kpep_debug_write_banner(FILE *stream,
+static int ardent_debug_write_banner(FILE *stream,
                                    const char *banner,
                                    char *errbuf,
                                    size_t errbuf_len)
@@ -103,27 +103,27 @@ static int kpep_debug_write_banner(FILE *stream,
 #else
     if (gmtime_r(&now, &utc_tm) == NULL) {
 #endif
-        kpep_debug_set_error_text(errbuf, errbuf_len, "failed to format UTC timestamp");
+        ardent_debug_set_error_text(errbuf, errbuf_len, "failed to format UTC timestamp");
         return 0;
     }
 
     if (strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &utc_tm) == 0) {
-        kpep_debug_set_error_text(errbuf, errbuf_len, "failed to format UTC timestamp");
+        ardent_debug_set_error_text(errbuf, errbuf_len, "failed to format UTC timestamp");
         return 0;
     }
 
     rc = fprintf(stream, "\n=== %s === %s UTC ===\n",
-                 banner ? banner : "KPEP Debug Output",
+                 banner ? banner : "ARDENT Debug Output",
                  stamp);
     if (rc < 0 || fflush(stream) != 0) {
-        kpep_debug_get_os_error(errbuf, errbuf_len);
+        ardent_debug_get_os_error(errbuf, errbuf_len);
         return 0;
     }
 
     return 1;
 }
 
-int kpep_debug_validate_filename(const char *path)
+int ardent_debug_validate_filename(const char *path)
 {
     struct stat st;
     const char *p;
@@ -145,13 +145,13 @@ int kpep_debug_validate_filename(const char *path)
     return 1;
 }
 
-int kpep_debug_is_enabled_flag(const char *name)
+int ardent_debug_is_enabled_flag(const char *name)
 {
     const char *value = getenv(name);
     return value != NULL && strcmp(value, "1") == 0;
 }
 
-int kpep_debug_is_stream_name(const char *name, FILE **out_stream)
+int ardent_debug_is_stream_name(const char *name, FILE **out_stream)
 {
     if (out_stream)
         *out_stream = NULL;
@@ -174,7 +174,7 @@ int kpep_debug_is_stream_name(const char *name, FILE **out_stream)
     return 0;
 }
 
-int kpep_debug_parse_bool(const char *value, int *out)
+int ardent_debug_parse_bool(const char *value, int *out)
 {
     if (!value || !out)
         return 0;
@@ -189,7 +189,7 @@ int kpep_debug_parse_bool(const char *value, int *out)
     return 0;
 }
 
-uint32_t kpep_debug_parse_u32_env(const char *value)
+uint32_t ardent_debug_parse_u32_env(const char *value)
 {
     char *end = NULL;
     unsigned long parsed;
@@ -205,14 +205,14 @@ uint32_t kpep_debug_parse_u32_env(const char *value)
     return (uint32_t)parsed;
 }
 
-int kpep_debug_parse_interval(const char *value, uint32_t *out)
+int ardent_debug_parse_interval(const char *value, uint32_t *out)
 {
     uint32_t interval;
 
     if (!value || !out)
         return 0;
 
-    interval = kpep_debug_parse_u32_env(value);
+    interval = ardent_debug_parse_u32_env(value);
     if (interval == 0 && strcmp(value, "0") != 0)
         return 0;
 
@@ -220,7 +220,7 @@ int kpep_debug_parse_interval(const char *value, uint32_t *out)
     return 1;
 }
 
-void kpep_debug_report_error_once(const char *tag, const char *fmt, ...)
+void ardent_debug_report_error_once(const char *tag, const char *fmt, ...)
 {
     static char last_tag[64] = {0};
     static char last_msg[512] = {0};
@@ -247,7 +247,7 @@ void kpep_debug_report_error_once(const char *tag, const char *fmt, ...)
     fprintf(stderr, "%s: %s\n", tag ? tag : "LOG ERROR", buf);
 }
 
-uint64_t kpep_debug_monotonic_us(void)
+uint64_t ardent_debug_monotonic_us(void)
 {
 #if defined(OPENSSL_SYS_WINDOWS) || defined(WINDOWS)
     LARGE_INTEGER freq;
@@ -305,7 +305,7 @@ uint64_t kpep_debug_monotonic_us(void)
 #endif
 }
 
-int kpep_debug_open_output(const char *name,
+int ardent_debug_open_output(const char *name,
                            const char *banner,
                            FILE **out_stream,
                            int *out_owned,
@@ -322,30 +322,30 @@ int kpep_debug_open_output(const char *name,
         errbuf[0] = '\0';
 
     if (!name || name[0] == '\0') {
-        kpep_debug_set_error_text(errbuf, errbuf_len, "empty stream name");
+        ardent_debug_set_error_text(errbuf, errbuf_len, "empty stream name");
         return 0;
     }
 
-    if (kpep_debug_is_stream_name(name, &fp)) {
-        if (!kpep_debug_write_banner(fp, banner, errbuf, errbuf_len))
+    if (ardent_debug_is_stream_name(name, &fp)) {
+        if (!ardent_debug_write_banner(fp, banner, errbuf, errbuf_len))
             return 0;
         if (out_stream)
             *out_stream = fp;
         return 1;
     }
 
-    if (!kpep_debug_validate_filename(name)) {
-        kpep_debug_set_error_text(errbuf, errbuf_len, "invalid path");
+    if (!ardent_debug_validate_filename(name)) {
+        ardent_debug_set_error_text(errbuf, errbuf_len, "invalid path");
         return 0;
     }
 
     fp = fopen(name, "a");
     if (!fp) {
-        kpep_debug_get_os_error(errbuf, errbuf_len);
+        ardent_debug_get_os_error(errbuf, errbuf_len);
         return 0;
     }
 
-    if (!kpep_debug_write_banner(fp, banner, errbuf, errbuf_len)) {
+    if (!ardent_debug_write_banner(fp, banner, errbuf, errbuf_len)) {
         fclose(fp);
         return 0;
     }

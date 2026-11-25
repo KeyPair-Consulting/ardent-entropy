@@ -18,11 +18,12 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "kpep/kpep.h"
-#include "kpep/kpep_names_optest.h"
+#include "ardent/ardent.h"
+#include "ardent/ardent_names_optest.h"
 #include "sha2.h"
 #include "drbg.h"
 #include "../seeding/seed_control.h"
+#include "../ardent_integrity.h"
 
 /* ************************************************************************************************
  * ************************************************************************************************
@@ -30,12 +31,12 @@
  * ************************************************************************************************
  * ***********************************************************************************************/
 
-#define MODULE_NAME "KPEP-DRBG"
+#define MODULE_NAME "ARDENT-DRBG"
 
 // Seed length for SHA2-256
 #define SEED_BYTE_LENGTH    (uint32_t) (55)
 
-struct kpep_drbg_ctx_st {
+struct ardent_drbg_ctx_st {
 	// State
 	uint32_t         running;
 	uint32_t         reseed_counter;
@@ -49,15 +50,6 @@ struct kpep_drbg_ctx_st {
 	uint8_t V[SEED_BYTE_LENGTH];
 	uint8_t C[SEED_BYTE_LENGTH];
 };
-
-// "Static Additional Data for DRBG", R.Dent
-static uint8_t static_addl[] = {
-	0x52, 0x61, 0x6D, 0x64, 0x6F, 0x6D,             // Random
-	0x46, 0x72, 0x65, 0x71, 0x75, 0x65, 0x6E, 0x74, // Frequent
-	0x46, 0x6C, 0x79, 0x65, 0x72,                   // Flyer
-	0x44, 0x65, 0x6E, 0x74                          // Dent
-};
-static size_t static_addl_len = sizeof(static_addl);
 
 #ifdef DEBUG_DRBG
 static void print_bytes(const uint8_t *buf, const uint32_t len, const uint32_t indent)
@@ -84,28 +76,28 @@ EXPORT_VISIBILITY_DEFAULT
 #else
 EXPORT_VISIBILITY_HIDDEN
 #endif
-void* drbg_new(void *vctx, RBG_ENTROPY_MODE on_demand, KPEP_RESULT *errnum) 
+void* drbg_new(void *vctx, RBG_ENTROPY_MODE on_demand, ARDENT_RESULT *errnum) 
 {
-	KPEP_DRBG_CTX* ctx = NULL;
+	ARDENT_DRBG_CTX* ctx = NULL;
 
-	if (kpep_trace_seed_enabled) {
+	if (ardent_trace_seed_enabled) {
 		TRACE_START;
 	}
 
 	// Allocate for DRBG context
-	ctx = (KPEP_DRBG_CTX*) kpep_zalloc(sizeof(KPEP_DRBG_CTX));
+	ctx = (ARDENT_DRBG_CTX*) ardent_zalloc(sizeof(ARDENT_DRBG_CTX));
 	if (!ctx) {
-		LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_MALLOC_FAIL);
-		if (errnum) *errnum = KPEP_R_MALLOC_FAIL;
+		LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_MALLOC_FAIL);
+		if (errnum) *errnum = ARDENT_R_MALLOC_FAIL;
 		return NULL;
 	}
 
 	// Allocate for the SHA Context
 	ctx->hash_ctx = sha2_ctx_new();
 	if (!ctx->hash_ctx) {
-		LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_INTERNAL_HASH_FAIL);
-		if (errnum) *errnum = KPEP_R_INTERNAL_HASH_FAIL;
-		kpep_free(ctx);  // Nothing to zeroize
+		LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_INTERNAL_HASH_FAIL);
+		if (errnum) *errnum = ARDENT_R_INTERNAL_HASH_FAIL;
+		ardent_free(ctx);  // Nothing to zeroize
 		return NULL;
 	}
 
@@ -126,14 +118,14 @@ EXPORT_VISIBILITY_DEFAULT
 #else
 EXPORT_VISIBILITY_HIDDEN
 #endif
-void drbg_free(KPEP_DRBG_CTX* ctx) 
+void drbg_free(ARDENT_DRBG_CTX* ctx) 
 {
-	if (kpep_trace_seed_enabled) {
+	if (ardent_trace_seed_enabled) {
 		TRACE_START;
 	}
 	if (ctx) {
 		sha2_ctx_free(ctx->hash_ctx);              // NULL check inside
-		kpep_cleanse(ctx, sizeof(KPEP_DRBG_CTX));  // Zeroize before Free
+		ardent_cleanse(ctx, sizeof(ARDENT_DRBG_CTX));  // Zeroize before Free
 	}
 }
 
@@ -144,7 +136,7 @@ void drbg_free(KPEP_DRBG_CTX* ctx)
  * ***********************************************************************************************/
 
 static 
-KPEP_RESULT hash_df(KPEP_DRBG_CTX* ctx, 
+ARDENT_RESULT hash_df(ARDENT_DRBG_CTX* ctx, 
                     uint8_t* output, uint32_t output_len,
                     uint8_t* input, uint32_t input_len) 
 {
@@ -156,7 +148,7 @@ KPEP_RESULT hash_df(KPEP_DRBG_CTX* ctx,
 
 	if (!output || output_len == 0 || !input || input_len == 0 ||
 	    output_len > (255 *SHA2_256_DIGEST_SIZE)) {
-		return KPEP_R_INVALID_ARG;	
+		return ARDENT_R_INVALID_ARG;	
 	}
 
 	// Counter plus 32-bit int as bytes (big-endian)
@@ -173,8 +165,8 @@ KPEP_RESULT hash_df(KPEP_DRBG_CTX* ctx,
 			!sha2_update(ctx->hash_ctx, output_len_bytes, 5) ||
 			!sha2_update(ctx->hash_ctx, input, input_len) ||
 			!sha2_final (ctx->hash_ctx, digest, NULL)) {
-			kpep_zeroize(digest, sizeof(digest));
-			return KPEP_R_INTERNAL_HASH_FAIL;
+			ardent_zeroize(digest, sizeof(digest));
+			return ARDENT_R_INTERNAL_HASH_FAIL;
 		}
 
 		// Full or partial block?
@@ -193,12 +185,12 @@ KPEP_RESULT hash_df(KPEP_DRBG_CTX* ctx,
 	}
 
 #ifdef DEBUG_DRBG
-	kpep_trace(MODULE_NAME, "HASH_DF");
+	ardent_trace(MODULE_NAME, "HASH_DF");
 	printf("Output: \n");
 	print_bytes(output, SEED_BYTE_LENGTH, 4); printf("\n");
 #endif
 
-	return KPEP_R_SUCCESS;
+	return ARDENT_R_SUCCESS;
 }
 
 /* ************************************************************************************************
@@ -212,19 +204,19 @@ EXPORT_VISIBILITY_DEFAULT
 #else
 EXPORT_VISIBILITY_HIDDEN
 #endif
-KPEP_RESULT drbg_instantiate_ex(KPEP_DRBG_CTX* ctx, int strength_bits,
+ARDENT_RESULT drbg_instantiate_ex(ARDENT_DRBG_CTX* ctx, int strength_bits,
     							const uint8_t* entropy, uint32_t entropy_len, 
     							const uint8_t* nonce, uint32_t nonce_len, 
     							const uint8_t* pers, uint32_t pers_len)
 {
-	KPEP_RESULT rv = KPEP_R_SUCCESS; // Assume success
+	ARDENT_RESULT rv = ARDENT_R_SUCCESS; // Assume success
 	uint32_t buffer_len;
 	uint8_t *p, *buffer = NULL;
 	SHA2_CTX *new_hash_ctx = NULL;
 
 
 #ifdef DEBUG_DRBG
-	kpep_trace(MODULE_NAME, "INSTANTIATE_EX");
+	ardent_trace(MODULE_NAME, "INSTANTIATE_EX");
 	printf("Entropy: \n");
 	print_bytes(entropy, entropy_len, 4); printf("\n");
 	printf("Nonce  : \n");
@@ -234,19 +226,19 @@ KPEP_RESULT drbg_instantiate_ex(KPEP_DRBG_CTX* ctx, int strength_bits,
 #endif
 
 	// Validate inputs
-	if (!ctx || (strength_bits <= 0) || (strength_bits > KPEP_SECURITY_STRENGTH_BITS))
-		return KPEP_R_INVALID_ARG;
-	if (!entropy || (entropy_len < KPEP_SECURITY_STRENGTH_BYTES) || (entropy_len > MAX_ENTROPY_LEN))
-		return KPEP_R_INVALID_ARG;
+	if (!ctx || (strength_bits <= 0) || (strength_bits > ARDENT_SECURITY_STRENGTH_BITS))
+		return ARDENT_R_INVALID_ARG;
+	if (!entropy || (entropy_len < ARDENT_SECURITY_STRENGTH_BYTES) || (entropy_len > MAX_ENTROPY_LEN))
+		return ARDENT_R_INVALID_ARG;
 	if ((pers && !pers_len) || (!pers && pers_len) || (pers_len > MAX_PERS_LEN))
-		return KPEP_R_INVALID_ARG;
+		return ARDENT_R_INVALID_ARG;
 	if ((nonce && !nonce_len) || (!nonce && nonce_len) || (nonce_len > MAX_NONCE_LEN))
-		return KPEP_R_INVALID_ARG;
+		return ARDENT_R_INVALID_ARG;
 
 	// Refresh the Hash context
 	new_hash_ctx = sha2_ctx_new();
 	if (!new_hash_ctx) {
-		return KPEP_R_MALLOC_FAIL;
+		return ARDENT_R_MALLOC_FAIL;
 	}
 	sha2_ctx_free(ctx->hash_ctx);
 	ctx->hash_ctx = new_hash_ctx;
@@ -257,9 +249,9 @@ KPEP_RESULT drbg_instantiate_ex(KPEP_DRBG_CTX* ctx, int strength_bits,
 		// 2. seed = Hash_df (seed_material, seedlen).
 		// 3. V = seed.
 		buffer_len = entropy_len + nonce_len + pers_len;
-		buffer = (uint8_t*) kpep_zalloc(buffer_len);
+		buffer = (uint8_t*) ardent_zalloc(buffer_len);
 		if (!buffer) {
-			rv = KPEP_R_MALLOC_FAIL;
+			rv = ARDENT_R_MALLOC_FAIL;
 			break;
 		}
 		p = buffer;
@@ -278,14 +270,14 @@ KPEP_RESULT drbg_instantiate_ex(KPEP_DRBG_CTX* ctx, int strength_bits,
 		}
 
 		// Cleanup for re-use
-		kpep_cleanse(buffer, buffer_len);
+		ardent_cleanse(buffer, buffer_len);
 		buffer = NULL;
 		
 		// 4. C = Hash_df ((0x00 || V), seedlen);  Comment: Precede V with a byte of zeros.
 		buffer_len = SEED_BYTE_LENGTH+1;
-		buffer = (uint8_t*) kpep_zalloc(buffer_len);
+		buffer = (uint8_t*) ardent_zalloc(buffer_len);
 		if (!buffer) {
-			rv = KPEP_R_MALLOC_FAIL;
+			rv = ARDENT_R_MALLOC_FAIL;
 			break;
 		}
 		buffer[0] = 0x00;
@@ -315,7 +307,7 @@ KPEP_RESULT drbg_instantiate_ex(KPEP_DRBG_CTX* ctx, int strength_bits,
 	} while (0);
 
 	// Cleanup
-	kpep_cleanse(buffer, buffer_len);
+	ardent_cleanse(buffer, buffer_len);
 	
 	// Reset/Zeroize state on failure
 	if (rv) {
@@ -332,9 +324,9 @@ EXPORT_VISIBILITY_DEFAULT
 #else
 EXPORT_VISIBILITY_HIDDEN
 #endif
-void drbg_uninstantiate(KPEP_DRBG_CTX* ctx)
+void drbg_uninstantiate(ARDENT_DRBG_CTX* ctx)
 {
-	if (kpep_trace_seed_enabled) {
+	if (ardent_trace_seed_enabled) {
 		TRACE_START;
 	}
 	if (ctx) {
@@ -351,7 +343,7 @@ EXPORT_VISIBILITY_DEFAULT
 #else
 EXPORT_VISIBILITY_HIDDEN
 #endif
-int  drbg_verify_zeroization(KPEP_DRBG_CTX* ctx)
+int  drbg_verify_zeroization(ARDENT_DRBG_CTX* ctx)
 {
 	size_t i;
 	if (!ctx)
@@ -370,41 +362,41 @@ int  drbg_verify_zeroization(KPEP_DRBG_CTX* ctx)
  * ***********************************************************************************************/
 
 EXPORT_VISIBILITY_HIDDEN
-KPEP_RESULT drbg_reseed_ex(KPEP_DRBG_CTX* ctx, 
+ARDENT_RESULT drbg_reseed_ex(ARDENT_DRBG_CTX* ctx, 
 				        	const uint8_t *entropy, size_t entropy_len,
 				        	const uint8_t *addl, size_t addl_len)
 {
-	KPEP_RESULT rv = 0;  // Assume success
+	ARDENT_RESULT rv = 0;  // Assume success
 	size_t buffer_len;
 	uint8_t *p, *buffer = NULL;
 	uint8_t tmpV[SEED_BYTE_LENGTH], *v = tmpV;
 	uint8_t tmpC[SEED_BYTE_LENGTH], *c = tmpC;
 
-	if (kpep_trace_seed_enabled) {
+	if (ardent_trace_seed_enabled) {
 		TRACE_START;
 	}
 
 	if (!ctx || (entropy_len > MAX_ENTROPY_LEN) || (addl_len > MAX_ADDL_LEN)) {
-		return KPEP_R_INVALID_ARG;
+		return ARDENT_R_INVALID_ARG;
 	}
 	if ((!addl && addl_len) || (addl && !addl_len)) {
-		return KPEP_R_INVALID_ARG;
+		return ARDENT_R_INVALID_ARG;
 	}
 	if (!entropy) {
 		if ((ctx->entropy_mode == ENTROPY_MODE_RBG3) || 
 			(!addl || !addl_len || entropy_len)) {
-			return KPEP_R_DRBG_INSUFFICIENT_ENTROPY;
+			return ARDENT_R_DRBG_INSUFFICIENT_ENTROPY;
 		}
 	}
-	else if (entropy_len < KPEP_SECURITY_STRENGTH_BYTES) {
-		return KPEP_R_DRBG_INSUFFICIENT_ENTROPY;
+	else if (entropy_len < ARDENT_SECURITY_STRENGTH_BYTES) {
+		return ARDENT_R_DRBG_INSUFFICIENT_ENTROPY;
 	}
 	if (!ctx->running) {
-		return KPEP_R_DRBG_INVALID_STATE;
+		return ARDENT_R_DRBG_INVALID_STATE;
 	}
 
 #ifdef DEBUG_DRBG
-	kpep_trace(MODULE_NAME, "RESEED_EX");
+	ardent_trace(MODULE_NAME, "RESEED_EX");
 	printf("Entropy: \n");
 	print_bytes(entropy, entropy_len, 4); printf("\n");
 	printf("Addin  : \n");
@@ -416,9 +408,9 @@ KPEP_RESULT drbg_reseed_ex(KPEP_DRBG_CTX* ctx,
 		// 2. seed = Hash_df (seed_material, seedlen).
 		// 3. V = seed.
 		buffer_len = 1 + SEED_BYTE_LENGTH + entropy_len + addl_len;
-		buffer = (uint8_t*) kpep_zalloc(buffer_len);
+		buffer = (uint8_t*) ardent_zalloc(buffer_len);
 		if (!buffer) {
-			rv = KPEP_R_MALLOC_FAIL;
+			rv = ARDENT_R_MALLOC_FAIL;
 			break;
 		}
 		buffer[0] = 0x01;
@@ -438,14 +430,14 @@ KPEP_RESULT drbg_reseed_ex(KPEP_DRBG_CTX* ctx,
 		}
 
 		// Cleanup for re-use
-		kpep_cleanse(buffer, buffer_len);
+		ardent_cleanse(buffer, buffer_len);
 		buffer = NULL;
 
 		// 4. C = Hash_df ((0x00 || V), seedlen).
 		buffer_len = SEED_BYTE_LENGTH + 1;
-		buffer = (uint8_t*) kpep_zalloc(buffer_len);
+		buffer = (uint8_t*) ardent_zalloc(buffer_len);
 		if (!buffer) {
-			rv = KPEP_R_MALLOC_FAIL;
+			rv = ARDENT_R_MALLOC_FAIL;
 			break;
 		}
 		buffer[0] = 0x00;
@@ -454,7 +446,7 @@ KPEP_RESULT drbg_reseed_ex(KPEP_DRBG_CTX* ctx,
 		if (rv) {
 			break;
 		}
-		// kpep_cleanse(buffer, buffer_len); // Performed below at cleanup
+		// ardent_cleanse(buffer, buffer_len); // Performed below at cleanup
 
 		// 5. reseed_counter = 1.
 		// Prediction Resistance is always ON
@@ -475,9 +467,9 @@ KPEP_RESULT drbg_reseed_ex(KPEP_DRBG_CTX* ctx,
 #endif
 
 	// Cleanup
-	kpep_zeroize(v, SEED_BYTE_LENGTH);
-	kpep_zeroize(c, SEED_BYTE_LENGTH);
-	kpep_cleanse(buffer, buffer_len);
+	ardent_zeroize(v, SEED_BYTE_LENGTH);
+	ardent_zeroize(c, SEED_BYTE_LENGTH);
+	ardent_cleanse(buffer, buffer_len);
 
 	return rv;
 }
@@ -527,7 +519,7 @@ void drbg_add_buf(unsigned char *dst, size_t dstlen,
 }
 
 static 
-KPEP_RESULT hash_gen(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
+ARDENT_RESULT hash_gen(ARDENT_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 {
 	const uint8_t one[1] = { 0x01 };
 	uint8_t data[256];
@@ -536,11 +528,11 @@ KPEP_RESULT hash_gen(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 	uint8_t *w = rand;  // rand is 'W', this 'w' starts at [0]
 
 	if (!ctx || !rand || !rand_len) {
-		return KPEP_R_INVALID_ARG;
+		return ARDENT_R_INVALID_ARG;
 	}
 
 	if (!ctx->running) {
-		return KPEP_R_DRBG_INVALID_STATE;
+		return ARDENT_R_DRBG_INVALID_STATE;
 	}
 
 	remaining = rand_len;
@@ -558,7 +550,7 @@ KPEP_RESULT hash_gen(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 	while (remaining > 0) {
 		// 4.1 w = Hash (data).
 		if (!sha2_oneshot(data, SEED_BYTE_LENGTH, digest)) {
-			return KPEP_R_INTERNAL_HASH_FAIL;
+			return ARDENT_R_INTERNAL_HASH_FAIL;
 		}
 
 		// Partial block, exit here?
@@ -578,7 +570,7 @@ KPEP_RESULT hash_gen(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 		drbg_add_buf(data, SEED_BYTE_LENGTH, one, 1);
 	}
 
-	return KPEP_R_SUCCESS;
+	return ARDENT_R_SUCCESS;
 }
 
 #ifdef FIPS_ACVP
@@ -586,26 +578,26 @@ EXPORT_VISIBILITY_DEFAULT
 #else
 EXPORT_VISIBILITY_HIDDEN
 #endif
-KPEP_RESULT drbg_generate_ex(KPEP_DRBG_CTX* ctx, 
+ARDENT_RESULT drbg_generate_ex(ARDENT_DRBG_CTX* ctx, 
 	                       	 uint8_t *rand, uint32_t rand_len,
 							 const uint8_t *entropy, size_t entropy_len,
 	                       	 const uint8_t *addl, uint32_t addl_len)
 {
-	KPEP_RESULT rv = KPEP_R_SUCCESS;  // Assume success
+	ARDENT_RESULT rv = ARDENT_R_SUCCESS;  // Assume success
 
 	uint8_t *buffer = NULL;
 	uint8_t H[64] = { 0 };
 
-	if (kpep_trace_seed_enabled) {
+	if (ardent_trace_seed_enabled) {
 		TRACE_START;
 	}
 
 	if (!ctx || !rand || !rand_len)
-		return KPEP_R_INVALID_ARG;
+		return ARDENT_R_INVALID_ARG;
 	if (rand_len > DRBG_MAX_BYTES_PER_REQUEST) {
-		return KPEP_R_DRBG_REQUEST_TOO_LARGE;
+		return ARDENT_R_DRBG_REQUEST_TOO_LARGE;
 	}	if (!ctx->running) {
-		return KPEP_R_DRBG_INVALID_STATE;
+		return ARDENT_R_DRBG_INVALID_STATE;
 	}
 
 	// 1. If reseed_counter > reseed_interval, then return an indication that a reseed is required.
@@ -617,7 +609,7 @@ KPEP_RESULT drbg_generate_ex(KPEP_DRBG_CTX* ctx,
 		return rv;
 
 #ifdef DEBUG_DRBG
-	kpep_trace(MODULE_NAME, "GENERATE_EX");
+	ardent_trace(MODULE_NAME, "GENERATE_EX");
 #endif
 
 	do {
@@ -628,15 +620,15 @@ KPEP_RESULT drbg_generate_ex(KPEP_DRBG_CTX* ctx,
 		}
 
 		// 4. H = Hash (0x03 || V).
-		buffer = (uint8_t*) kpep_zalloc(SEED_BYTE_LENGTH+1);
+		buffer = (uint8_t*) ardent_zalloc(SEED_BYTE_LENGTH+1);
 		if (!buffer) {
-			rv = KPEP_R_MALLOC_FAIL;
+			rv = ARDENT_R_MALLOC_FAIL;
 			break;
 		}
 		buffer[0] = 0x03;
 		memcpy(buffer+1, ctx->V, SEED_BYTE_LENGTH);
 		if (!sha2_oneshot(buffer, SEED_BYTE_LENGTH+1, H)) {
-			rv = KPEP_R_INTERNAL_HASH_FAIL;
+			rv = ARDENT_R_INTERNAL_HASH_FAIL;
 			break;
 		}
 
@@ -663,10 +655,10 @@ KPEP_RESULT drbg_generate_ex(KPEP_DRBG_CTX* ctx,
 
 	// Zeroize on error
 	if (rv)
-		kpep_zeroize(rand, rand_len);
+		ardent_zeroize(rand, rand_len);
 
 	// Cleanup state and temp
-	kpep_cleanse(buffer, SEED_BYTE_LENGTH+1);  // NULL safe
+	ardent_cleanse(buffer, SEED_BYTE_LENGTH+1);  // NULL safe
 	memset(H, 0, sizeof(H));                   // Zeroize
 
 	return rv;
@@ -679,47 +671,47 @@ KPEP_RESULT drbg_generate_ex(KPEP_DRBG_CTX* ctx,
  * ***********************************************************************************************/
 
 EXPORT_VISIBILITY_HIDDEN
-KPEP_RESULT drbg_instantiate(KPEP_DRBG_CTX* ctx, int strength_bits, const uint8_t* perso, uint32_t perso_len)
+ARDENT_RESULT drbg_instantiate(ARDENT_DRBG_CTX* ctx, int strength_bits, const uint8_t* perso, uint32_t perso_len)
 {
-	KPEP_RESULT rv = KPEP_R_SUCCESS;
+	ARDENT_RESULT rv = ARDENT_R_SUCCESS;
 	uint8_t *entropy = NULL;
 	uint8_t *nonce = NULL;
 	size_t ent_len = 0, nonce_len = 0;
 
-	if (kpep_trace_seed_enabled) {
+	if (ardent_trace_seed_enabled) {
 		TRACE_START;
 	}
 
 	if (!ctx)
-		return KPEP_R_NULL_ARG;
+		return ARDENT_R_NULL_ARG;
 
 	do {
 		// Gather entropy
-		rv = seed_control_gather(ctx->seed_ctx, &entropy, &ent_len, KPEP_SECURITY_STRENGTH_BITS, 1); // Validated
+		rv = seed_control_gather(ctx->seed_ctx, &entropy, &ent_len, ARDENT_SECURITY_STRENGTH_BITS, 1); // Validated
 		if (rv) {
 			// Logged in seed_control.c with better context
-			//LOG_KPEP_ERROR(MODULE_NAME, rv);
+			//LOG_ARDENT_ERROR(MODULE_NAME, rv);
 			break;
 		}
 		// Gather Nonce; STRENGTH_BITS/2 (see SP 800-90Ar1 section 8.6.7)
-		rv = seed_control_gather(ctx->seed_ctx, &nonce, &nonce_len, KPEP_SECURITY_STRENGTH_BITS/2, 1); // Validated
+		rv = seed_control_gather(ctx->seed_ctx, &nonce, &nonce_len, ARDENT_SECURITY_STRENGTH_BITS/2, 1); // Validated
 		if (rv) {
 			// Logged in seed_control.c with better context
-			//LOG_KPEP_ERROR(MODULE_NAME, rv);
+			//LOG_ARDENT_ERROR(MODULE_NAME, rv);
 			break;
 		}
 		// Call the instantiate function
-		rv = drbg_instantiate_ex(ctx, KPEP_SECURITY_STRENGTH_BITS, 
+		rv = drbg_instantiate_ex(ctx, ARDENT_SECURITY_STRENGTH_BITS, 
 			                	entropy, ent_len,
 								nonce, nonce_len,
 								perso, perso_len);
 	} while (0);
 
 	// Free the seed buffers
-	kpep_cleanse(entropy, ent_len);
-	kpep_cleanse(nonce, nonce_len);
+	ardent_cleanse(entropy, ent_len);
+	ardent_cleanse(nonce, nonce_len);
 
-	if (rv == KPEP_R_SEED_CONTROL_FATAL) {
+	if (rv == ARDENT_R_SEED_CONTROL_FATAL) {
 		drbg_uninstantiate(ctx);
 	}
 
@@ -727,30 +719,30 @@ KPEP_RESULT drbg_instantiate(KPEP_DRBG_CTX* ctx, int strength_bits, const uint8_
 }
 
 EXPORT_VISIBILITY_HIDDEN
-KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
+ARDENT_RESULT drbg_generate(ARDENT_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 {
-	KPEP_RESULT rv = KPEP_R_SUCCESS;
+	ARDENT_RESULT rv = ARDENT_R_SUCCESS;
 
 	uint8_t    *entropy = NULL, *addl = NULL;  // From CTRL
 	size_t      ent_len = 0, addl_len = 0;
 
-	uint8_t     drbg_buf[KPEP_SECURITY_STRENGTH_BYTES];
+	uint8_t     drbg_buf[ARDENT_SECURITY_STRENGTH_BYTES];
 	uint8_t    *drbg_out = rand;
 	uint32_t    idx = 0;
 	uint32_t    gen_size, gen_needed = rand_len;
 	uint32_t    rbg2_no_reseed = 0;
 	uint32_t    addl_no_free = 0;
  
-	if (kpep_trace_seed_enabled) {
-		kpep_trace_fmt(MODULE_NAME, "%s (req %u)", __func__, rand_len<<3);
+	if (ardent_trace_seed_enabled) {
+		ardent_trace_fmt(MODULE_NAME, "%s (req %u)", __func__, rand_len<<3);
 	}
 
 	// Validate
 	if (!ctx || !rand) {
-		return KPEP_R_INVALID_ARG;
+		return ARDENT_R_INVALID_ARG;
 	}
 	if (!rand_len) {
-		return KPEP_R_SUCCESS;
+		return ARDENT_R_SUCCESS;
 	}
 
 	if  (ctx->entropy_mode == ENTROPY_MODE_RBG2) {
@@ -762,7 +754,7 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 	else {
 		// For RBG3, gather no more than SECURITY_STRENGTH bytes per request
 		//     (see SP 800-90C section 6.5.1.2, step 3.2)
-		gen_size = KPEP_SECURITY_STRENGTH_BYTES;
+		gen_size = ARDENT_SECURITY_STRENGTH_BYTES;
 		// Output to array, Accum to argument
 		drbg_out = drbg_buf;
 	}
@@ -770,47 +762,47 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 	do {
 		// Get valid entropy
 		// Need to pull in STRENGTH_BITS + 64 bits for RBGC(RS) (see SP 800-90C section 6.5.1.2, in particular step 3.1)
-		rv = seed_control_gather(ctx->seed_ctx, &entropy, &ent_len, KPEP_SECURITY_STRENGTH_BITS+64, 1); // Validated
+		rv = seed_control_gather(ctx->seed_ctx, &entropy, &ent_len, ARDENT_SECURITY_STRENGTH_BITS+64, 1); // Validated
 #ifdef FIPS_OPTEST
 		{
 			const char* debug = getenv(ENV_OPTEST_RBG2_GATHER);
 			if (debug) {
 				LOG_SIMPLE_ERROR(MODULE_NAME, "DRBG-RBG2 insufficient entropy (optest)");
-				kpep_cleanse(entropy, ent_len); // Free also
+				ardent_cleanse(entropy, ent_len); // Free also
 				entropy = NULL;
 				ent_len = 0;
-				rv = KPEP_R_SEED_INSUFFICIENT_ENTROPY;
+				rv = ARDENT_R_SEED_INSUFFICIENT_ENTROPY;
 			}
 		}
 #endif
 
 		if (rv) {
 			if (ctx->entropy_mode == ENTROPY_MODE_RBG3) {
-				LOG_KPEP_ERROR(MODULE_NAME, rv); // Log real error
-				rv = KPEP_R_SEED_INSUFFICIENT_ENTROPY;
+				LOG_ARDENT_ERROR(MODULE_NAME, rv); // Log real error
+				rv = ARDENT_R_SEED_INSUFFICIENT_ENTROPY;
 				break;
 			}
-			if (rv != KPEP_R_SEED_INSUFFICIENT_ENTROPY) {
-				LOG_KPEP_ERROR(MODULE_NAME, rv);
+			if (rv != ARDENT_R_SEED_INSUFFICIENT_ENTROPY) {
+				LOG_ARDENT_ERROR(MODULE_NAME, rv);
 				break;
 			}
 
 			rbg2_no_reseed = 1;
 			if (ctx->reseed_counter + rand_len > RBG2_RESEED_MAX_BYTES) {
 				LOG_SIMPLE_ERROR(MODULE_NAME, "RBG2 reseed required");
-				rv = KPEP_R_SEED_INSUFFICIENT_ENTROPY;
+				rv = ARDENT_R_SEED_INSUFFICIENT_ENTROPY;
 				break;
 			}
 		}
 
 		// Gather additional input (We don't abort for additional input gathering failures)
-		seed_control_gather(ctx->seed_ctx, &addl, &addl_len, KPEP_SECURITY_STRENGTH_BITS+64, 0); // Non-Validated
+		seed_control_gather(ctx->seed_ctx, &addl, &addl_len, ARDENT_SECURITY_STRENGTH_BITS+64, 0); // Non-Validated
 
 		// Use static additional if none is provided; We need an extra HMAC_DRBG_update to run,
 		// Per Woodage and Shumow paper (https://eprint.iacr.org/2018/349.pdf)
 		if (rbg2_no_reseed && !addl) {
-			addl = static_addl;
-			addl_len = static_addl_len;
+			addl = (uint8_t*) ardent_integrity_key;
+			addl_len = ardent_integrity_key_len;
 			addl_no_free = 1;
 		}
 
@@ -820,7 +812,7 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 			                    entropy, ent_len,
 								addl, addl_len);
 		if (rv) {
-			LOG_KPEP_ERROR(MODULE_NAME, rv);
+			LOG_ARDENT_ERROR(MODULE_NAME, rv);
 			break;
 		}
 
@@ -841,19 +833,19 @@ KPEP_RESULT drbg_generate(KPEP_DRBG_CTX* ctx, uint8_t *rand, uint32_t rand_len)
 		gen_needed -= gen_size;
 
 		// Cleanup for next iteration
-		kpep_cleanse(entropy, ent_len);
+		ardent_cleanse(entropy, ent_len);
 		if (!addl_no_free) 
-			kpep_cleanse(addl, addl_len);
+			ardent_cleanse(addl, addl_len);
 	} while (gen_needed > 0); // Loop if necessay
 
 	// Zeroize output on failure
 	if (rv) {
-		kpep_zeroize(rand, rand_len);
-		kpep_cleanse(entropy, ent_len);
+		ardent_zeroize(rand, rand_len);
+		ardent_cleanse(entropy, ent_len);
 		if (!addl_no_free) 
-			kpep_cleanse(addl, addl_len);
+			ardent_cleanse(addl, addl_len);
 	}
-	kpep_zeroize(drbg_buf, sizeof(drbg_buf));
+	ardent_zeroize(drbg_buf, sizeof(drbg_buf));
 
 	return rv;
 }

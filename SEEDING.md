@@ -1,8 +1,6 @@
-# KeyPair Entropy Provider Seeding Subsystem
+# ARDent Entropy Provider Seeding Subsystem
 
-The KeyPair Entropy Provider (KPEP) replaces OpenSSL's default `SEED-SRC` entropy
-source. KPEP does not consume entropy independently. It supplies entropy to the
-OpenSSL request path through its internal DRBG.
+The ARDent Entropy Provider replaces OpenSSL's default `SEED-SRC` entropy source. ARDent does not consume entropy independently. It supplies entropy to the OpenSSL request path through its internal DRBG.
 
 The entropy flow is:
 
@@ -10,7 +8,7 @@ The entropy flow is:
 OpenSSL entropy request
 				|
 				v
-Provider Seed Source API (kpep_seeding.c)
+Provider Seed Source API (ardent_seeding.c)
 				|
 				v
 DRBG (crypto/drbg.c)
@@ -29,7 +27,7 @@ The provider-facing seed API and the DRBG form the OpenSSL integration boundary;
 
 ## Seeding hierarchy and call tree
 
-### Provider Seed Source API (kpep_seeding.c)
+### Provider Seed Source API (ardent_seeding.c)
 
 Implements the OpenSSL provider API for the replacement `SEED-SRC`. It receives
 entropy requests from OpenSSL and passes them to the DRBG. It also reports the
@@ -37,9 +35,9 @@ current seed state and source description to OpenSSL.
 
 Relevant implementation and API locations:
 
-- `source/kpep_seeding.c`
-- `include/kpep/kpep.h`
-- `include/kpep/kpep_names.h`
+- `source/ardent_seeding.c`
+- `include/ardent/ardent.h`
+- `include/ardent/ardent_names.h`
 
 ### DRBG (crypto/drbg.c)
 
@@ -62,7 +60,7 @@ Relevant files:
 
 - `source/seeding/seed_control.h`
 - `source/seeding/seed_control.c`
-- `include/kpep/kpep_seed_stub.h`
+- `include/ardent/ardent_seed_stub.h`
 - `source/seeding/seed_sources.h`
 
 ### Asynchronous Seed Source (seeding/async_seed.c)
@@ -89,13 +87,13 @@ Seed sources provide the raw entropy gathered by the Async Seed Source wrapper.
 Each source reports its output block size and credited entropy so the wrapper
 can determine how much source material is needed for an entropy request.
 
-The source interface is defined by `include/kpep/kpep_seed_stub.h`. The built-in
+The source interface is defined by `include/ardent/ardent_seed_stub.h`. The built-in
 source definitions and their configuration prefixes are listed in
 `source/seeding/seed_sources.h`.
 
 Relevant files:
 
-- `include/kpep/kpep_seed_stub.h`
+- `include/ardent/ardent_seed_stub.h`
 - `source/seeding/seed_sources.h`
 
 #### Jitter Entropy
@@ -103,7 +101,7 @@ Relevant files:
 The jitter entropy source derives entropy from timing jitter using Jitterentropy,
 statically linked into the provider from an externally supplied `libjitterentropy.a`.
 It is represented by the `seed.jitter` source configuration and has one instance
-per machine. KPEP does not compile or bundle the Jitterentropy implementation;
+per machine. ARDent does not compile or bundle the Jitterentropy implementation;
 its archive and headers are build dependencies.
 
 Configure the dependency using exactly one of these forms:
@@ -120,7 +118,7 @@ Configure the dependency using exactly one of these forms:
 
 The two modes are mutually exclusive, and `jitter-lib` and `jitter-include`
 must be supplied together. CMake does not build Jitterentropy. The supplied
-archive must be suitable for static linking into the KPEP provider shared
+archive must be suitable for static linking into the ARDent provider shared
 object; compiler and linker diagnostics report archive compatibility issues.
 
 For example, using a checkout:
@@ -161,22 +159,22 @@ configured, using numbered options such as `1.filepath` through `4.filepath`.
 
 #### External
 
-The external source loads a shared object that implements the KPEP seed-source
+The external source loads a shared object that implements the ARDent seed-source
 stub interface. This allows a vendor or integrator to provide a custom source
 without changing the provider. Up to four external instances can be configured
 through `seed.extseed`.
 
 The required integration points are the shared-object path and the exported
-`STUB_FUNCTIONS` symbol. See `include/kpep/kpep_seed_stub.h` for the interface
+`STUB_FUNCTIONS` symbol. See `include/ardent/ardent_seed_stub.h` for the interface
 and `example/external_entropy` for an example implementation. The example wraps
-the jitterentropy static library in a lightweight KPEP seed-source
+the jitterentropy static library in a lightweight ARDent seed-source
 implementation.
 
 ## Configurations and Runtime Options
 
 Configuration is supplied through the `seed` section of the OpenSSL provider
-configuration. The reference configuration is `resources/kpepmodule.cnf`.
-Source parameters use the names defined in `include/kpep/kpep_names.h`.
+configuration. The reference configuration is `resources/ardentmodule.cnf`.
+Source parameters use the names defined in `include/ardent/ardent_names.h`.
 
 ### Seed source categories
 

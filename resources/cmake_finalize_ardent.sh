@@ -16,32 +16,19 @@
 ##########################################################################################
 # 05/01/2025: Initial Release
 ##########################################################################################
-# Check whether we are sourced
-# https://stackoverflow.com/questions/2683279/how-to-detect-if-a-script-is-being-sourced
-sourced=0
-if [ -n "$ZSH_VERSION" ]; then 
-  case $ZSH_EVAL_CONTEXT in *:file) sourced=1;; esac
-elif [ -n "$KSH_VERSION" ]; then
-  [ "$(cd -- "$(dirname -- "$0")" && pwd -P)/$(basename -- "$0")" != "$(cd -- "$(dirname -- "${.sh.file}")" && pwd -P)/$(basename -- "${.sh.file}")" ] && sourced=1
-elif [ -n "$BASH_VERSION" ]; then
-  (return 0 2>/dev/null) && sourced=1 
-else # All other shells: examine $0 for known shell binary filenames.
-  # Detects `sh` and `dash`; add additional shell filenames as needed.
-  case ${0##*/} in sh|-sh|dash|-dash) sourced=1;; esac
-fi
-if [ $sourced -eq 1 ]; then
-    echo "This script must be executed without using 'source'"
-	exit 1
-fi
+
+##########################################################################################
+# When run from CMake, we must back up one directory
+cd ..
 
 ##########################################################################################
 ##########################################################################################
 
 print_usage()
 {
-   echo "Install the KeyPair Management Provider () and complete installation for KeyPair FIPS Provider (KPFP)"
+   echo "Install ARDent files and complete the installation process"
    echo
-   echo "Syntax:  kpep_install.sh [--root </path/to/dir>] [--modules </path/to/dir>]"
+   echo "Syntax:  ardent_install.sh [--root </path/to/dir>] [--modules </path/to/dir>]"
    echo "                         [--libdir </path/to/dir>] [--ssldir </path/to/dir>]"
    echo "                         [--verbose | -v] [--quiet | -q] [--info] [--cast] [--help]" 
    echo
@@ -153,87 +140,39 @@ if [ $VERBOSE -eq 1 ]; then
     echo "LIBDIR  = $OSSL_LIBDIR"
     echo "SSLDIR  = $OSSL_SSLDIR"
     echo "MODULES = $OSSL_MODULES"
+    echo "PWD = $PWD"
 fi
 
 ##########################################################################################
 
-# Check for non-conforming OpenSSL installation
-if [ -f $OSSL_SSLDIR/fipsmodule.cnf ]; then
-    # If "module-mac" is found, it indicates 'fipsinstall' was run
-    # If ".include" is not found, it indicates the file has been altered in some way
-    if grep -q "module-mac" $OSSL_SSLDIR/fipsmodule.cnf || ! grep -q ".include" $OSSL_SSLDIR/fipsmodule.cnf; then
-        echo "The OpenSSL FIPS module installed in the specified location does not pass a validity check. This"
-        echo "is usually caused by an installation that does not conform to the requirements specified in the"
-        echo "module Security Policy.  Please contact KeyPair for assistance."
-        exit 1
-    fi
-fi 
-
-### Copy  artifacts
-cp bin/kpep.so $OSSL_MODULES/
-cp resources/kpepmodule.cnf $OSSL_SSLDIR/
-
-### Copy  utilities
-cp bin/kpep_utility $OSSL_ROOT/bin/
-cp bin/kpep_filecheck $OSSL_ROOT/bin/
-cp bin/kpep_rand $OSSL_ROOT/bin/
-
-### Rename FIPS provider
-if [[ -f $OSSL_MODULES/fips.so ]]; then
-    mv $OSSL_MODULES/fips.so $OSSL_MODULES/kpfp.so
-fi
-if [[ -f $OSSL_SSLDIR/fipsmodule.cnf ]]; then
-    mv $OSSL_SSLDIR/fipsmodule.cnf $OSSL_SSLDIR/kpfpmodule.cnf
-fi
-
-### Set permissions on FIPS configuration
-chmod 644 $OSSL_SSLDIR/kpfpmodule.cnf
-
-### Generate HMAC for 
+### Generate HMAC for ARDENT
 (LD_LIBRARY_PATH=$OSSL_LIBDIR:$OSSL_MODULES \
-    $OSSL_ROOT/bin/kpep_utility --module --out $OSSL_MODULES/kpep.so.mac --hmac $OSSL_MODULES/kpep.so)
+    $OSSL_ROOT/bin/ardent_utility --hmac $OSSL_MODULES/ardent.so)
 # Fix the .include for the MAC
-sed -i 's@.*include.*kpep.so.mac@.include '$OSSL_MODULES'/kpep.so.mac@g' $OSSL_SSLDIR/kpepmodule.cnf
+sed -i 's@.*include.*ardent.so.mac@.include '$OSSL_MODULES'/ardent.so.mac@g' $OSSL_SSLDIR/ardentmodule.cnf
 # Fix the .include for the personalization file
-sed -i 's@.*include.*personalization.cnf@.include '$OSSL_SSLDIR'/personalization.cnf@g' $OSSL_SSLDIR/kpepmodule.cnf
-
-### Generate HMAC for KPFP
-(LD_LIBRARY_PATH=$OSSL_LIBDIR:$OSSL_MODULES \
-    $OSSL_ROOT/bin/kpep_utility --module --out $OSSL_MODULES/kpfp.so.mac --hmac $OSSL_MODULES/kpfp.so)
-# Fix the .include for the MAC
-sed -i 's@.*include.*@.include '$OSSL_MODULES'/kpfp.so.mac@g' $OSSL_SSLDIR/kpfpmodule.cnf
-# Activate the FIPS provider
-sed -i 's@activate = 0@activate = 1@g' $OSSL_SSLDIR/kpfpmodule.cnf
-# Change the section name
-sed -i 's@fips_sect@kpfp_sect@g' $OSSL_SSLDIR/kpfpmodule.cnf
+sed -i 's@.*include.*personalization.cnf@.include '$OSSL_SSLDIR'/personalization.cnf@g' $OSSL_SSLDIR/ardentmodule.cnf
 
 ### Update paths in the main openssl.cnf file
-sed -i 's@.*include.*kpepmodule.cnf@.include '$OSSL_SSLDIR'/kpepmodule.cnf@g' $OSSL_SSLDIR/openssl.cnf
-sed -i 's@.*include.*kpfpmodule.cnf@.include '$OSSL_SSLDIR'/kpfpmodule.cnf@g' $OSSL_SSLDIR/openssl.cnf
+#sed -i 's@.*include.*ardentmodule.cnf@.include '$OSSL_SSLDIR'/ardentmodule.cnf@g' $OSSL_SSLDIR/openssl.cnf
 
 # All required steps complete
 if [ $QUIET == 0 ]; then
-    echo "Installation complete!"
+    echo "-- ARDENT custom installation complete!"
 fi
 
 # Run the self-tests
 if [ $RUN_CAST == 1 ]; then
     echo
-    echo "KPFP Self-Tests:"
-    (LD_LIBRARY_PATH=$OSSL_LIBDIR:$OSSL_MODULES $OSSL_ROOT/bin/kpep_utility --cast kpfp)
-    echo
     echo " Self-Tests:"
-    (LD_LIBRARY_PATH=$OSSL_LIBDIR:$OSSL_MODULES $OSSL_ROOT/bin/kpep_utility --cast kpep)
+    (LD_LIBRARY_PATH=$OSSL_LIBDIR:$OSSL_MODULES $OSSL_ROOT/bin/ardent_utility --cast ardent)
 fi
 
 # Show module info
 if [ $SHOW_INFO == 1 ]; then
     echo
-    echo "KPFP Provider Info:"
-    (LD_LIBRARY_PATH=$OSSL_LIBDIR:$OSSL_MODULES $OSSL_ROOT/bin/kpep_utility --info kpfp)
-    echo
     echo " Provider Info:"
-    (LD_LIBRARY_PATH=$OSSL_LIBDIR:$OSSL_MODULES $OSSL_ROOT/bin/kpep_utility --info kpep)
+    (LD_LIBRARY_PATH=$OSSL_LIBDIR:$OSSL_MODULES $OSSL_ROOT/bin/ardent_utility --info ardent)
 fi
 
 

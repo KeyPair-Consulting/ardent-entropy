@@ -19,8 +19,8 @@
 #include <string.h>
 #include <errno.h>
 
-#include "kpep/kpep.h"
-#include "kpep_internal.h"
+#include "ardent/ardent.h"
+#include "ardent_internal.h"
 
 /* ************************************************************************************************
  * ************************************************************************************************
@@ -29,7 +29,7 @@
  * ***********************************************************************************************/
 
 EXPORT_VISIBILITY_DEFAULT
-void  kpep_free(void* ptr)
+void  ardent_free(void* ptr)
 {
 	if (!ptr)
 		return;
@@ -37,7 +37,7 @@ void  kpep_free(void* ptr)
 }
 
 EXPORT_VISIBILITY_DEFAULT
-void  kpep_zeroize(void* ptr, size_t size)
+void  ardent_zeroize(void* ptr, size_t size)
 {
 	if (!ptr)
 		return;
@@ -45,14 +45,14 @@ void  kpep_zeroize(void* ptr, size_t size)
 }
 
 EXPORT_VISIBILITY_DEFAULT
-void  kpep_cleanse(void* ptr, size_t size)
+void  ardent_cleanse(void* ptr, size_t size)
 {
-    kpep_zeroize(ptr, size);
-    kpep_free(ptr);
+    ardent_zeroize(ptr, size);
+    ardent_free(ptr);
 }
 
 EXPORT_VISIBILITY_DEFAULT
-void* kpep_zalloc(size_t size)
+void* ardent_zalloc(size_t size)
 {
     uint8_t *buffer = NULL;
     if ((size > 0) && (buffer = malloc(size)) != NULL) {
@@ -65,7 +65,7 @@ void* kpep_zalloc(size_t size)
 // large enough to store the result.  If it is too small, the output is truncated.
 // https://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
 EXPORT_VISIBILITY_DEFAULT
-size_t kpep_trimwhitespace(char *out, size_t len, const char *str)
+size_t ardent_trimwhitespace(char *out, size_t len, const char *str)
 {
 	const char *end;
 	size_t out_size;

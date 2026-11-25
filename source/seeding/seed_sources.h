@@ -14,8 +14,8 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPEP_SEED_SOURCE_H
-#define KPEP_SEED_SOURCE_H
+#ifndef ARDENT_SEED_SOURCE_H
+#define ARDENT_SEED_SOURCE_H
 #pragma once
 
 #include <stdint.h>
@@ -27,8 +27,8 @@
 #include <time.h>
 #endif
 
-#include "kpep/kpep_names.h"
-#include "kpep/kpep_seed_stub.h"
+#include "ardent/ardent_names.h"
+#include "ardent/ardent_seed_stub.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,17 +52,17 @@ typedef struct seed_source_def_st {
 
 // All seed sources are defined here, with their associated stub function collections and parameters
 static SEED_SOURCE_DEF seed_source_defs[] = {
-    { "jitter",  KPEP_PROV_PARAM_SEED_JITTER, 0, 0, &stub_jitter },
-    { "rdseed",  KPEP_PROV_PARAM_SEED_RDSEED, 1, 0, &stub_rdseed },
-    { "rdrand",  KPEP_PROV_PARAM_SEED_RDRAND, 1, 0, &stub_rdrand },
-    { "osrand1", KPEP_PROV_PARAM_SEED_OSRAND, 0, 1, &stub_osrand },
-    { "osrand2", KPEP_PROV_PARAM_SEED_OSRAND, 0, 2, &stub_osrand },
-    { "osrand3", KPEP_PROV_PARAM_SEED_OSRAND, 0, 3, &stub_osrand },
-    { "osrand4", KPEP_PROV_PARAM_SEED_OSRAND, 0, 4, &stub_osrand },
-    { "extern1", KPEP_PROV_PARAM_SEED_EXTERN, 0, 1, &stub_extern },
-    { "extern2", KPEP_PROV_PARAM_SEED_EXTERN, 0, 2, &stub_extern },
-    { "extern3", KPEP_PROV_PARAM_SEED_EXTERN, 0, 3, &stub_extern },
-    { "extern4", KPEP_PROV_PARAM_SEED_EXTERN, 0, 4, &stub_extern },
+    { "jitter",  ARDENT_PROV_PARAM_SEED_JITTER, 0, 0, &stub_jitter },
+    { "rdseed",  ARDENT_PROV_PARAM_SEED_RDSEED, 1, 0, &stub_rdseed },
+    { "rdrand",  ARDENT_PROV_PARAM_SEED_RDRAND, 1, 0, &stub_rdrand },
+    { "osrand1", ARDENT_PROV_PARAM_SEED_OSRAND, 0, 1, &stub_osrand },
+    { "osrand2", ARDENT_PROV_PARAM_SEED_OSRAND, 0, 2, &stub_osrand },
+    { "osrand3", ARDENT_PROV_PARAM_SEED_OSRAND, 0, 3, &stub_osrand },
+    { "osrand4", ARDENT_PROV_PARAM_SEED_OSRAND, 0, 4, &stub_osrand },
+    { "extern1", ARDENT_PROV_PARAM_SEED_EXTERN, 0, 1, &stub_extern },
+    { "extern2", ARDENT_PROV_PARAM_SEED_EXTERN, 0, 2, &stub_extern },
+    { "extern3", ARDENT_PROV_PARAM_SEED_EXTERN, 0, 3, &stub_extern },
+    { "extern4", ARDENT_PROV_PARAM_SEED_EXTERN, 0, 4, &stub_extern },
     { NULL, NULL, 0, 0, NULL }
 };
 
@@ -124,4 +124,4 @@ void seed_stub_profile_update(SEED_STUB_INFO *info, uint32_t last_us, uint32_t l
 #ifdef __cplusplus
 }
 #endif
-#endif /* KPEP_SEED_SOURCE_H */
+#endif /* ARDENT_SEED_SOURCE_H */

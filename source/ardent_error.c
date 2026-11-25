@@ -23,7 +23,7 @@
 
 #include <openssl/err.h>
 
-#include "kpep/kpep.h"
+#include "ardent/ardent.h"
 
 /* ************************************************************************************************
  * ************************************************************************************************
@@ -103,27 +103,27 @@ static ERR_STRING_DATA reasons[] = {
 
 /* Library ID assigned by OpenSSL at runtime for error handling/lookup */
 EXPORT_VISIBILITY_HIDDEN
-int ERR_LIB_KPEP = 0;
+int ERR_LIB_ARDENT = 0;
 
 EXPORT_VISIBILITY_HIDDEN
-int kpep_set_openssl_reason_strings(void)
+int ardent_set_openssl_reason_strings(void)
 {
 	int idx;
 
 	// Get our library ID
-	ERR_LIB_KPEP = ERR_get_next_error_library();
-	if (!ERR_LIB_KPEP) {
+	ERR_LIB_ARDENT = ERR_get_next_error_library();
+	if (!ERR_LIB_ARDENT) {
 		printf("Failed to secure a library ID for error handling\n");
 		return 0;
 	}
 
 	// Fill in our packed identifier based on the assigned Library ID
-	for (idx=0; idx<KPEP_R_COUNT; ++idx) {
-		reasons[idx].error = ERR_PACK(ERR_LIB_KPEP, 0, KPEP_R_START+idx);
+	for (idx=0; idx<ARDENT_R_COUNT; ++idx) {
+		reasons[idx].error = ERR_PACK(ERR_LIB_ARDENT, 0, ARDENT_R_START+idx);
 	}
 
 	// Load the reasopn strings into libcrypto
-	if (!ERR_load_strings(ERR_LIB_KPEP, reasons)) {
+	if (!ERR_load_strings(ERR_LIB_ARDENT, reasons)) {
 		printf("Failed to load the error reason strings into OpenSSL\n");
 		return 0;
 	}
@@ -132,12 +132,12 @@ int kpep_set_openssl_reason_strings(void)
 }
 
 EXPORT_VISIBILITY_DEFAULT
-const char* kpep_get_reason_string(KPEP_RESULT result, const char *module)
+const char* ardent_get_reason_string(ARDENT_RESULT result)
 {
-	if ((result < KPEP_R_START) || (result > KPEP_R_END))  {
-		LOG_FORMATTED_ERROR(module, "Error number out of range (got %3d, expected %3d..%3d).", result, KPEP_R_START, KPEP_R_END);
+	if ((result < ARDENT_R_START) || (result > ARDENT_R_END))  {
+		LOG_FORMATTED_ERROR("ARDENT", "Error number out of range (got %3d, expected %3d..%3d).", result, ARDENT_R_START, ARDENT_R_END);
 		return "Error number out of range";
 	}
-	return reasons[result-KPEP_R_START].string;
+	return reasons[result-ARDENT_R_START].string;
 }
 

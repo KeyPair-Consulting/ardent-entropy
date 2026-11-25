@@ -18,7 +18,7 @@
 # define _GNU_SOURCE
 #endif
 
-#include "kpep/kpep.h"
+#include "ardent/ardent.h"
 
 #include <limits.h>
 #include <stdio.h>
@@ -44,11 +44,11 @@
 
 #include "internal/thread_arch.h"
 
-#include "../kpep_internal.h"
-#include "kpep/kpep_debug.h"
+#include "../ardent_internal.h"
+#include "ardent/ardent_debug.h"
 #include "debug_utility.h"
 #include "debug_core.h"
-#include "kpep/kpep_names.h"
+#include "ardent/ardent_names.h"
 
 #include "openssl/bio.h"
 #include "openssl/conf.h"
@@ -61,16 +61,16 @@
  * ************************************************************************************************
  * ***********************************************************************************************/
 
-struct kpep_debug_sink_st {
+struct ardent_debug_sink_st {
 	char *name;
 	FILE *stream;
 	int owned_stream;
 	unsigned int refcount;
 	CRYPTO_MUTEX *lock;
-	struct kpep_debug_sink_st *next;
+	struct ardent_debug_sink_st *next;
 };
 
-static int kpep_debug_apply_config(const char *buffer, size_t buffer_len);
+static int ardent_debug_apply_config(const char *buffer, size_t buffer_len);
 
 /* ************************************************************************************************
  * ************************************************************************************************
@@ -80,7 +80,7 @@ static int kpep_debug_apply_config(const char *buffer, size_t buffer_len);
 
 static CRYPTO_MUTEX *debug_core_mutex = NULL;
 static CRYPTO_MUTEX *debug_reload_mutex = NULL;
-static KPEP_DEBUG_SINK *debug_sinks = NULL;
+static ARDENT_DEBUG_SINK *debug_sinks = NULL;
 static char debug_ipc_path[PATH_MAX] = {0};
 static int debug_peer_security = 0;
 
@@ -94,7 +94,7 @@ static CRYPTO_MUTEX *debug_listener_mutex = NULL;
 static int debug_listener_stop = 0;
 #endif
 
-static void kpep_debug_core_lock(void)
+static void ardent_debug_core_lock(void)
 {
 	if (!debug_core_mutex)
 		debug_core_mutex = ossl_crypto_mutex_new();
@@ -102,13 +102,13 @@ static void kpep_debug_core_lock(void)
 		ossl_crypto_mutex_lock(debug_core_mutex);
 }
 
-static void kpep_debug_core_unlock(void)
+static void ardent_debug_core_unlock(void)
 {
 	if (debug_core_mutex)
 		ossl_crypto_mutex_unlock(debug_core_mutex);
 }
 
-static void kpep_debug_reload_lock(void)
+static void ardent_debug_reload_lock(void)
 {
 	if (!debug_reload_mutex)
 		debug_reload_mutex = ossl_crypto_mutex_new();
@@ -116,7 +116,7 @@ static void kpep_debug_reload_lock(void)
 		ossl_crypto_mutex_lock(debug_reload_mutex);
 }
 
-static void kpep_debug_reload_unlock(void)
+static void ardent_debug_reload_unlock(void)
 {
 	if (debug_reload_mutex)
 		ossl_crypto_mutex_unlock(debug_reload_mutex);
@@ -129,9 +129,9 @@ static void kpep_debug_reload_unlock(void)
  * ***********************************************************************************************/
 
 static 
-KPEP_DEBUG_SINK *kpep_debug_find_sink(const char *name)
+ARDENT_DEBUG_SINK *ardent_debug_find_sink(const char *name)
 {
-	KPEP_DEBUG_SINK *sink;
+	ARDENT_DEBUG_SINK *sink;
 
 	for (sink = debug_sinks; sink; sink = sink->next) {
 		if (strcmp(sink->name, name) == 0)
@@ -142,7 +142,7 @@ KPEP_DEBUG_SINK *kpep_debug_find_sink(const char *name)
 }
 
 static 
-void kpep_debug_destroy_sink(KPEP_DEBUG_SINK *sink)
+void ardent_debug_destroy_sink(ARDENT_DEBUG_SINK *sink)
 {
 	if (!sink)
 		return;
@@ -162,11 +162,11 @@ void kpep_debug_destroy_sink(KPEP_DEBUG_SINK *sink)
 	OPENSSL_free(sink);
 }
 
-KPEP_DEBUG_SINK *kpep_debug_sink_acquire(const char *name,
+ARDENT_DEBUG_SINK *ardent_debug_sink_acquire(const char *name,
 										 const char *error_tag,
 										 const char *env_name)
 {
-	KPEP_DEBUG_SINK *sink;
+	ARDENT_DEBUG_SINK *sink;
 	FILE *stream = NULL;
 	int owned_stream = 0;
 	char errbuf[256] = {0};
@@ -174,22 +174,22 @@ KPEP_DEBUG_SINK *kpep_debug_sink_acquire(const char *name,
 	if (!name || name[0] == '\0')
 		return NULL;
 
-	kpep_debug_core_lock();
-	sink = kpep_debug_find_sink(name);
+	ardent_debug_core_lock();
+	sink = ardent_debug_find_sink(name);
 	if (sink) {
 		sink->refcount += 1;
-		kpep_debug_core_unlock();
+		ardent_debug_core_unlock();
 		return sink;
 	}
 
-	if (!kpep_debug_open_output(name,
-								"KPEP Debug Output",
+	if (!ardent_debug_open_output(name,
+								"ARDENT Debug Output",
 								&stream,
 								&owned_stream,
 								errbuf,
 								sizeof(errbuf))) {
-		kpep_debug_core_unlock();
-		kpep_debug_report_error_once(error_tag,
+		ardent_debug_core_unlock();
+		ardent_debug_report_error_once(error_tag,
 									 "%s '%s' failed: %s",
 									 env_name ? env_name : "debug output",
 									 name,
@@ -203,8 +203,8 @@ KPEP_DEBUG_SINK *kpep_debug_sink_acquire(const char *name,
 			fclose(stream);
 		else
 			fflush(stream);
-		kpep_debug_core_unlock();
-		kpep_debug_report_error_once(error_tag, "failed to allocate debug sink for %s", name);
+		ardent_debug_core_unlock();
+		ardent_debug_report_error_once(error_tag, "failed to allocate debug sink for %s", name);
 		return NULL;
 	}
 
@@ -214,23 +214,23 @@ KPEP_DEBUG_SINK *kpep_debug_sink_acquire(const char *name,
 	sink->owned_stream = owned_stream;
 	sink->refcount = 1;
 	if (!sink->name || !sink->lock) {
-		kpep_debug_destroy_sink(sink);
-		kpep_debug_core_unlock();
-		kpep_debug_report_error_once(error_tag, "failed to allocate debug sink for %s", name);
+		ardent_debug_destroy_sink(sink);
+		ardent_debug_core_unlock();
+		ardent_debug_report_error_once(error_tag, "failed to allocate debug sink for %s", name);
 		return NULL;
 	}
 
 	sink->next = debug_sinks;
 	debug_sinks = sink;
-	kpep_debug_core_unlock();
+	ardent_debug_core_unlock();
 	return sink;
 }
 
-void kpep_debug_sink_release(KPEP_DEBUG_SINK **sink_ptr)
+void ardent_debug_sink_release(ARDENT_DEBUG_SINK **sink_ptr)
 {
-	KPEP_DEBUG_SINK *sink;
-	KPEP_DEBUG_SINK *iter;
-	KPEP_DEBUG_SINK *prev = NULL;
+	ARDENT_DEBUG_SINK *sink;
+	ARDENT_DEBUG_SINK *iter;
+	ARDENT_DEBUG_SINK *prev = NULL;
 	int free_mutex = 0;
 	CRYPTO_MUTEX *mutex_to_free = NULL;
 
@@ -240,10 +240,10 @@ void kpep_debug_sink_release(KPEP_DEBUG_SINK **sink_ptr)
 	sink = *sink_ptr;
 	*sink_ptr = NULL;
 
-	kpep_debug_core_lock();
+	ardent_debug_core_lock();
 	if (sink->refcount > 1) {
 		sink->refcount -= 1;
-		kpep_debug_core_unlock();
+		ardent_debug_core_unlock();
 		return;
 	}
 
@@ -266,14 +266,14 @@ void kpep_debug_sink_release(KPEP_DEBUG_SINK **sink_ptr)
 	if (mutex_to_free)
 		ossl_crypto_mutex_unlock(mutex_to_free);
 	else
-		kpep_debug_core_unlock();
+		ardent_debug_core_unlock();
 
-	kpep_debug_destroy_sink(sink);
+	ardent_debug_destroy_sink(sink);
 	if (free_mutex)
 		ossl_crypto_mutex_free(&mutex_to_free);
 }
 
-int kpep_debug_sink_write(KPEP_DEBUG_SINK *sink, const char *text, int flush_output)
+int ardent_debug_sink_write(ARDENT_DEBUG_SINK *sink, const char *text, int flush_output)
 {
 	int ok = 1;
 
@@ -300,13 +300,13 @@ int kpep_debug_sink_write(KPEP_DEBUG_SINK *sink, const char *text, int flush_out
 * ***********************************************************************************************/
 
 // Forward declaration for the debug listener stop function
-static void kpep_debug_listener_stop(void);
+static void ardent_debug_listener_stop(void);
 
-static void kpep_debug_cleanup_if_unused(void)
+static void ardent_debug_cleanup_if_unused(void)
 {
 	CRYPTO_MUTEX *mutex_to_free = NULL;
 
-	kpep_debug_core_lock();
+	ardent_debug_core_lock();
 	if (!debug_sinks && debug_core_mutex) {
 		mutex_to_free = debug_core_mutex;
 		debug_core_mutex = NULL;
@@ -314,26 +314,26 @@ static void kpep_debug_cleanup_if_unused(void)
 	if (mutex_to_free)
 		ossl_crypto_mutex_unlock(mutex_to_free);
 	else
-		kpep_debug_core_unlock();
+		ardent_debug_core_unlock();
 
 	if (mutex_to_free)
 		ossl_crypto_mutex_free(&mutex_to_free);
 }
 
-void kpep_debug_fini(void)
+void ardent_debug_fini(void)
 {
-	KPEP_DEBUG_SINK *sink;
-	KPEP_DEBUG_SINK *next;
+	ARDENT_DEBUG_SINK *sink;
+	ARDENT_DEBUG_SINK *next;
 	CRYPTO_MUTEX *mutex_to_free = NULL;
 
 #if defined(OPENSSL_SYS_UNIX) || defined(OPENSSL_SYS_WINDOWS)
-	kpep_debug_listener_stop();
+	ardent_debug_listener_stop();
 #endif
-	kpep_debug_reload_lock();
-	kpep_profile_fini();
-	kpep_trace_fini();
+	ardent_debug_reload_lock();
+	ardent_profile_fini();
+	ardent_trace_fini();
 
-	kpep_debug_core_lock();
+	ardent_debug_core_lock();
 	sink = debug_sinks;
 	debug_sinks = NULL;
 	if (debug_core_mutex) {
@@ -343,57 +343,57 @@ void kpep_debug_fini(void)
 	if (mutex_to_free)
 		ossl_crypto_mutex_unlock(mutex_to_free);
 	else
-		kpep_debug_core_unlock();
+		ardent_debug_core_unlock();
 
 	while (sink) {
 		next = sink->next;
-		kpep_debug_destroy_sink(sink);
+		ardent_debug_destroy_sink(sink);
 		sink = next;
 	}
 
 	if (mutex_to_free)
 		ossl_crypto_mutex_free(&mutex_to_free);
 
-	kpep_debug_reload_unlock();
+	ardent_debug_reload_unlock();
 	if (debug_reload_mutex)
 		ossl_crypto_mutex_free(&debug_reload_mutex);
 	debug_ipc_path[0] = '\0';
 	debug_peer_security = 0;
 }
 
-void kpep_debug_init(void)
+void ardent_debug_init(void)
 {
-	KPEP_DEBUG_TRACE_CONFIG trace_config = {0};
-	KPEP_DEBUG_PROFILE_CONFIG profile_config = {0};
+	ARDENT_DEBUG_TRACE_CONFIG trace_config = {0};
+	ARDENT_DEBUG_PROFILE_CONFIG profile_config = {0};
 	const char *interval;
 
-	trace_config.file = getenv(KPEP_ENV_TRACE_FILE);
-	trace_config.seed = kpep_debug_is_enabled_flag(KPEP_ENV_TRACE_SEED);
-	trace_config.sink = kpep_debug_is_enabled_flag(KPEP_ENV_TRACE_SINK);
-	trace_config.thread = kpep_debug_is_enabled_flag(KPEP_ENV_TRACE_THREAD);
-	trace_config.lazy_write = kpep_debug_is_enabled_flag(KPEP_ENV_TRACE_LAZY_WRITE);
+	trace_config.file = getenv(ARDENT_ENV_TRACE_FILE);
+	trace_config.seed = ardent_debug_is_enabled_flag(ARDENT_ENV_TRACE_SEED);
+	trace_config.sink = ardent_debug_is_enabled_flag(ARDENT_ENV_TRACE_SINK);
+	trace_config.thread = ardent_debug_is_enabled_flag(ARDENT_ENV_TRACE_THREAD);
+	trace_config.lazy_write = ardent_debug_is_enabled_flag(ARDENT_ENV_TRACE_LAZY_WRITE);
 
-	profile_config.file = getenv(KPEP_ENV_PROFILE_FILE);
-	profile_config.each_sample = kpep_debug_is_enabled_flag(KPEP_ENV_PROFILE_EACH_SAMPLE);
-	interval = getenv(KPEP_ENV_PROFILE_INTERVAL);
+	profile_config.file = getenv(ARDENT_ENV_PROFILE_FILE);
+	profile_config.each_sample = ardent_debug_is_enabled_flag(ARDENT_ENV_PROFILE_EACH_SAMPLE);
+	interval = getenv(ARDENT_ENV_PROFILE_INTERVAL);
 	if (interval && interval[0] != '\0' &&
-		!kpep_debug_parse_interval(interval, &profile_config.interval)) {
-		kpep_debug_report_error_once("PROFILE ERROR", "%s '%s' is invalid; profiling disabled",
-			KPEP_ENV_PROFILE_INTERVAL, interval);
+		!ardent_debug_parse_interval(interval, &profile_config.interval)) {
+		ardent_debug_report_error_once("PROFILE ERROR", "%s '%s' is invalid; profiling disabled",
+			ARDENT_ENV_PROFILE_INTERVAL, interval);
 		profile_config.file = NULL;
 		profile_config.each_sample = 0;
 	}
 
-	kpep_debug_reload_lock();
-	kpep_profile_fini();
-	kpep_trace_fini();
-	kpep_trace_init(&trace_config);
-	kpep_profile_init(&profile_config);
-	kpep_debug_cleanup_if_unused();
-	kpep_debug_reload_unlock();
+	ardent_debug_reload_lock();
+	ardent_profile_fini();
+	ardent_trace_fini();
+	ardent_trace_init(&trace_config);
+	ardent_profile_init(&profile_config);
+	ardent_debug_cleanup_if_unused();
+	ardent_debug_reload_unlock();
 }
 
-static int kpep_debug_get_required_string(CONF *config,
+static int ardent_debug_get_required_string(CONF *config,
 		const char *section,
 		const char *name,
 		const char **out)
@@ -409,10 +409,10 @@ static int kpep_debug_get_required_string(CONF *config,
 	return 1;
 }
 
-static int kpep_debug_apply_config(const char *buffer, size_t buffer_len)
+static int ardent_debug_apply_config(const char *buffer, size_t buffer_len)
 {
-	KPEP_DEBUG_TRACE_CONFIG trace_config = {0};
-	KPEP_DEBUG_PROFILE_CONFIG profile_config = {0};
+	ARDENT_DEBUG_TRACE_CONFIG trace_config = {0};
+	ARDENT_DEBUG_PROFILE_CONFIG profile_config = {0};
 	int has_trace = 0;
 	int has_profile = 0;
 	BIO *bio = NULL;
@@ -420,7 +420,7 @@ static int kpep_debug_apply_config(const char *buffer, size_t buffer_len)
 	long error_line = 0;
 	int result = 0;
 
-	if (!buffer || buffer_len > KPEP_DEBUG_CONFIG_MAX)
+	if (!buffer || buffer_len > ARDENT_DEBUG_CONFIG_MAX)
 		return 0;
 
 	if (buffer_len > 0) {
@@ -434,35 +434,35 @@ static int kpep_debug_apply_config(const char *buffer, size_t buffer_len)
 
 		if (NCONF_get_section(config, "trace") != NULL) {
 			has_trace = 1;
-			if (!kpep_debug_get_required_string(config, "trace", "file", &trace_config.file) ||
-				!kpep_debug_parse_bool(NCONF_get_string(config, "trace", "seed"), &trace_config.seed) ||
-				!kpep_debug_parse_bool(NCONF_get_string(config, "trace", "sink"), &trace_config.sink) ||
-				!kpep_debug_parse_bool(NCONF_get_string(config, "trace", "thread"), &trace_config.thread) ||
-				!kpep_debug_parse_bool(NCONF_get_string(config, "trace", "lazy-write"), &trace_config.lazy_write)) {
+			if (!ardent_debug_get_required_string(config, "trace", "file", &trace_config.file) ||
+				!ardent_debug_parse_bool(NCONF_get_string(config, "trace", "seed"), &trace_config.seed) ||
+				!ardent_debug_parse_bool(NCONF_get_string(config, "trace", "sink"), &trace_config.sink) ||
+				!ardent_debug_parse_bool(NCONF_get_string(config, "trace", "thread"), &trace_config.thread) ||
+				!ardent_debug_parse_bool(NCONF_get_string(config, "trace", "lazy-write"), &trace_config.lazy_write)) {
 				goto end;
 			}
 		}
 
 		if (NCONF_get_section(config, "profile") != NULL) {
 			has_profile = 1;
-			if (!kpep_debug_get_required_string(config, "profile", "file", &profile_config.file) ||
-				!kpep_debug_parse_interval(NCONF_get_string(config, "profile", "interval"), &profile_config.interval) ||
-				!kpep_debug_parse_bool(NCONF_get_string(config, "profile", "each-sample"), &profile_config.each_sample) ||
-				!kpep_debug_parse_bool(NCONF_get_string(config, "profile", "format-csv"), &profile_config.format_csv)) {
+			if (!ardent_debug_get_required_string(config, "profile", "file", &profile_config.file) ||
+				!ardent_debug_parse_interval(NCONF_get_string(config, "profile", "interval"), &profile_config.interval) ||
+				!ardent_debug_parse_bool(NCONF_get_string(config, "profile", "each-sample"), &profile_config.each_sample) ||
+				!ardent_debug_parse_bool(NCONF_get_string(config, "profile", "format-csv"), &profile_config.format_csv)) {
 				goto end;
 			}
 		}
 	}
 
-	kpep_debug_reload_lock();
-	kpep_profile_fini();
-	kpep_trace_fini();
+	ardent_debug_reload_lock();
+	ardent_profile_fini();
+	ardent_trace_fini();
 	if (has_trace)
-		kpep_trace_init(&trace_config);
+		ardent_trace_init(&trace_config);
 	if (has_profile)
-		kpep_profile_init(&profile_config);
-	kpep_debug_cleanup_if_unused();
-	kpep_debug_reload_unlock();
+		ardent_profile_init(&profile_config);
+	ardent_debug_cleanup_if_unused();
+	ardent_debug_reload_unlock();
 	result = 1;
 
 end:
@@ -484,14 +484,14 @@ static int load_params(void *prov_ctx)
 	if (!prov_ctx)
 		return 0;
 
-	*p++ = OSSL_PARAM_construct_utf8_ptr(KPEP_PROV_PARAM_DEBUG_IPC_PATH,
+	*p++ = OSSL_PARAM_construct_utf8_ptr(ARDENT_PROV_PARAM_DEBUG_IPC_PATH,
 			(char **)&socket_value, sizeof(socket_value));
-	*p++ = OSSL_PARAM_construct_utf8_ptr(KPEP_PROV_PARAM_DEBUG_SECURITY,
+	*p++ = OSSL_PARAM_construct_utf8_ptr(ARDENT_PROV_PARAM_DEBUG_SECURITY,
 			(char **)&security_value, sizeof(security_value));
 	*p = OSSL_PARAM_construct_end();
 
-	if (!kpep_get_core_params(prov_ctx, params)) {
-		kpep_debug_report_error_once("DEBUG ERROR", "failed to load debug control configuration");
+	if (!ardent_get_core_params(prov_ctx, params)) {
+		ardent_debug_report_error_once("DEBUG ERROR", "failed to load debug control configuration");
 		return 0;
 	}
 
@@ -499,7 +499,7 @@ static int load_params(void *prov_ctx)
 		return 1;
 
 	if (strlen(socket_value) >= sizeof(debug_ipc_path)) {
-		kpep_debug_report_error_once("DEBUG ERROR", "%s is too long", KPEP_PROV_PARAM_DEBUG_IPC_PATH);
+		ardent_debug_report_error_once("DEBUG ERROR", "%s is too long", ARDENT_PROV_PARAM_DEBUG_IPC_PATH);
 		return 0;
 	}
 
@@ -507,7 +507,7 @@ static int load_params(void *prov_ctx)
 		if (strcmp(security_value, "peer") == 0)
 			debug_peer_security = 1;
 		else if (strcmp(security_value, "none") != 0) {
-			kpep_debug_report_error_once("DEBUG ERROR", "%s must be 'none' or 'peer'", KPEP_PROV_PARAM_DEBUG_SECURITY);
+			ardent_debug_report_error_once("DEBUG ERROR", "%s must be 'none' or 'peer'", ARDENT_PROV_PARAM_DEBUG_SECURITY);
 			return 0;
 		}
 	}
@@ -523,7 +523,7 @@ static int load_params(void *prov_ctx)
  * ***********************************************************************************************/
 
 #if defined(OPENSSL_SYS_UNIX)
-static int kpep_debug_peer_allowed(int client_fd)
+static int ardent_debug_peer_allowed(int client_fd)
 {
 # if defined(OPENSSL_SYS_LINUX) && defined(SO_PEERCRED)
 	struct ucred credentials;
@@ -560,9 +560,9 @@ static int kpep_debug_peer_allowed(int client_fd)
 # endif
 }
 
-static int kpep_debug_handle_client(int client_fd)
+static int ardent_debug_handle_client(int client_fd)
 {
-	char config[KPEP_DEBUG_CONFIG_MAX + 1];
+	char config[ARDENT_DEBUG_CONFIG_MAX + 1];
 	size_t config_len = 0;
 	char acknowledge;
 	ssize_t received;
@@ -579,54 +579,54 @@ static int kpep_debug_handle_client(int client_fd)
 			goto end;
 		}
 		config_len += (size_t)received;
-		if (config_len > KPEP_DEBUG_CONFIG_MAX)
+		if (config_len > ARDENT_DEBUG_CONFIG_MAX)
 			goto end;
 	}
 
-	result = kpep_debug_apply_config(config, config_len);
+	result = ardent_debug_apply_config(config, config_len);
 
 end:
-	acknowledge = result ? KPEP_DEBUG_ACK_SUCCESS : KPEP_DEBUG_ACK_FAILURE;
+	acknowledge = result ? ARDENT_DEBUG_ACK_SUCCESS : ARDENT_DEBUG_ACK_FAILURE;
 	(void)send(client_fd, &acknowledge, sizeof(acknowledge), 0);
 	return result;
 }
 
-static void kpep_debug_reject_client(int client_fd)
+static void ardent_debug_reject_client(int client_fd)
 {
-	char acknowledge = KPEP_DEBUG_ACK_FAILURE;
+	char acknowledge = ARDENT_DEBUG_ACK_FAILURE;
 
 	(void)send(client_fd, &acknowledge, sizeof(acknowledge), 0);
 }
 
-static CRYPTO_THREAD_RETVAL kpep_debug_listener_main(void *unused)
+static CRYPTO_THREAD_RETVAL ardent_debug_listener_main(void *unused)
 {
 	int listener_fd;
 
 	(void)unused;
-	kpep_debug_core_lock();
+	ardent_debug_core_lock();
 	listener_fd = debug_listener_fd;
-	kpep_debug_core_unlock();
+	ardent_debug_core_unlock();
 
 	while (listener_fd >= 0) {
 		int client_fd = accept(listener_fd, NULL, NULL);
 
 		if (client_fd < 0) {
-			kpep_debug_core_lock();
+			ardent_debug_core_lock();
 			if (debug_listener_stop) {
-				kpep_debug_core_unlock();
+				ardent_debug_core_unlock();
 				break;
 			}
-			kpep_debug_core_unlock();
+			ardent_debug_core_unlock();
 			if (errno == EINTR)
 				continue;
 			break;
 		}
 
-		if (!debug_peer_security || kpep_debug_peer_allowed(client_fd))
-			kpep_debug_handle_client(client_fd);
+		if (!debug_peer_security || ardent_debug_peer_allowed(client_fd))
+			ardent_debug_handle_client(client_fd);
 		else {
-			kpep_debug_report_error_once("DEBUG ERROR", "debug reload rejected: unauthorized peer");
-			kpep_debug_reject_client(client_fd);
+			ardent_debug_report_error_once("DEBUG ERROR", "debug reload rejected: unauthorized peer");
+			ardent_debug_reject_client(client_fd);
 		}
 		close(client_fd);
 	}
@@ -634,19 +634,19 @@ static CRYPTO_THREAD_RETVAL kpep_debug_listener_main(void *unused)
 	return 0;
 }
 
-static void kpep_debug_listener_stop(void)
+static void ardent_debug_listener_stop(void)
 {
 	CRYPTO_THREAD *thread;
 	CRYPTO_THREAD_RETVAL retval;
 	int listener_fd;
 
-	kpep_debug_core_lock();
+	ardent_debug_core_lock();
 	thread = debug_listener_thread;
 	listener_fd = debug_listener_fd;
 	debug_listener_thread = NULL;
 	debug_listener_fd = -1;
 	debug_listener_stop = 1;
-	kpep_debug_core_unlock();
+	ardent_debug_core_unlock();
 
 	if (listener_fd >= 0) {
 		shutdown(listener_fd, SHUT_RDWR);
@@ -664,13 +664,13 @@ static void kpep_debug_listener_stop(void)
 	}
 }
 
-static void kpep_debug_atexit_cleanup(void)
+static void ardent_debug_atexit_cleanup(void)
 {
 	if (debug_ipc_path[0] != '\0')
 		unlink(debug_ipc_path);
 }
 
-static int kpep_debug_prepare_socket_path(const char *path)
+static int ardent_debug_prepare_socket_path(const char *path)
 {
 	struct sockaddr_un probe_addr;
 	int probe_fd;
@@ -694,7 +694,7 @@ static int kpep_debug_prepare_socket_path(const char *path)
 	if (connect(probe_fd, (struct sockaddr *)&probe_addr, sizeof(probe_addr)) == 0) {
 		/* An active listener is genuinely using this socket */
 		close(probe_fd);
-		kpep_debug_report_error_once("DEBUG ERROR",
+		ardent_debug_report_error_once("DEBUG ERROR",
 			"debug socket '%s' is already in use by an active process", path);
 		return 0;
 	}
@@ -706,7 +706,7 @@ static int kpep_debug_prepare_socket_path(const char *path)
 	return 1;
 }
 
-static int kpep_debug_listener_start(void)
+static int ardent_debug_listener_start(void)
 {
 	static int atexit_registered = 0;
 	struct sockaddr_un address;
@@ -717,21 +717,21 @@ static int kpep_debug_listener_start(void)
 		return 1;
 
 	if (strlen(debug_ipc_path) >= sizeof(address.sun_path)) {
-		kpep_debug_report_error_once("DEBUG ERROR", "%s is too long", KPEP_PROV_PARAM_DEBUG_IPC_PATH);
+		ardent_debug_report_error_once("DEBUG ERROR", "%s is too long", ARDENT_PROV_PARAM_DEBUG_IPC_PATH);
 		return 0;
 	}
 
-	if (!kpep_debug_prepare_socket_path(debug_ipc_path))
+	if (!ardent_debug_prepare_socket_path(debug_ipc_path))
 		return 0;
 
 	if (!atexit_registered) {
-		atexit(kpep_debug_atexit_cleanup);
+		atexit(ardent_debug_atexit_cleanup);
 		atexit_registered = 1;
 	}
 
 	listener_fd = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (listener_fd < 0) {
-		kpep_debug_report_error_once("DEBUG ERROR", "failed to create debug control socket: %s", strerror(errno));
+		ardent_debug_report_error_once("DEBUG ERROR", "failed to create debug control socket: %s", strerror(errno));
 		return 0;
 	}
 
@@ -741,7 +741,7 @@ static int kpep_debug_listener_start(void)
 	old_umask = umask(debug_peer_security ? 0077 : 0000);
 	if (bind(listener_fd, (struct sockaddr *)&address, sizeof(address)) != 0) {
 		umask(old_umask);
-		kpep_debug_report_error_once("DEBUG ERROR", "failed to bind debug socket '%s': %s",
+		ardent_debug_report_error_once("DEBUG ERROR", "failed to bind debug socket '%s': %s",
 			debug_ipc_path, strerror(errno));
 		close(listener_fd);
 		return 0;
@@ -749,32 +749,32 @@ static int kpep_debug_listener_start(void)
 	umask(old_umask);
 
 	if (listen(listener_fd, 4) != 0) {
-		kpep_debug_report_error_once("DEBUG ERROR", "failed to listen on debug socket '%s': %s",
+		ardent_debug_report_error_once("DEBUG ERROR", "failed to listen on debug socket '%s': %s",
 			debug_ipc_path, strerror(errno));
 		close(listener_fd);
 		unlink(debug_ipc_path);
 		return 0;
 	}
 
-	kpep_debug_core_lock();
+	ardent_debug_core_lock();
 	debug_listener_stop = 0;
 	debug_listener_fd = listener_fd;
-	debug_listener_thread = ossl_crypto_thread_native_start(kpep_debug_listener_main, NULL, 1);
+	debug_listener_thread = ossl_crypto_thread_native_start(ardent_debug_listener_main, NULL, 1);
 	if (!debug_listener_thread) {
 		debug_listener_fd = -1;
-		kpep_debug_core_unlock();
-		kpep_debug_report_error_once("DEBUG ERROR", "failed to start debug control listener");
+		ardent_debug_core_unlock();
+		ardent_debug_report_error_once("DEBUG ERROR", "failed to start debug control listener");
 		close(listener_fd);
 		unlink(debug_ipc_path);
 		return 0;
 	}
-	kpep_debug_core_unlock();
+	ardent_debug_core_unlock();
 	return 1;
 }
 #endif
 
 #if defined(OPENSSL_SYS_WINDOWS)
-static void kpep_debug_listener_lock(void)
+static void ardent_debug_listener_lock(void)
 {
 	if (!debug_listener_mutex)
 		debug_listener_mutex = ossl_crypto_mutex_new();
@@ -782,13 +782,13 @@ static void kpep_debug_listener_lock(void)
 		ossl_crypto_mutex_lock(debug_listener_mutex);
 }
 
-static void kpep_debug_listener_unlock(void)
+static void ardent_debug_listener_unlock(void)
 {
 	if (debug_listener_mutex)
 		ossl_crypto_mutex_unlock(debug_listener_mutex);
 }
 
-static int kpep_debug_peer_allowed(HANDLE pipe)
+static int ardent_debug_peer_allowed(HANDLE pipe)
 {
 	HANDLE token = NULL;
 	PSID administrators_sid = NULL;
@@ -822,24 +822,24 @@ end:
 	return allowed;
 }
 
-static int kpep_debug_handle_client(HANDLE pipe)
+static int ardent_debug_handle_client(HANDLE pipe)
 {
-	char config[KPEP_DEBUG_CONFIG_MAX + 1];
+	char config[ARDENT_DEBUG_CONFIG_MAX + 1];
 	DWORD received = 0;
 	DWORD written = 0;
 	char acknowledge;
 	int result = 0;
 
 	if (ReadFile(pipe, config, sizeof(config), &received, NULL) &&
-		received <= KPEP_DEBUG_CONFIG_MAX)
-		result = kpep_debug_apply_config(config, (size_t)received);
+		received <= ARDENT_DEBUG_CONFIG_MAX)
+		result = ardent_debug_apply_config(config, (size_t)received);
 
-	acknowledge = result ? KPEP_DEBUG_ACK_SUCCESS : KPEP_DEBUG_ACK_FAILURE;
+	acknowledge = result ? ARDENT_DEBUG_ACK_SUCCESS : ARDENT_DEBUG_ACK_FAILURE;
 	(void)WriteFile(pipe, &acknowledge, sizeof(acknowledge), &written, NULL);
 	return result;
 }
 
-static CRYPTO_THREAD_RETVAL kpep_debug_listener_main(void *unused)
+static CRYPTO_THREAD_RETVAL ardent_debug_listener_main(void *unused)
 {
 	(void)unused;
 
@@ -867,14 +867,14 @@ static CRYPTO_THREAD_RETVAL kpep_debug_listener_main(void *unused)
 			break;
 		}
 
-		kpep_debug_listener_lock();
+		ardent_debug_listener_lock();
 		stop_requested = debug_listener_stop;
-		kpep_debug_listener_unlock();
+		ardent_debug_listener_unlock();
 		if (!stop_requested) {
-			if (!debug_peer_security || kpep_debug_peer_allowed(pipe))
-				kpep_debug_handle_client(pipe);
+			if (!debug_peer_security || ardent_debug_peer_allowed(pipe))
+				ardent_debug_handle_client(pipe);
 			else
-				kpep_debug_report_error_once("DEBUG ERROR", "debug reload rejected: unauthorized peer");
+				ardent_debug_report_error_once("DEBUG ERROR", "debug reload rejected: unauthorized peer");
 		}
 
 		DisconnectNamedPipe(pipe);
@@ -886,17 +886,17 @@ static CRYPTO_THREAD_RETVAL kpep_debug_listener_main(void *unused)
 	return 0;
 }
 
-static void kpep_debug_listener_stop(void)
+static void ardent_debug_listener_stop(void)
 {
 	CRYPTO_THREAD *thread;
 	CRYPTO_THREAD_RETVAL retval;
 	HANDLE pipe;
 
-	kpep_debug_listener_lock();
+	ardent_debug_listener_lock();
 	thread = debug_listener_thread;
 	debug_listener_thread = NULL;
 	debug_listener_stop = 1;
-	kpep_debug_listener_unlock();
+	ardent_debug_listener_unlock();
 
 	if (thread) {
 		pipe = CreateFileA(debug_ipc_path, GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
@@ -910,33 +910,33 @@ static void kpep_debug_listener_stop(void)
 		ossl_crypto_mutex_free(&debug_listener_mutex);
 }
 
-static int kpep_debug_listener_start(void)
+static int ardent_debug_listener_start(void)
 {
 	if (debug_ipc_path[0] == '\0')
 		return 1;
 
-	kpep_debug_listener_lock();
+	ardent_debug_listener_lock();
 	debug_listener_stop = 0;
-	debug_listener_thread = ossl_crypto_thread_native_start(kpep_debug_listener_main, NULL, 1);
+	debug_listener_thread = ossl_crypto_thread_native_start(ardent_debug_listener_main, NULL, 1);
 	if (!debug_listener_thread) {
-		kpep_debug_listener_unlock();
-		kpep_debug_report_error_once("DEBUG ERROR", "failed to start debug control listener");
+		ardent_debug_listener_unlock();
+		ardent_debug_report_error_once("DEBUG ERROR", "failed to start debug control listener");
 		return 0;
 	}
-	kpep_debug_listener_unlock();
+	ardent_debug_listener_unlock();
 	return 1;
 }
 #endif
 
-void kpep_debug_control_init(void *prov_ctx)
+void ardent_debug_control_init(void *prov_ctx)
 {
 	if (!load_params(prov_ctx))
 		return;
 
 #if defined(OPENSSL_SYS_UNIX) || defined(OPENSSL_SYS_WINDOWS)
-	kpep_debug_listener_start();
+	ardent_debug_listener_start();
 #else
 	if (debug_ipc_path[0] != '\0')
-		kpep_debug_report_error_once("DEBUG ERROR", "debug control listener is unsupported on this platform");
+		ardent_debug_report_error_once("DEBUG ERROR", "debug control listener is unsupported on this platform");
 #endif
 }

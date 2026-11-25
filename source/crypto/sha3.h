@@ -14,10 +14,10 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPEP_SHA3_H
-#define KPEP_SHA3_H
+#ifndef ARDENT_SHA3_H
+#define ARDENT_SHA3_H
 
-#include "kpep/kpep.h"
+#include "ardent/ardent.h"
 #include "openssl/params.h"
 
 # ifdef __cplusplus
@@ -39,5 +39,5 @@ int sha3_get_params(OSSL_PARAM params[]);
 # ifdef __cplusplus
 }
 # endif
-#endif /* KPEP_SHA3_H */
+#endif /* ARDENT_SHA3_H */
 

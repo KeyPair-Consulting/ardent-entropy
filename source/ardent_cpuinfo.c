@@ -26,7 +26,7 @@
  * 3) Functions have been renamed
  * ***********************************************************************************************/
 
-#include "kpep/kpep_cpuinfo.h"
+#include "ardent/ardent_cpuinfo.h"
 
 #include <string.h>
 

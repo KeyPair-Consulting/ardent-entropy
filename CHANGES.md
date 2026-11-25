@@ -1,4 +1,4 @@
-# KeyPair Entropy Provider (KPEP) Change Log
+# ARDent Entropy Provider Change Log
 
 This file contains an overview of all changes contained in each release version.
 

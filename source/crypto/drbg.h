@@ -14,13 +14,13 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPEP_DRBG_H
-#define KPEP_DRBG_H
+#ifndef ARDENT_DRBG_H
+#define ARDENT_DRBG_H
 # pragma once
 
 #include <stdlib.h>
 #include <stdint.h>
-#include "kpep/kpep_error.h"
+#include "ardent/ardent_error.h"
 
 # ifdef __cplusplus
 extern "C" {
@@ -42,22 +42,22 @@ typedef enum {
 #define MAX_PERS_LEN      1024
 
 // Opaque context structure
-typedef struct kpep_drbg_ctx_st KPEP_DRBG_CTX;
+typedef struct ardent_drbg_ctx_st ARDENT_DRBG_CTX;
 
 // Callable functions for DRBG management
-void* drbg_new (void* seed_ctx, uint32_t entropy_mode, KPEP_RESULT *errnum);
-void  drbg_free(KPEP_DRBG_CTX* ctx);
-int   drbg_verify_zeroization(KPEP_DRBG_CTX* ctx);
+void* drbg_new (void* seed_ctx, uint32_t entropy_mode, ARDENT_RESULT *errnum);
+void  drbg_free(ARDENT_DRBG_CTX* ctx);
+int   drbg_verify_zeroization(ARDENT_DRBG_CTX* ctx);
 
 // Callable functions for DRBG operations
-KPEP_RESULT drbg_instantiate   (KPEP_DRBG_CTX* ctx, int strength,
+ARDENT_RESULT drbg_instantiate   (ARDENT_DRBG_CTX* ctx, int strength,
 								const uint8_t* perso, uint32_t perso_len);
-void        drbg_uninstantiate (KPEP_DRBG_CTX* ctx);
-KPEP_RESULT drbg_generate      (KPEP_DRBG_CTX* ctx, 
+void        drbg_uninstantiate (ARDENT_DRBG_CTX* ctx);
+ARDENT_RESULT drbg_generate      (ARDENT_DRBG_CTX* ctx, 
 								uint8_t *rand, uint32_t rand_len);
 
 #ifdef __cplusplus
 }
 #endif
-#endif /* KPEP_DRBG */
+#endif /* ARDENT_DRBG */
 

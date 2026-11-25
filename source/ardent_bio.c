@@ -41,8 +41,8 @@
 #include "prov/provider_ctx.h"        /* Access inside provider context structure */
 //#include "internal/cryptlib.h"
 
-#include "kpep/kpep.h"                /* Module properties strings for fetch */
-#include "kpep_bio.h"                 /* OpenSSL BIO routines */
+#include "ardent/ardent.h"                /* Module properties strings for fetch */
+#include "ardent_bio.h"                 /* OpenSSL BIO routines */
 
 static OSSL_FUNC_BIO_new_file_fn             *c_bio_new_file = NULL;
 static OSSL_FUNC_BIO_new_membuf_fn           *c_bio_new_membuf = NULL;
@@ -62,7 +62,7 @@ static OSSL_FUNC_BIO_vprintf_fn              *c_bio_vprintf = NULL;
  * ***********************************************************************************************/
 
 EXPORT_VISIBILITY_HIDDEN
-int kpep_bio_from_dispatch(const OSSL_DISPATCH *fns)
+int ardent_bio_from_dispatch(const OSSL_DISPATCH *fns)
 {
     for (; fns->function_id != 0; fns++) {
         switch (fns->function_id) {
@@ -112,7 +112,7 @@ int kpep_bio_from_dispatch(const OSSL_DISPATCH *fns)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-OSSL_CORE_BIO *kpep_bio_new_file(const char *filename, const char *mode)
+OSSL_CORE_BIO *ardent_bio_new_file(const char *filename, const char *mode)
 {
     if (c_bio_new_file == NULL)
         return NULL;
@@ -120,7 +120,7 @@ OSSL_CORE_BIO *kpep_bio_new_file(const char *filename, const char *mode)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-OSSL_CORE_BIO *kpep_bio_new_membuf(const char *filename, int len)
+OSSL_CORE_BIO *ardent_bio_new_membuf(const char *filename, int len)
 {
     if (c_bio_new_membuf == NULL)
         return NULL;
@@ -128,7 +128,7 @@ OSSL_CORE_BIO *kpep_bio_new_membuf(const char *filename, int len)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-int kpep_bio_read_ex(OSSL_CORE_BIO *bio, void *data, size_t data_len,
+int ardent_bio_read_ex(OSSL_CORE_BIO *bio, void *data, size_t data_len,
                           size_t *bytes_read)
 {
     if (c_bio_read_ex == NULL)
@@ -137,7 +137,7 @@ int kpep_bio_read_ex(OSSL_CORE_BIO *bio, void *data, size_t data_len,
 }
 
 EXPORT_VISIBILITY_HIDDEN
-int kpep_bio_write_ex(OSSL_CORE_BIO *bio, const void *data, size_t data_len,
+int ardent_bio_write_ex(OSSL_CORE_BIO *bio, const void *data, size_t data_len,
                            size_t *written)
 {
     if (c_bio_write_ex == NULL)
@@ -146,7 +146,7 @@ int kpep_bio_write_ex(OSSL_CORE_BIO *bio, const void *data, size_t data_len,
 }
 
 EXPORT_VISIBILITY_HIDDEN
-int kpep_bio_gets(OSSL_CORE_BIO *bio, char *buf, int size)
+int ardent_bio_gets(OSSL_CORE_BIO *bio, char *buf, int size)
 {
     if (c_bio_gets == NULL)
         return -1;
@@ -154,7 +154,7 @@ int kpep_bio_gets(OSSL_CORE_BIO *bio, char *buf, int size)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-int kpep_bio_puts(OSSL_CORE_BIO *bio, const char *str)
+int ardent_bio_puts(OSSL_CORE_BIO *bio, const char *str)
 {
     if (c_bio_puts == NULL)
         return -1;
@@ -162,7 +162,7 @@ int kpep_bio_puts(OSSL_CORE_BIO *bio, const char *str)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-int kpep_bio_ctrl(OSSL_CORE_BIO *bio, int cmd, long num, void *ptr)
+int ardent_bio_ctrl(OSSL_CORE_BIO *bio, int cmd, long num, void *ptr)
 {
     if (c_bio_ctrl == NULL)
         return -1;
@@ -170,7 +170,7 @@ int kpep_bio_ctrl(OSSL_CORE_BIO *bio, int cmd, long num, void *ptr)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-int kpep_bio_up_ref(OSSL_CORE_BIO *bio)
+int ardent_bio_up_ref(OSSL_CORE_BIO *bio)
 {
     if (c_bio_up_ref == NULL)
         return 0;
@@ -178,7 +178,7 @@ int kpep_bio_up_ref(OSSL_CORE_BIO *bio)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-int kpep_bio_free(OSSL_CORE_BIO *bio)
+int ardent_bio_free(OSSL_CORE_BIO *bio)
 {
     if (c_bio_free == NULL)
         return 0;
@@ -186,7 +186,7 @@ int kpep_bio_free(OSSL_CORE_BIO *bio)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-int kpep_bio_vprintf(OSSL_CORE_BIO *bio, const char *format, va_list ap)
+int ardent_bio_vprintf(OSSL_CORE_BIO *bio, const char *format, va_list ap)
 {
     if (c_bio_vprintf == NULL)
         return -1;
@@ -194,13 +194,13 @@ int kpep_bio_vprintf(OSSL_CORE_BIO *bio, const char *format, va_list ap)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-int kpep_bio_printf(OSSL_CORE_BIO *bio, const char *format, ...)
+int ardent_bio_printf(OSSL_CORE_BIO *bio, const char *format, ...)
 {
     va_list ap;
     int ret;
 
     va_start(ap, format);
-    ret = kpep_bio_vprintf(bio, format, ap);
+    ret = ardent_bio_vprintf(bio, format, ap);
     va_end(ap);
 
     return ret;
@@ -209,28 +209,28 @@ int kpep_bio_printf(OSSL_CORE_BIO *bio, const char *format, ...)
 static int bio_core_read_ex(BIO *bio, char *data, size_t data_len,
                             size_t *bytes_read)
 {
-    return kpep_bio_read_ex(BIO_get_data(bio), data, data_len, bytes_read);
+    return ardent_bio_read_ex(BIO_get_data(bio), data, data_len, bytes_read);
 }
 
 static int bio_core_write_ex(BIO *bio, const char *data, size_t data_len,
                              size_t *written)
 {
-    return kpep_bio_write_ex(BIO_get_data(bio), data, data_len, written);
+    return ardent_bio_write_ex(BIO_get_data(bio), data, data_len, written);
 }
 
 static long bio_core_ctrl(BIO *bio, int cmd, long num, void *ptr)
 {
-    return kpep_bio_ctrl(BIO_get_data(bio), cmd, num, ptr);
+    return ardent_bio_ctrl(BIO_get_data(bio), cmd, num, ptr);
 }
 
 static int bio_core_gets(BIO *bio, char *buf, int size)
 {
-    return kpep_bio_gets(BIO_get_data(bio), buf, size);
+    return ardent_bio_gets(BIO_get_data(bio), buf, size);
 }
 
 static int bio_core_puts(BIO *bio, const char *str)
 {
-    return kpep_bio_puts(BIO_get_data(bio), str);
+    return ardent_bio_puts(BIO_get_data(bio), str);
 }
 
 static int bio_core_new(BIO *bio)
@@ -243,13 +243,13 @@ static int bio_core_new(BIO *bio)
 static int bio_core_free(BIO *bio)
 {
     BIO_set_init(bio, 0);
-    kpep_bio_free(BIO_get_data(bio));
+    ardent_bio_free(BIO_get_data(bio));
 
     return 1;
 }
 
 EXPORT_VISIBILITY_HIDDEN
-BIO_METHOD *kpep_bio_prov_init_bio_method(void)
+BIO_METHOD *ardent_bio_prov_init_bio_method(void)
 {
     BIO_METHOD *corebiometh = NULL;
 

@@ -14,17 +14,17 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPEP_DEBUG_H
-#define KPEP_DEBUG_H
+#ifndef ARDENT_DEBUG_H
+#define ARDENT_DEBUG_H
 #pragma once
 
 /* ************************************************************************************************
  * IPC limits and configuration
  * ***********************************************************************************************/
 
-#define KPEP_DEBUG_CONFIG_MAX 1024
-#define KPEP_DEBUG_ACK_FAILURE 0
-#define KPEP_DEBUG_ACK_SUCCESS 1
+#define ARDENT_DEBUG_CONFIG_MAX 1024
+#define ARDENT_DEBUG_ACK_FAILURE 0
+#define ARDENT_DEBUG_ACK_SUCCESS 1
 
 /* ************************************************************************************************
  * Centralized environment variable names for the debug subsystem.
@@ -34,7 +34,7 @@
  *   - Profile
  *
  * Naming convention for future extensibility (finite feature set):
- *   KPEP_<FEATURE>_<SETTING>
+ *   ARDENT_<FEATURE>_<SETTING>
  * ***********************************************************************************************/
 
 /* ************************************************************************************************
@@ -42,32 +42,32 @@
  * ***********************************************************************************************/
 
 /* Enable trace feature with target: "stdout", "stderr", or filename path. */
-#define KPEP_ENV_TRACE_FILE           "KPEP_TRACE_FILE"
+#define ARDENT_ENV_TRACE_FILE           "ARDENT_TRACE_FILE"
 
 /* Enable seed-source trace messages (enabled if "1"). */
-#define KPEP_ENV_TRACE_SEED           "KPEP_TRACE_SEED"
+#define ARDENT_ENV_TRACE_SEED           "ARDENT_TRACE_SEED"
 
 /* Enable sink trace messages (enabled if "1"). */
-#define KPEP_ENV_TRACE_SINK           "KPEP_TRACE_SINK"
+#define ARDENT_ENV_TRACE_SINK           "ARDENT_TRACE_SINK"
 
 /* Enable thread trace messages (enabled if "1"). */
-#define KPEP_ENV_TRACE_THREAD         "KPEP_TRACE_THREAD"
+#define ARDENT_ENV_TRACE_THREAD         "ARDENT_TRACE_THREAD"
 
 /* Lazy trace write mode (buffers writes without immediate flush if "1"). */
-#define KPEP_ENV_TRACE_LAZY_WRITE     "KPEP_TRACE_LAZY_WRITE"
+#define ARDENT_ENV_TRACE_LAZY_WRITE     "ARDENT_TRACE_LAZY_WRITE"
 
 /* ************************************************************************************************
  * PROFILE feature env-vars
  * ***********************************************************************************************/
 
 /* Enable profiling feature with target: "stdout", "stderr", or filename path. */
-#define KPEP_ENV_PROFILE_FILE         "KPEP_PROFILE_FILE"
+#define ARDENT_ENV_PROFILE_FILE         "ARDENT_PROFILE_FILE"
 
 /* Interval between write/reset operations (uint32). */
-#define KPEP_ENV_PROFILE_INTERVAL     "KPEP_PROFILE_INTERVAL"
+#define ARDENT_ENV_PROFILE_INTERVAL     "ARDENT_PROFILE_INTERVAL"
 
 /* Enable per-sample profile behavior (enabled if "1"). */
-#define KPEP_ENV_PROFILE_EACH_SAMPLE  "KPEP_PROFILE_EACH_SAMPLE"
+#define ARDENT_ENV_PROFILE_EACH_SAMPLE  "ARDENT_PROFILE_EACH_SAMPLE"
 
 /* ************************************************************************************************
  * FUTURE feature env-vars
@@ -75,9 +75,9 @@
 
 /* Add future feature env-vars below as grouped blocks, for example:
  *
- * #define KPEP_ENV_DIAG_ENABLE       "KPEP_DIAG_ENABLE"
- * #define KPEP_ENV_METRICS_FILE      "KPEP_METRICS_FILE"
- * #define KPEP_ENV_WATCHDOG_INTERVAL "KPEP_WATCHDOG_INTERVAL"
+ * #define ARDENT_ENV_DIAG_ENABLE       "ARDENT_DIAG_ENABLE"
+ * #define ARDENT_ENV_METRICS_FILE      "ARDENT_METRICS_FILE"
+ * #define ARDENT_ENV_WATCHDOG_INTERVAL "ARDENT_WATCHDOG_INTERVAL"
  */
 
  /* ************************************************************************************************
@@ -86,7 +86,7 @@
  * ***********************************************************************************************/
 
 static const char template_text[] =
-    "# Debug template for KPEP debugging (tracing and profiling).  This \n"
+    "# Debug template for ARDENT debugging (tracing and profiling).  This \n"
     "# template provides all the configuration fields with default settings.\n"
     "# Rename and modify as needed.\n"
     "# NOTE: Sections ([trace], [profile]) are optional. Omitted sections default to\n"
@@ -105,4 +105,4 @@ static const char template_text[] =
     "each-sample = 0\n"
     "format-csv = 0\n";
 
-#endif /* KPEP_DEBUG_H */
+#endif /* ARDENT_DEBUG_H */

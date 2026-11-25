@@ -20,8 +20,8 @@
  * calling applications can reference these names.
  */
 
-#ifndef KPEP_NAMES_H
-#define KPEP_NAMES_H
+#ifndef ARDENT_NAMES_H
+#define ARDENT_NAMES_H
 #pragma once
 #ifdef __cplusplus
 extern "C" {
@@ -29,19 +29,19 @@ extern "C" {
 
 /*
  * Type: OSSL_PARAM_UTF8_STRING
- * Purpose: Colon-separated byte array (HMAC-SHA3-256 of the kpep.so)
+ * Purpose: Colon-separated byte array (HMAC-SHA3-256 of the ardent.so)
  */
-#define KPEP_PROV_PARAM_MODULE_MAC    "module-mac"
+#define ARDENT_PROV_PARAM_MODULE_MAC    "module-mac"
 
 /* **************************************************************************************** */
 /* DEBUG CONTROL */
 /* **************************************************************************************** */
 
 /* Type: OSSL_PARAM_UTF8_STRING; local debug control endpoint path. */
-#define KPEP_PROV_PARAM_DEBUG_IPC_PATH  "debug-ipc-path"
+#define ARDENT_PROV_PARAM_DEBUG_IPC_PATH  "debug-ipc-path"
 
 /* Type: OSSL_PARAM_UTF8_STRING; local control security mode: "none" or "peer". */
-#define KPEP_PROV_PARAM_DEBUG_SECURITY  "debug-security"
+#define ARDENT_PROV_PARAM_DEBUG_SECURITY  "debug-security"
 
 /* **************************************************************************************** */
 /* **************************************************************************************** */
@@ -53,20 +53,20 @@ extern "C" {
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: Security strength for the internal DRBG (either 128 or 256)
  */
-#define KPEP_PROV_PARAM_SEED_STRENGTH  "seed.strength"
+#define ARDENT_PROV_PARAM_SEED_STRENGTH  "seed.strength"
 
 /*
  * Type: OSSL_PARAM_UTF8_STRING
  * Purpose: String to use for the "personalization string" for this device.  Should be
  *          unique per device.
  */
-#define KPEP_PROV_PARAM_SEED_PERSO  "seed.perso"
+#define ARDENT_PROV_PARAM_SEED_PERSO  "seed.perso"
 
 /*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: Whether to run the seed pipeline in async mode. Default: 0 (sync mode)
  */
-#define KPEP_PROV_PARAM_SEED_ASYNC_MODE       "seed.async-mode"
+#define ARDENT_PROV_PARAM_SEED_ASYNC_MODE       "seed.async-mode"
 
 /*
  * Type: OSSL_PARAM_UTF8_STRING
@@ -76,7 +76,7 @@ extern "C" {
  * to 2^17 total bits before reseed.  Any successful gather from validated source(s)  resets 
  * this counter.
  */
-#define KPEP_PROV_PARAM_RBG_ENTROPY_MODE       "seed.rbg-entropy-mode"
+#define ARDENT_PROV_PARAM_RBG_ENTROPY_MODE       "seed.rbg-entropy-mode"
 
 /*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
@@ -84,14 +84,14 @@ extern "C" {
  * If "1", require all entropy sources to provide entropy for each request.
  * If "0", require at least one seed source to provide entropy for each request.
  */
-#define KPEP_PROV_PARAM_REQ_ALL_SOURCES       "seed.req-all-sources"
+#define ARDENT_PROV_PARAM_REQ_ALL_SOURCES       "seed.req-all-sources"
 
 /*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: Whether to use the more restrictive entropy counting "Method 1".
  * This option is only in effect for "all" or "some" source settings (above).
  */
-#define KPEP_PROV_PARAM_REQ_HARDWARE_SOURCE  "seed.req-hardware-source"
+#define ARDENT_PROV_PARAM_REQ_HARDWARE_SOURCE  "seed.req-hardware-source"
 
 /* **************************************************************************************** */
 /* **************************************************************************************** */
@@ -103,15 +103,15 @@ extern "C" {
  * Each seed source is activated and configured with a set of standard configuration keys, 
  * and can optionally define source-specific keys.  This creates a lot of redundant strings
  * to store and maintain.  This is achieved by concatenated, for example :
- * const char *name = KPEP_PROV_PARAM_SEED_JITTER"."KPEP_PROV_PARAM_SEED_ACTIVATE
+ * const char *name = ARDENT_PROV_PARAM_SEED_JITTER"."ARDENT_PROV_PARAM_SEED_ACTIVATE
  */
 
 /* Seed source names; derived from section header names */
-#define KPEP_PROV_PARAM_SEED_JITTER "seed.jitter"
-#define KPEP_PROV_PARAM_SEED_RDSEED "seed.rdseed"
-#define KPEP_PROV_PARAM_SEED_RDRAND "seed.rdrand"
-#define KPEP_PROV_PARAM_SEED_OSRAND "seed.osrand"
-#define KPEP_PROV_PARAM_SEED_EXTERN "seed.extseed"
+#define ARDENT_PROV_PARAM_SEED_JITTER "seed.jitter"
+#define ARDENT_PROV_PARAM_SEED_RDSEED "seed.rdseed"
+#define ARDENT_PROV_PARAM_SEED_RDRAND "seed.rdrand"
+#define ARDENT_PROV_PARAM_SEED_OSRAND "seed.osrand"
+#define ARDENT_PROV_PARAM_SEED_EXTERN "seed.extseed"
 
 /* *** Standard Configuration Keys ******************************************************** */
 
@@ -119,33 +119,33 @@ extern "C" {
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: Whether the seed source is active/utilized (boolean)
  */
-#define KPEP_PROV_PARAM_SEED_ACTIVATE  "activate"
+#define ARDENT_PROV_PARAM_SEED_ACTIVATE  "activate"
 /*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: Whether the seed source provides validated/qualified entropy (boolean)
  */
-#define KPEP_PROV_PARAM_SEED_VALIDATED "validated"
+#define ARDENT_PROV_PARAM_SEED_VALIDATED "validated"
 /*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose:  Whether the seed source is a hardware source (for restrictive entropy counting method "1")
  */
-#define KPEP_PROV_PARAM_SEED_HARDWARE "hardware-source"
+#define ARDENT_PROV_PARAM_SEED_HARDWARE "hardware-source"
 /*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: The size of the output block for this source
  */
-#define KPEP_PROV_PARAM_SEED_BLOCK_SIZE  "block-size"
+#define ARDENT_PROV_PARAM_SEED_BLOCK_SIZE  "block-size"
 /*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: The number of blocks of 'block-size' to meet 128-bit security strength
  */
-#define KPEP_PROV_PARAM_SEED_BLOCK_COUNT "block-count"
+#define ARDENT_PROV_PARAM_SEED_BLOCK_COUNT "block-count"
 /*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: The number of times to retry for RdSeed and RdRand (each set independently).  
  *          This option is ignored by other sources.
  */
-#define KPEP_PROV_PARAM_SEED_RETRY_COUNT "retry-count"
+#define ARDENT_PROV_PARAM_SEED_RETRY_COUNT "retry-count"
 /*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: Size of the ring buffer (in bits) to store entropy for async operations.  This value
@@ -156,7 +156,7 @@ extern "C" {
  *          This should be sized with burst conditions in mind, but it won't help long-term
  *          resource starvation.
  */
-#define KPEP_PROV_PARAM_SEED_RING_SIZE  "ring-size"
+#define ARDENT_PROV_PARAM_SEED_RING_SIZE  "ring-size"
 
 /* *** Options  ************************************************************************** */
 
@@ -164,19 +164,19 @@ extern "C" {
  * Type: OSSL_PARAM_UTF8_STRING
  * Purpose: Absolute path to the target file (e.g. "/dev/random" or "/usr/lib/mylib.so")
  */
-#define KPEP_PROV_PARAM_SEED_FILEPATH    "filepath"
+#define ARDENT_PROV_PARAM_SEED_FILEPATH    "filepath"
 
 /*
  * Type: OSSL_PARAM_UTF8_STRING
  * Purpose: name of the symbol used for the "const STUB_FUNCTIONS <name>" array of pointers
  */
-#define KPEP_PROV_PARAM_SEED_FUNCTIONS   "functions"
+#define ARDENT_PROV_PARAM_SEED_FUNCTIONS   "functions"
 
 /*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: Oversample rate (OSR) for jitter entropy seed source.
  */
-#define KPEP_PROV_PARAM_SEED_JITTER_OVERSAMPLE    KPEP_PROV_PARAM_SEED_JITTER".oversample-rate"
+#define ARDENT_PROV_PARAM_SEED_JITTER_OVERSAMPLE    ARDENT_PROV_PARAM_SEED_JITTER".oversample-rate"
 
 
 /* **************************************************************************************** */
@@ -189,55 +189,55 @@ extern "C" {
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: Enable/Disable logging of FIPS indicators (boolean)
  */
-#define KPEP_PROV_PARAM_LOG_FIPS_INDICATORS "logging.fips-indicators"
+#define ARDENT_PROV_PARAM_LOG_FIPS_INDICATORS "logging.fips-indicators"
 
 /*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: Whether logs should be output to syslog
  */
-#define KPEP_PROV_PARAM_LOG_SYSLOG_ACTIVATE    "logging.syslog.activate"
+#define ARDENT_PROV_PARAM_LOG_SYSLOG_ACTIVATE    "logging.syslog.activate"
 
 /*
  * Type: OSSL_PARAM_UTF8_STRING
  * Purpose: The standard logging level for syslog
  */
-#define KPEP_PROV_PARAM_LOG_SYSLOG_LEVEL    "logging.syslog.level"
+#define ARDENT_PROV_PARAM_LOG_SYSLOG_LEVEL    "logging.syslog.level"
 
 /*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: Whether logs should be output to stderr
  */
-#define KPEP_PROV_PARAM_LOG_STDERR_ACTIVATE    "logging.stderr.activate"
+#define ARDENT_PROV_PARAM_LOG_STDERR_ACTIVATE    "logging.stderr.activate"
 
 /*
  * Type: OSSL_PARAM_UTF8_STRING
  * Purpose: The standard logging level for syslog
  */
-#define KPEP_PROV_PARAM_LOG_STDERR_LEVEL    "logging.stderr.level"
+#define ARDENT_PROV_PARAM_LOG_STDERR_LEVEL    "logging.stderr.level"
 
 /*
  * Type: OSSL_PARAM_UNSIGNED_INTEGER
  * Purpose: Whether logs should be output to an external sink
  */
-#define KPEP_PROV_PARAM_LOG_EXTERN_ACTIVATE    "logging.extlog.activate"
+#define ARDENT_PROV_PARAM_LOG_EXTERN_ACTIVATE    "logging.extlog.activate"
 
 /*
  * Type: OSSL_PARAM_UTF8_STRING
  * Purpose: The standard logging level for syslog
  */
-#define KPEP_PROV_PARAM_LOG_EXTERN_LEVEL    "logging.extlog.level"
+#define ARDENT_PROV_PARAM_LOG_EXTERN_LEVEL    "logging.extlog.level"
 
 /*
  * Type: OSSL_PARAM_UTF8_STRING
  * Purpose: Absolute path to the shared object (.so/.dll) to load
  */
-#define KPEP_PROV_PARAM_LOG_EXTERN_FILEPATH    "logging.extlog.filepath"
+#define ARDENT_PROV_PARAM_LOG_EXTERN_FILEPATH    "logging.extlog.filepath"
 
 /*
  * Type: OSSL_PARAM_UTF8_STRING
  * Purpose: name of the symbol used for the "const LOG_SINK <name>" array of pointers
  */
-#define KPEP_PROV_PARAM_LOG_EXTERN_FUNCTIONS    "logging.extlog.functions"
+#define ARDENT_PROV_PARAM_LOG_EXTERN_FUNCTIONS    "logging.extlog.functions"
 
 
 /* **************************************************************************************** */
@@ -250,41 +250,41 @@ extern "C" {
  * Logging Sinks -- Set reporting level to enable
  */
 
-#define ENV_LOG_SYSLOG_LEVEL         "KPEP_LOG_SYSLOG_LEVEL"
+#define ENV_LOG_SYSLOG_LEVEL         "ARDENT_LOG_SYSLOG_LEVEL"
 
-#define ENV_LOG_STDERR_LEVEL         "KPEP_LOG_STDERR_LEVEL"
+#define ENV_LOG_STDERR_LEVEL         "ARDENT_LOG_STDERR_LEVEL"
 
-#define ENV_LOG_EXTERN_LEVEL         "KPEP_LOG_EXTERN_LEVEL"
-#define ENV_LOG_EXTERN_FILEPATH      "KPEP_LOG_EXTERN_FILEPATH"
-#define ENV_LOG_EXTERN_FUNCTIONS     "KPEP_LOG_EXTERN_FUNCTIONS"
+#define ENV_LOG_EXTERN_LEVEL         "ARDENT_LOG_EXTERN_LEVEL"
+#define ENV_LOG_EXTERN_FILEPATH      "ARDENT_LOG_EXTERN_FILEPATH"
+#define ENV_LOG_EXTERN_FUNCTIONS     "ARDENT_LOG_EXTERN_FUNCTIONS"
 
 /* 
  * Seed source configuration
  */
-#define ENV_SEED_JITTER_OSR          "KPEP_SEED_JITTER_OSR"   /* Over Sample Rate (default: 4) */
+#define ENV_SEED_JITTER_OSR          "ARDENT_SEED_JITTER_OSR"   /* Over Sample Rate (default: 4) */
 
-#define ENV_SEED_RDSEED_BLOCK_SIZE   "KPEP_SEED_RDSEED_BLOCK_SIZE"
-#define ENV_SEED_RDSEED_BLOCK_COUNT  "KPEP_SEED_RDSEED_BLOCK_COUNT"
-#define ENV_SEED_RDSEED_RETRY_COUNT  "KPEP_SEED_RDSEED_RETRY_COUNT"
+#define ENV_SEED_RDSEED_BLOCK_SIZE   "ARDENT_SEED_RDSEED_BLOCK_SIZE"
+#define ENV_SEED_RDSEED_BLOCK_COUNT  "ARDENT_SEED_RDSEED_BLOCK_COUNT"
+#define ENV_SEED_RDSEED_RETRY_COUNT  "ARDENT_SEED_RDSEED_RETRY_COUNT"
 
-#define ENV_SEED_RDRAND_BLOCK_SIZE   "KPEP_SEED_RDRAND_BLOCK_SIZE"
-#define ENV_SEED_RDRAND_BLOCK_COUNT  "KPEP_SEED_RDRAND_BLOCK_COUNT"
-#define ENV_SEED_RDRAND_RETRY_COUNT  "KPEP_SEED_RDRAND_RETRY_COUNT"
+#define ENV_SEED_RDRAND_BLOCK_SIZE   "ARDENT_SEED_RDRAND_BLOCK_SIZE"
+#define ENV_SEED_RDRAND_BLOCK_COUNT  "ARDENT_SEED_RDRAND_BLOCK_COUNT"
+#define ENV_SEED_RDRAND_RETRY_COUNT  "ARDENT_SEED_RDRAND_RETRY_COUNT"
 
-#define ENV_SEED_OSRAND_BLOCK_SIZE   "KPEP_SEED_OSRAND_BLOCK_SIZE"
-#define ENV_SEED_OSRAND_BLOCK_COUNT  "KPEP_SEED_OSRAND_BLOCK_COUNT"
-#define ENV_SEED_OSRAND_FILEPATH     "KPEP_SEED_OSRAND_FILEPATH"
+#define ENV_SEED_OSRAND_BLOCK_SIZE   "ARDENT_SEED_OSRAND_BLOCK_SIZE"
+#define ENV_SEED_OSRAND_BLOCK_COUNT  "ARDENT_SEED_OSRAND_BLOCK_COUNT"
+#define ENV_SEED_OSRAND_FILEPATH     "ARDENT_SEED_OSRAND_FILEPATH"
 
-#define ENV_SEED_EXTERN_BLOCK_SIZE   "KPEP_SEED_EXTERN_BLOCK_SIZE"
-#define ENV_SEED_EXTERN_BLOCK_COUNT  "KPEP_SEED_EXTERN_BLOCK_COUNT"
-#define ENV_SEED_EXTERN_FILEPATH     "KPEP_SEED_EXTERN_FILEPATH"
+#define ENV_SEED_EXTERN_BLOCK_SIZE   "ARDENT_SEED_EXTERN_BLOCK_SIZE"
+#define ENV_SEED_EXTERN_BLOCK_COUNT  "ARDENT_SEED_EXTERN_BLOCK_COUNT"
+#define ENV_SEED_EXTERN_FILEPATH     "ARDENT_SEED_EXTERN_FILEPATH"
 
 // Add additional environment variable names for triggering OpTest demonstrations
 #ifdef FIPS_OPTEST
-#include "kpep/kpep_names_optest.h"
+#include "ardent/ardent_names_optest.h"
 #endif
 
 #ifdef __cplusplus
 }
 #endif
-#endif /* KPEP_NAMES_H */
+#endif /* ARDENT_NAMES_H */

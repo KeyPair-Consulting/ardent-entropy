@@ -1,51 +1,51 @@
-# KPEP Debugging Guide
+# ARDent Debugging Guide
 
-KPEP provides trace and profile facilities for diagnosing entropy-source behavior. Startup settings are read from environment variables so provider initialization and early entropy collection can be captured; a configured local IPC endpoint can later replace those settings without restarting the application that loaded the provider.
+ARDent provides trace and profile facilities for diagnosing entropy-source behavior. Startup settings are read from environment variables so provider initialization and early entropy collection can be captured; a configured local IPC endpoint can later replace those settings without restarting the application that loaded the provider.
 
 ## Features
 
 | Feature | Purpose | Startup control | Runtime control |
 | --- | --- | --- | --- |
-| Trace | Emits timestamped diagnostic messages for selected KPEP subsystems. | `KPEP_TRACE_*` environment variables | `[trace]` section sent through local IPC |
-| Profile | Records seed-source timing statistics. | `KPEP_PROFILE_*` environment variables | `[profile]` section sent through local IPC |
+| Trace | Emits timestamped diagnostic messages for selected ARDent subsystems. | `ARDent_TRACE_*` environment variables | `[trace]` section sent through local IPC |
+| Profile | Records seed-source timing statistics. | `ARDent_PROFILE_*` environment variables | `[profile]` section sent through local IPC |
 
 Runtime configuration applies both feature sections as one complete request. Invalid runtime configuration is rejected and the active feature configuration is left unchanged.
 
 ## Startup Configuration
 
-Set environment variables before the enterprise application loads the KPEP provider. These values are read when provider startup calls the debug subsystem, allowing trace output to include the provider initialization sequence and profiling to begin before initial entropy collection.
+Set environment variables before the enterprise application loads the ARDent provider. These values are read when provider startup calls the debug subsystem, allowing trace output to include the provider initialization sequence and profiling to begin before initial entropy collection.
 
 | Variable | Meaning |
 | --- | --- |
-| `KPEP_TRACE_FILE` | Trace output destination: `stdout`, `stderr`, or a filename. |
-| `KPEP_TRACE_SEED` | Enable seed-source trace messages only when set to `1`. |
-| `KPEP_TRACE_SINK` | Enable logging-sink trace messages using the same flag rules. |
-| `KPEP_TRACE_THREAD` | Enable thread trace messages using the same flag rules. |
-| `KPEP_TRACE_LAZY_WRITE` | Buffer trace writes without immediate flush when set to `1` (default: `0`, flush on every write). |
-| `KPEP_PROFILE_FILE` | Profile output destination: `stdout`, `stderr`, or a filename. |
-| `KPEP_PROFILE_INTERVAL` | Profile interval as an unsigned 32-bit integer. `0` is valid. |
-| `KPEP_PROFILE_EACH_SAMPLE` | Enable per-sample profiling only when set to `1`. |
+| `ARDent_TRACE_FILE` | Trace output destination: `stdout`, `stderr`, or a filename. |
+| `ARDent_TRACE_SEED` | Enable seed-source trace messages only when set to `1`. |
+| `ARDent_TRACE_SINK` | Enable logging-sink trace messages using the same flag rules. |
+| `ARDent_TRACE_THREAD` | Enable thread trace messages using the same flag rules. |
+| `ARDent_TRACE_LAZY_WRITE` | Buffer trace writes without immediate flush when set to `1` (default: `0`, flush on every write). |
+| `ARDent_PROFILE_FILE` | Profile output destination: `stdout`, `stderr`, or a filename. |
+| `ARDent_PROFILE_INTERVAL` | Profile interval as an unsigned 32-bit integer. `0` is valid. |
+| `ARDent_PROFILE_EACH_SAMPLE` | Enable per-sample profiling only when set to `1`. |
 
 For example, the following enables early trace collection to a file:
 
 ```sh
-export KPEP_TRACE_FILE=/var/tmp/kpep.trace
-export KPEP_TRACE_SEED=1
+export ARDent_TRACE_FILE=/var/tmp/ardent.trace
+export ARDent_TRACE_SEED=1
 ```
 
 ## Runtime Reconfiguration
 
-Runtime reconfiguration is optional. It is enabled only when the provider's immutable OpenSSL configuration contains `debug-ipc-path`. The provider creates a local IPC listener after provider initialization completes; a running `keypair_debug` utility sends a complete configuration file to that endpoint and receives a one-byte success or failure acknowledgment.
+Runtime reconfiguration is optional. It is enabled only when the provider's immutable OpenSSL configuration contains `debug-ipc-path`. The provider creates a local IPC listener after provider initialization completes; a running `ardent_debug` utility sends a complete configuration file to that endpoint and receives a one-byte success or failure acknowledgment.
 
 The endpoint policy is fixed for the lifetime of the loaded provider. Runtime requests replace trace and profile configuration only; they do not change the IPC endpoint or its security mode.
 
 ## Provider IPC Configuration
 
-Add these settings to the KPEP provider section in the OpenSSL configuration. The project sample uses `[kpep_sect]` in [resources/kpepmodule.cnf](resources/kpepmodule.cnf).
+Add these settings to the ARDent provider section in the OpenSSL configuration. The project sample uses `[ardent_sect]` in [resources/ardentmodule.cnf](resources/ardentmodule.cnf).
 
 ```ini
-[kpep_sect]
-debug-ipc-path = /var/run/kpep-debug.sock
+[ardent_sect]
+debug-ipc-path = /var/run/ardent-debug.sock
 debug-security = peer
 ```
 
@@ -64,20 +64,20 @@ If `debug-ipc-path` is absent or empty, no listener is started. Startup environm
 
 On Unix, use an endpoint directory that is writable only by the appropriate administrator account or group. The provider creates the socket with a restrictive `umask` in `peer` mode.
 
-## keypair_debug
+## ardent_debug
 
-`keypair_debug` is the local client for generating and applying runtime debug configuration. It honors `OPENSSL_CONF` when looking up the configured IPC path and falls back to OpenSSL's default configuration-file location when `OPENSSL_CONF` is unset.
+`ardent_debug` is the local client for generating and applying runtime debug configuration. It honors `OPENSSL_CONF` when looking up the configured IPC path and falls back to OpenSSL's default configuration-file location when `OPENSSL_CONF` is unset.
 
 ```text
-keypair_debug --write-template
-keypair_debug [--ipc-path <path>] <config-file>
+ardent_debug --write-template
+ardent_debug [--ipc-path <path>] <config-file>
 ```
 
 | Invocation | Effect |
 | --- | --- |
-| `keypair_debug --write-template` | Writes `kpep_trace_template.cnf` in the current directory. |
-| `keypair_debug runtime.cnf` | Reads `debug-ipc-path` from `[kpep_sect]` in the OpenSSL configuration, then applies `runtime.cnf`. |
-| `keypair_debug --ipc-path /var/run/kpep-debug.sock runtime.cnf` | Uses the supplied endpoint instead of the OpenSSL configuration value. |
+| `ardent_debug --write-template` | Writes `ardent_trace_template.cnf` in the current directory. |
+| `ardent_debug runtime.cnf` | Reads `debug-ipc-path` from `[ardent_sect]` in the OpenSSL configuration, then applies `runtime.cnf`. |
+| `ardent_debug --ipc-path /var/run/ardent-debug.sock runtime.cnf` | Uses the supplied endpoint instead of the OpenSSL configuration value. |
 
 The configuration filename is required when applying settings. The client exits nonzero if the file cannot be read, the endpoint cannot be reached, or the provider rejects the configuration.
 
@@ -86,7 +86,7 @@ The configuration filename is required when applying settings. The client exits 
 The runtime file uses OpenSSL configuration syntax. Sections (`[trace]`, `[profile]`) are optional. Omitted sections default to off; included sections require all of their fields to be present. An empty file (0 bytes) resets all debug features to off. The complete file must not exceed 1024 bytes; comments count toward that limit.
 
 ```ini
-# Debug template for KPEP debugging (tracing and profiling).   
+# Debug template for ARDent debugging (tracing and profiling).   
 # This template provides all the configuration fields with 
 # default settings.  Copy, rename and modify as needed.
 # NOTE: Sections ([trace], [profile]) are optional. Omitted sections default to
@@ -122,7 +122,7 @@ Both features accept `stdout`, `stderr`, or a regular filename as their output d
 When trace and profile request the same destination string, they share one managed sink and one per-sink OpenSSL mutex. A regular file is opened in append mode and closed when the final feature releases it; standard streams are flushed but never closed. Each newly opened sink receives one banner:
 
 ```text
-=== KPEP Debug Output ===
+=== ARDent Debug Output ===
 Start: YYYY-MM-DD HH:MM:SS UTC
 ```
 
@@ -133,20 +133,20 @@ Start: YYYY-MM-DD HH:MM:SS UTC
 3. Generate a complete configuration template:
 
 ```sh
-keypair_debug --write-template
+ardent_debug --write-template
 ```
 
-4. Edit `kpep_trace_template.cnf` and keep every required field.
+4. Edit `ardent_trace_template.cnf` and keep every required field.
 5. Apply it to the running provider:
 
 ```sh
-keypair_debug kpep_trace_template.cnf
+ardent_debug ardent_trace_template.cnf
 ```
 
 6. To override the endpoint from the OpenSSL configuration for a single request:
 
 ```sh
-keypair_debug --ipc-path /var/run/kpep-debug.sock kpep_trace_template.cnf
+ardent_debug --ipc-path /var/run/ardent-debug.sock ardent_trace_template.cnf
 ```
 
 7. Inspect the configured output destination for trace or profile records. Apply another complete configuration file to change or disable settings.
@@ -156,11 +156,11 @@ keypair_debug --ipc-path /var/run/kpep-debug.sock kpep_trace_template.cnf
 | Symptom | Likely cause | Action |
 | --- | --- | --- |
 | `No configuration file specified.` | No positional runtime configuration file was supplied. | Supply one file path. |
-| `Specify --ipc-path ...` | The CLI override was omitted and `debug-ipc-path` is absent from the effective OpenSSL configuration. | Add `debug-ipc-path` to `[kpep_sect]`, or supply `--ipc-path`. |
+| `Specify --ipc-path ...` | The CLI override was omitted and `debug-ipc-path` is absent from the effective OpenSSL configuration. | Add `debug-ipc-path` to `[ardent_sect]`, or supply `--ipc-path`. |
 | Connection to the IPC endpoint fails | The provider did not start a listener, the endpoint path differs, or permissions deny access. | Verify the provider config, process state, endpoint path, and security mode. |
 | `Runtime debug configuration was rejected.` | The payload is incomplete, invalid, oversized, or not authorized. | Start from `--write-template`; verify every field in present sections and the 1024-byte limit. |
 | No trace output after applying config | All trace flags are `0`, or the output target cannot be opened. | Enable at least one trace flag and verify the destination path. |
-| No early startup trace records | Trace was enabled only after provider startup. | Set `KPEP_TRACE_FILE` and at least one `KPEP_TRACE_*` flag before the application starts. |
+| No early startup trace records | Trace was enabled only after provider startup. | Set `ARDent_TRACE_FILE` and at least one `ARDent_TRACE_*` flag before the application starts. |
 
 ## Platform Notes
 

@@ -32,7 +32,7 @@ typedef struct ring_ctx_st RING_CTX;
  * @param size The number of bytes (size-1) that can be stored in the ring.  Must be a power-of-2.
  * @return TOOLBOX_RESULT (zero on success, otherwise specified error)
  */
-KPEP_RESULT ring_new(RING_CTX** ctx, size_t size);
+ARDENT_RESULT ring_new(RING_CTX** ctx, size_t size);
 
 /**
  * Free the ring buffer context and all allocated memory
@@ -67,7 +67,7 @@ size_t ring_space(const RING_CTX* ctx);
  * @param buflen The number of bytes to copy/add
  * @return TOOLBOX_RESULT (zero on success, otherwise specified error)
  */
-KPEP_RESULT ring_enqueue(RING_CTX* ctx, const uint8_t *restrict buf, size_t buflen);
+ARDENT_RESULT ring_enqueue(RING_CTX* ctx, const uint8_t *restrict buf, size_t buflen);
 
 /**
  * Remove bytes from the ring and place them in the buffer.  Removed bytes in ring are zeroized.
@@ -76,7 +76,7 @@ KPEP_RESULT ring_enqueue(RING_CTX* ctx, const uint8_t *restrict buf, size_t bufl
  * @param buflen The number of bytes to return
  * @return TOOLBOX_RESULT (zero on success, otherwise specified error)
  */
-KPEP_RESULT ring_dequeue(RING_CTX* ctx, uint8_t *restrict buf, size_t buflen);
+ARDENT_RESULT ring_dequeue(RING_CTX* ctx, uint8_t *restrict buf, size_t buflen);
 
 #ifdef __cplusplus
 }

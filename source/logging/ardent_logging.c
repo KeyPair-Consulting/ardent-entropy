@@ -41,8 +41,8 @@
 
 #include "internal/thread_arch.h"
 
-#include "kpep/kpep.h"
-#include "kpep/kpep_names.h"
+#include "ardent/ardent.h"
+#include "ardent/ardent_names.h"
 
 /* ************************************************************************************************
  * ************************************************************************************************
@@ -66,7 +66,7 @@ static unsigned int activate_extern = 0;
 
 static CRYPTO_MUTEX *log_mutex = NULL;
 
-static void kpep_log_lock(void)
+static void ardent_log_lock(void)
 {
 	if (log_mutex == NULL)
 		log_mutex = ossl_crypto_mutex_new();
@@ -74,7 +74,7 @@ static void kpep_log_lock(void)
 		ossl_crypto_mutex_lock(log_mutex);
 }
 
-static void kpep_log_unlock(void)
+static void ardent_log_unlock(void)
 {
 	if (log_mutex)
 		ossl_crypto_mutex_unlock(log_mutex);
@@ -86,12 +86,12 @@ static void kpep_log_unlock(void)
  * ************************************************************************************************
  * ***********************************************************************************************/
 
-KPEP_RESULT kpep_log_add_sink(const SINK_FUNCTIONS *funcs)
+ARDENT_RESULT ardent_log_add_sink(const SINK_FUNCTIONS *funcs)
 {
 	size_t idx;
 
-	if (kpep_trace_sink_enabled) {
-		kpep_trace("KPEP-SINK", __func__);
+	if (ardent_trace_sink_enabled) {
+		ardent_trace("ARDENT-SINK", __func__);
 	}
 
 	if (!funcs || 
@@ -101,13 +101,13 @@ KPEP_RESULT kpep_log_add_sink(const SINK_FUNCTIONS *funcs)
 		!funcs->level_fn ||
 		!funcs->write_fn ||
 		!funcs->write_data_fn) {
-		return KPEP_R_INVALID_ARG;
+		return ARDENT_R_INVALID_ARG;
 	}
 
 	for (idx=0; idx<MAX_SINK_COUNT; ++idx) {
 		if (sinks[idx].fn == NULL) {
-			if (kpep_trace_sink_enabled) {
-				kpep_trace_fmt("KPEP-SINK", "Adding log sink '%s' to slot #%d", funcs->name_fn(), (int)idx);
+			if (ardent_trace_sink_enabled) {
+				ardent_trace_fmt("ARDENT-SINK", "Adding log sink '%s' to slot #%d", funcs->name_fn(), (int)idx);
 			}
 			sinks[idx].fn = funcs;
 			sinks[idx].name = funcs->name_fn();
@@ -116,10 +116,10 @@ KPEP_RESULT kpep_log_add_sink(const SINK_FUNCTIONS *funcs)
 	}
 	if (idx == MAX_SINK_COUNT) {
 		printf("ERROR: Could not attach log sink; no slots available\n");
-		return KPEP_R_NO_SLOTS;
+		return ARDENT_R_NO_SLOTS;
 	}
 
-	return KPEP_R_SUCCESS;
+	return ARDENT_R_SUCCESS;
 }
 
 LogLevel read_log_level_string(const char *level)
@@ -155,24 +155,24 @@ const char*  get_log_level_string(LogLevel level)
 		return "Requested level is out of range.";
 }
 
-static KPEP_RESULT load_params_from_environment(void);
-static KPEP_RESULT load_params_from_openssl(void* prov_ctx);
+static ARDENT_RESULT load_params_from_environment(void);
+static ARDENT_RESULT load_params_from_openssl(void* prov_ctx);
 
 extern const SINK_FUNCTIONS sink_dummy;
 extern const SINK_FUNCTIONS sink_syslog;
 extern const SINK_FUNCTIONS sink_stderr;
-#ifndef KPEP_DISABLE_EXTERNAL
+#ifndef ARDENT_DISABLE_EXTERNAL
 extern const SINK_FUNCTIONS sink_extern;
 #endif
 
 EXPORT_VISIBILITY_HIDDEN
-KPEP_RESULT kpep_logging_init(void* prov_ctx) 
+ARDENT_RESULT ardent_logging_init(void* prov_ctx) 
 {
-	KPEP_RESULT rv = KPEP_R_SUCCESS;
+	ARDENT_RESULT rv = ARDENT_R_SUCCESS;
 	FILE* devnull = NULL;
 
-	if (kpep_trace_sink_enabled) {
-		kpep_trace("KPEP-SINK", __func__);
+	if (ardent_trace_sink_enabled) {
+		ardent_trace("ARDENT-SINK", __func__);
 	}
 
 	if (log_mutex == NULL)
@@ -191,13 +191,13 @@ KPEP_RESULT kpep_logging_init(void* prov_ctx)
 	devnull = fopen("/dev/null", "w");
 #endif
 	if (!devnull) {
-		rv = KPEP_R_LOG_BUGFIX_FAIL;
+		rv = ARDENT_R_LOG_BUGFIX_FAIL;
 		goto err;
 	}
 	fprintf(devnull, "DUMMY : %p : %p\n", &sink_dummy,  sink_dummy.init_fn);
 	fprintf(devnull, "SYSLOG: %p : %p\n", &sink_syslog, sink_syslog.init_fn);
 	fprintf(devnull, "STDOUT: %p : %p\n", &sink_stderr, sink_stderr.init_fn);
-#ifndef KPEP_DISABLE_EXTERNAL
+#ifndef ARDENT_DISABLE_EXTERNAL
 	fprintf(devnull, "EXTERN: %p : %p\n", &sink_extern, sink_extern.init_fn);
 #endif
 	fclose(devnull);
@@ -205,47 +205,47 @@ KPEP_RESULT kpep_logging_init(void* prov_ctx)
 	// Attempt to activate each of the 3 known types
 	if (activate_syslog) {
 		rv = (sink_syslog.init_fn)(prov_ctx);
-		if (rv == KPEP_R_SUCCESS)
-			rv = kpep_log_add_sink(&sink_syslog);
-		if (rv != KPEP_R_SUCCESS) {
-			printf("ERROR: Log sink 'SYSLOG' could not load properly: %s\n", kpep_get_reason_string(rv));
+		if (rv == ARDENT_R_SUCCESS)
+			rv = ardent_log_add_sink(&sink_syslog);
+		if (rv != ARDENT_R_SUCCESS) {
+			printf("ERROR: Log sink 'SYSLOG' could not load properly: %s\n", ardent_get_reason_string(rv));
 			goto err;
 		}
 	}
 	if (activate_stderr) {
 		rv = sink_stderr.init_fn(prov_ctx);
-		if (rv == KPEP_R_SUCCESS)
-			rv = kpep_log_add_sink(&sink_stderr);
-		if (rv != KPEP_R_SUCCESS) {
-			printf("ERROR: Log sink 'STDERR' could not load properly: %s\n", kpep_get_reason_string(rv));
+		if (rv == ARDENT_R_SUCCESS)
+			rv = ardent_log_add_sink(&sink_stderr);
+		if (rv != ARDENT_R_SUCCESS) {
+			printf("ERROR: Log sink 'STDERR' could not load properly: %s\n", ardent_get_reason_string(rv));
 			goto err;
 		}
 	}
-#ifndef KPEP_DISABLE_EXTERNAL
+#ifndef ARDENT_DISABLE_EXTERNAL
 	if (activate_extern) {
 		rv = sink_extern.init_fn(prov_ctx);
-		if (rv == KPEP_R_SUCCESS)
-			rv = kpep_log_add_sink(&sink_extern);
-		if (rv != KPEP_R_SUCCESS) {
-			printf("ERROR: Log sink 'EXTERN' could not load properly: %s\n", kpep_get_reason_string(rv));
+		if (rv == ARDENT_R_SUCCESS)
+			rv = ardent_log_add_sink(&sink_extern);
+		if (rv != ARDENT_R_SUCCESS) {
+			printf("ERROR: Log sink 'EXTERN' could not load properly: %s\n", ardent_get_reason_string(rv));
 			goto err;
 		}
 	}
 #endif
 
-	rv = KPEP_R_SUCCESS;
+	rv = ARDENT_R_SUCCESS;
 
 err:
 	return rv;
 }
 
 EXPORT_VISIBILITY_HIDDEN
-void kpep_logging_fini(void)
+void ardent_logging_fini(void)
 {
 	size_t idx;
 
-	if (kpep_trace_sink_enabled) {
-		kpep_trace("KPEP-SINK", __func__);
+	if (ardent_trace_sink_enabled) {
+		ardent_trace("ARDENT-SINK", __func__);
 	}
 
 	for (idx=0; idx<MAX_SINK_COUNT; ++idx) {
@@ -259,7 +259,7 @@ void kpep_logging_fini(void)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-void kpep_get_sink_descs(char *buffer)
+void ardent_get_sink_descs(char *buffer)
 {
 	size_t idx;
 	for (idx=0; idx<MAX_SINK_COUNT; ++idx) {
@@ -280,7 +280,7 @@ void kpep_get_sink_descs(char *buffer)
 
 #include "openssl/params.h"
 
-static KPEP_RESULT load_params_from_environment(void)
+static ARDENT_RESULT load_params_from_environment(void)
 {
 	char *dbgenv;
 
@@ -296,10 +296,10 @@ static KPEP_RESULT load_params_from_environment(void)
 	if (dbgenv != NULL) {
 		activate_extern = 1;
 	}
-	return KPEP_R_SUCCESS;
+	return ARDENT_R_SUCCESS;
 }
 
-static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
+static ARDENT_RESULT load_params_from_openssl(void* prov_ctx)
 {
     const char *act_syslog = NULL;
     const char *act_stderr = NULL;
@@ -307,21 +307,21 @@ static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
 
 	OSSL_PARAM params[4], *p = params;
     *p++ = OSSL_PARAM_construct_utf8_ptr(
-        KPEP_PROV_PARAM_LOG_SYSLOG_ACTIVATE,
+        ARDENT_PROV_PARAM_LOG_SYSLOG_ACTIVATE,
         (char **) &act_syslog,
         sizeof(act_syslog));
     *p++ = OSSL_PARAM_construct_utf8_ptr(
-        KPEP_PROV_PARAM_LOG_STDERR_ACTIVATE,
+        ARDENT_PROV_PARAM_LOG_STDERR_ACTIVATE,
         (char **) &act_stderr,
         sizeof(act_stderr));
     *p++ = OSSL_PARAM_construct_utf8_ptr(
-        KPEP_PROV_PARAM_LOG_EXTERN_ACTIVATE,
+        ARDENT_PROV_PARAM_LOG_EXTERN_ACTIVATE,
         (char **) &act_extern,
         sizeof(act_extern));
     *p = OSSL_PARAM_construct_end();
 
-    if (!kpep_get_core_params(prov_ctx, params)) {
-        return KPEP_R_CONFIG_LOOKUP_FAILURE;
+    if (!ardent_get_core_params(prov_ctx, params)) {
+        return ARDENT_R_CONFIG_LOOKUP_FAILURE;
     }
 
 	if (act_syslog)
@@ -331,7 +331,7 @@ static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
 	if (act_extern)
 		activate_extern = atoi(act_extern);
 
-    return KPEP_R_SUCCESS;
+    return ARDENT_R_SUCCESS;
 }
 
 /* ************************************************************************************************
@@ -340,38 +340,38 @@ static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
  * ************************************************************************************************
  * ***********************************************************************************************/
 
-void kpep_log(LogLevel level, const char* module, const char *fmt, ...) 
+void ardent_log(LogLevel level, const char* module, const char *fmt, ...) 
 {
 	size_t idx;
 	va_list args;
 
-	kpep_log_lock();
+	ardent_log_lock();
 	for (idx=0; idx<MAX_SINK_COUNT; ++idx) {
 		if (sinks[idx].fn && sinks[idx].fn->write_fn) {
-			if (kpep_trace_sink_enabled) {
-				kpep_trace_fmt("KPEP-SINK", "Writing msg to sink '%s'.", sinks[idx].name);
+			if (ardent_trace_sink_enabled) {
+				ardent_trace_fmt("ARDENT-SINK", "Writing msg to sink '%s'.", sinks[idx].name);
 			}
 			va_start(args, fmt);
 			sinks[idx].fn->write_fn(level, module, fmt, args);
 			va_end(args);
 		}
 	}
-	kpep_log_unlock();
+	ardent_log_unlock();
 }
 
-void kpep_log_data(LogLevel level, const char* module, const char* label, 
+void ardent_log_data(LogLevel level, const char* module, const char* label, 
 					unsigned char *bytes, size_t bytes_len)
 {
 	size_t idx;
 
-	kpep_log_lock();
+	ardent_log_lock();
 	for (idx=0; idx<MAX_SINK_COUNT; ++idx) {
 		if (sinks[idx].fn && sinks[idx].fn->write_data_fn) {
-			if (kpep_trace_sink_enabled) {
-				kpep_trace_fmt("KPEP-SINK", "Writing data to sink '%s'.", sinks[idx].name);
+			if (ardent_trace_sink_enabled) {
+				ardent_trace_fmt("ARDENT-SINK", "Writing data to sink '%s'.", sinks[idx].name);
 			}
 			sinks[idx].fn->write_data_fn(level, module, label, bytes, bytes_len);
 		}
 	}
-	kpep_log_unlock();
+	ardent_log_unlock();
 }

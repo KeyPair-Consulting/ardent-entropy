@@ -19,21 +19,21 @@
 #define __STDC_WANT_LIB_EXT2__ 1  // Define you want TR 24731-2:2010 extensions
 #define _GNU_SOURCE
 
-#include "kpep/kpep.h"
+#include "ardent/ardent.h"
 
-#if defined(KPEP_TRACE_DISABLED)
-
-EXPORT_VISIBILITY_HIDDEN
-void kpep_trace_init(const KPEP_DEBUG_TRACE_CONFIG *config) { (void)config; }
+#if defined(ARDENT_TRACE_DISABLED)
 
 EXPORT_VISIBILITY_HIDDEN
-void kpep_trace_fini(void) {}
+void ardent_trace_init(const ARDENT_DEBUG_TRACE_CONFIG *config) { (void)config; }
+
+EXPORT_VISIBILITY_HIDDEN
+void ardent_trace_fini(void) {}
 
 #if 0
-void kpep_trace(const char* module, const char* msg) { (void)module; (void)msg; }
-void kpep_trace_sub(const char* module, const char* submodule, const char* msg) { (void)module; (void)submodule; (void)msg; }
-void kpep_trace_fmt(const char* module, const char* fmt, ...) { (void)module; (void)fmt; }
-void kpep_trace_sub_fmt(const char* module, const char* submodule, const char* fmt, ...) { (void)module; (void)submodule; (void)fmt; }
+void ardent_trace(const char* module, const char* msg) { (void)module; (void)msg; }
+void ardent_trace_sub(const char* module, const char* submodule, const char* msg) { (void)module; (void)submodule; (void)msg; }
+void ardent_trace_fmt(const char* module, const char* fmt, ...) { (void)module; (void)fmt; }
+void ardent_trace_sub_fmt(const char* module, const char* submodule, const char* fmt, ...) { (void)module; (void)submodule; (void)fmt; }
 #endif
 
 #else
@@ -55,7 +55,7 @@ void kpep_trace_sub_fmt(const char* module, const char* submodule, const char* f
 
 #include "debug_utility.h"
 #include "debug_core.h"
-#include "kpep/kpep_names.h"
+#include "ardent/ardent_names.h"
 
 /* ************************************************************************************************
  * ************************************************************************************************
@@ -63,58 +63,58 @@ void kpep_trace_sub_fmt(const char* module, const char* submodule, const char* f
  * ************************************************************************************************
  * ***********************************************************************************************/
 
-int kpep_trace_seed_enabled = 0;
-int kpep_trace_sink_enabled = 0;
-int kpep_trace_thread_enabled = 0;
-int kpep_trace_lazy_write = 0;
+int ardent_trace_seed_enabled = 0;
+int ardent_trace_sink_enabled = 0;
+int ardent_trace_thread_enabled = 0;
+int ardent_trace_lazy_write = 0;
 
 static int trace_enabled = 0;
-static KPEP_DEBUG_SINK *trace_sink = NULL;
+static ARDENT_DEBUG_SINK *trace_sink = NULL;
 static uint64_t trace_start_us = 0;
 
-static uint64_t kpep_trace_monotonic_us(void)
+static uint64_t ardent_trace_monotonic_us(void)
 {
-	return kpep_debug_monotonic_us();
+	return ardent_debug_monotonic_us();
 }
 
 EXPORT_VISIBILITY_HIDDEN
-void kpep_trace_fini(void)
+void ardent_trace_fini(void)
 {
-	kpep_debug_sink_release(&trace_sink);
+	ardent_debug_sink_release(&trace_sink);
     trace_enabled = 0;
 	trace_start_us = 0;
-	kpep_trace_seed_enabled = 0;
-	kpep_trace_sink_enabled = 0;
-	kpep_trace_thread_enabled = 0;
-	kpep_trace_lazy_write = 0;
+	ardent_trace_seed_enabled = 0;
+	ardent_trace_sink_enabled = 0;
+	ardent_trace_thread_enabled = 0;
+	ardent_trace_lazy_write = 0;
 }
 
 EXPORT_VISIBILITY_HIDDEN
-void kpep_trace_init(const KPEP_DEBUG_TRACE_CONFIG *config)
+void ardent_trace_init(const ARDENT_DEBUG_TRACE_CONFIG *config)
 {
 	// Flush last state; initialize new
-	kpep_trace_fini();
+	ardent_trace_fini();
 	if (!config)
 		return;
 
 	trace_enabled = 0;
-	trace_start_us = kpep_trace_monotonic_us();
+	trace_start_us = ardent_trace_monotonic_us();
 
-	kpep_trace_seed_enabled = config->seed;
-	kpep_trace_sink_enabled = config->sink;
-	kpep_trace_thread_enabled = config->thread;
-	kpep_trace_lazy_write = config->lazy_write;
-	if (!kpep_trace_seed_enabled && !kpep_trace_sink_enabled && !kpep_trace_thread_enabled) {
+	ardent_trace_seed_enabled = config->seed;
+	ardent_trace_sink_enabled = config->sink;
+	ardent_trace_thread_enabled = config->thread;
+	ardent_trace_lazy_write = config->lazy_write;
+	if (!ardent_trace_seed_enabled && !ardent_trace_sink_enabled && !ardent_trace_thread_enabled) {
 		return;
 	}
 
 	if (!config->file || config->file[0] == '\0') {
-		kpep_debug_report_error_once("TRACE ERROR",
+		ardent_debug_report_error_once("TRACE ERROR",
 			"trace file is required to enable tracing; tracing disabled");
 		return;
 	}
 
-	trace_sink = kpep_debug_sink_acquire(config->file, "TRACE ERROR", "trace.file");
+	trace_sink = ardent_debug_sink_acquire(config->file, "TRACE ERROR", "trace.file");
 	if (!trace_sink) {
 		return;
 	}
@@ -123,7 +123,7 @@ void kpep_trace_init(const KPEP_DEBUG_TRACE_CONFIG *config)
 	trace_enabled = 1;
 }
 
-static void kpep_trace_write_v(const char *module,
+static void ardent_trace_write_v(const char *module,
 						   const char *submodule,
 						   const char *fmt,
 						   va_list args)
@@ -146,11 +146,11 @@ static void kpep_trace_write_v(const char *module,
 	va_end(copy);
 
 	if (n < 0) {
-		kpep_debug_report_error_once("TRACE ERROR", "failed to format trace message");
+		ardent_debug_report_error_once("TRACE ERROR", "failed to format trace message");
 		return;
 	}
 
-	now_us = kpep_trace_monotonic_us();
+	now_us = ardent_trace_monotonic_us();
 	if (now_us < trace_start_us)
 		now_us = trace_start_us;
 	snprintf(ts, sizeof(ts), "[%13llu]", (unsigned long long)(now_us - trace_start_us));
@@ -160,42 +160,42 @@ static void kpep_trace_write_v(const char *module,
 	else
 		snprintf(line, sizeof(line), "%s %-12s : %s\n", ts, module ? module : "", msg);
 
-	if (!kpep_debug_sink_write(trace_sink, line, !kpep_trace_lazy_write)) {
+	if (!ardent_debug_sink_write(trace_sink, line, !ardent_trace_lazy_write)) {
 		trace_enabled = 0;
-		kpep_debug_report_error_once("TRACE ERROR", "failed to write trace output");
+		ardent_debug_report_error_once("TRACE ERROR", "failed to write trace output");
 	}
 }
 
-void kpep_trace_fmt(const char* module, const char* fmt, ...)
+void ardent_trace_fmt(const char* module, const char* fmt, ...)
 {
 	va_list args;
 
 	va_start(args, fmt);
-	kpep_trace_write_v(module, NULL, fmt, args);
+	ardent_trace_write_v(module, NULL, fmt, args);
 	va_end(args);
 }
 
-void kpep_trace_sub_fmt(const char* module, const char* submodule, const char* fmt, ...)
+void ardent_trace_sub_fmt(const char* module, const char* submodule, const char* fmt, ...)
 {
 	va_list args;
 
 	va_start(args, fmt);
-	kpep_trace_write_v(module, submodule, fmt, args);
+	ardent_trace_write_v(module, submodule, fmt, args);
 	va_end(args);
 }
 
-void kpep_trace_sub(const char* module, const char* submodule, const char* msg)
+void ardent_trace_sub(const char* module, const char* submodule, const char* msg)
 {
 	if (!msg)
 		msg = "";
-	kpep_trace_sub_fmt(module, submodule, "%s", msg);
+	ardent_trace_sub_fmt(module, submodule, "%s", msg);
 }
 
-void kpep_trace(const char* module, const char* msg)
+void ardent_trace(const char* module, const char* msg)
 {
 	if (!msg)
 		msg = "";
-	kpep_trace_sub_fmt(module, NULL, "%s", msg);
+	ardent_trace_sub_fmt(module, NULL, "%s", msg);
 }
 
 #endif

@@ -19,26 +19,26 @@
 # ##################################################################################################
 
 # Set project source files
-SET  (KPEP_logging_sources kpep_logging.c)
-LIST (APPEND KPEP_logging_sources sink_dummy.c)
-LIST (APPEND KPEP_logging_sources sink_syslog.c)
-LIST (APPEND KPEP_logging_sources sink_stderr.c)
-LIST (APPEND KPEP_logging_sources sink_extern.c)
+SET  (ARDent_logging_sources ardent_logging.c)
+LIST (APPEND ARDent_logging_sources sink_dummy.c)
+LIST (APPEND ARDent_logging_sources sink_syslog.c)
+LIST (APPEND ARDent_logging_sources sink_stderr.c)
+LIST (APPEND ARDent_logging_sources sink_extern.c)
 
 # ##################################################################################################
 # STATIC Compilation for linking
 # ##################################################################################################
 
 # Rest of libacvpro
-ADD_LIBRARY (KPEP_logging OBJECT ${KPEP_logging_sources})
+ADD_LIBRARY (ARDent_logging OBJECT ${ARDent_logging_sources})
 
 IF (TRACE_SINK)
-ADD_DEFINITIONS(-DKPEP_TRACE_SINK)
+ADD_DEFINITIONS(-DARDent_TRACE_SINK)
 ENDIF ()
 
-TARGET_COMPILE_OPTIONS (KPEP_logging PRIVATE ${KPEP_LIB_CFLAGS} "-fPIC")
+TARGET_COMPILE_OPTIONS (ARDent_logging PRIVATE ${ARDent_LIB_CFLAGS} "-fPIC")
 IF(CMAKE_VERSION GREATER_EQUAL 3.13.0)
-    TARGET_LINK_OPTIONS(KPEP_logging PRIVATE ${KPEP_LIB_LDFLAGS})
+    TARGET_LINK_OPTIONS(ARDent_logging PRIVATE ${ARDent_LIB_LDFLAGS})
 ENDIF ()
 
 

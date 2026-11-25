@@ -29,7 +29,7 @@
 #include <stdint.h>
 #include <immintrin.h> // For _mm_pause
 
-#include "kpep/kpep.h"
+#include "ardent/ardent.h"
 #include "rdcpu_toolbox.h"
 
 /**********************************************/

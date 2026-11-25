@@ -1,7 +1,7 @@
 # Static Analysis Report — `source/debug`
 
 **Status:** Deferred; no subsystem fixes are in progress.
-**Scope:** Only `/home/dev/code/KeyPair/kpep/source/debug`.
+**Scope:** Only `/home/dev/code/KeyPair/ardent/source/debug`.
 **Build/lint result:** VS Code diagnostic scan found no errors in `source/debug` before the Windows monotonic-clock update.
 
 ## Deferred Findings
@@ -29,8 +29,8 @@ Concurrent first users can race, overwrite mutex pointers, or observe an uniniti
 - `source/debug/debug_core.c:145-163`
 - `source/debug/debug_core.c:229-273`
 - `source/debug/debug_core.c:276-292`
-- `source/debug/kpep_trace.c:83-118`
-- `source/debug/kpep_profile.c:50-95`
+- `source/debug/ardent_trace.c:83-118`
+- `source/debug/ardent_profile.c:50-95`
 
 **Evidence:**
 Sink release/destroy closes streams and frees the sink lock while trace/profile reload or other users may still hold or use the sink. Writes do not establish a separate lifetime reference.
@@ -47,8 +47,8 @@ Use-after-free, use-after-close, and mutex lock/destroy races.
 ### 3. High — Trace/profile lifecycle state is unsynchronized
 
 **Locations:**
-- `source/debug/kpep_trace.c:68-74,93-166`
-- `source/debug/kpep_profile.c:38-45,70-177`
+- `source/debug/ardent_trace.c:68-74,93-166`
+- `source/debug/ardent_profile.c:38-45,70-177`
 
 **Evidence:**
 Trace/profile pointers and enabled flags can be changed during reload or shutdown while readers and writers access them.
@@ -64,7 +64,7 @@ Data races and pointer lifetime races.
 ### 4. High — Profile counters permit lost concurrent updates
 
 **Location:**
-- `source/debug/kpep_profile.c:132-177`
+- `source/debug/ardent_profile.c:132-177`
 
 **Evidence:**
 `seed_stub_profile_update()` increments counters and recalculates/reset state without synchronization of `SEED_STUB_INFO`.
@@ -111,7 +111,7 @@ A process-wide `umask` change can affect unrelated threads during bind/listen se
 ### 7. Medium — Profile output failures are not consistently handled
 
 **Locations:**
-- `source/debug/kpep_profile.c:91-129`
+- `source/debug/ardent_profile.c:91-129`
 
 **Evidence:**
 Profile header and line write results are largely ignored. Profiling can remain marked enabled after output failures.
@@ -127,8 +127,8 @@ The subsystem can report profiling active while output is failing or incomplete.
 ### 8. Low/Medium — Diagnostic formatting can silently truncate
 
 **Locations:**
-- `source/debug/kpep_trace.c:145-163`
-- `source/debug/kpep_profile.c:110-129`
+- `source/debug/ardent_trace.c:145-163`
+- `source/debug/ardent_profile.c:110-129`
 
 **Evidence:**
 Fixed-formatting buffers are used, and positive `vsnprintf`/`snprintf` truncation may not be detected.
@@ -144,7 +144,7 @@ Incomplete or misleading diagnostic records.
 ### 9. Low/Medium — Windows monotonic-clock conversion overflow
 
 **Current location:**
-- `source/debug/debug_utility.c`, function `kpep_debug_monotonic_us()`
+- `source/debug/debug_utility.c`, function `ardent_debug_monotonic_us()`
 
 **Original evidence:**
 The original expression multiplies the QPC tick count by `1000000ULL` before dividing by the frequency:

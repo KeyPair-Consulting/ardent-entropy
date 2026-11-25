@@ -21,7 +21,7 @@
    - Confirm digest/MAC dispatch signatures, parameter getters/setters, context duplication semantics, and result-length behavior.
    - Relevant crypto code: `source/crypto/sha2.c`, `source/crypto/sha3_jent_wrapper.c`, `source/crypto/hmac.c`, and `source/crypto/drbg.c`.
 
-4. **KPEP security-strength and result/error definitions**
+4. **ARDent security-strength and result/error definitions**
    - Confirm the strength constants, request limits, and error-code meanings used by DRBG and provider wrappers.
    - Relevant crypto code: `source/crypto/drbg.h` and `source/crypto/drbg.c`.
 
@@ -36,30 +36,30 @@
    - Relevant debug code: `source/debug/debug_core.c`.
 
 3. **Provider parameter API**
-   - Validate `kpep_get_core_params()` and provider parameter constants.
+   - Validate `ardent_get_core_params()` and provider parameter constants.
    - Relevant debug code: `source/debug/debug_core.c`.
 
 4. **External profile structure**
    - Validate `SEED_STUB_INFO` layout and synchronization contract.
-   - Relevant debug code: `source/debug/kpep_profile.c`.
+   - Relevant debug code: `source/debug/ardent_profile.c`.
 
 5. **External debug callers**
    - Callers may invoke trace/profile APIs concurrently or during shutdown/reconfiguration.
    - Relevant declarations: `source/debug/debug_core.h`.
 
 6. **Debug build/configuration dependencies**
-   - Debug feature macros, `KPEP_LIB_CFLAGS`, `KPEP_LIB_LDFLAGS`, and OpenSSL compile settings.
+   - Debug feature macros, `ARDent_LIB_CFLAGS`, `ARDent_LIB_LDFLAGS`, and OpenSSL compile settings.
    - Relevant build code: `source/debug/CMakeLists.txt`.
 
 ## Source: `source/logging`
 
 1. **OpenSSL mutex/thread API**
    - Validate `ossl_crypto_mutex_*` behavior, lifetime, and nested-use behavior.
-   - Relevant logging code: `source/logging/kpep_logging.c`.
+   - Relevant logging code: `source/logging/ardent_logging.c`.
 
 2. **OpenSSL provider parameter lookup**
-   - Validate activation and level parameter loading through `kpep_get_core_params()`.
-   - Relevant logging code: `source/logging/kpep_logging.c` and sink parameter loaders.
+   - Validate activation and level parameter loading through `ardent_get_core_params()`.
+   - Relevant logging code: `source/logging/ardent_logging.c` and sink parameter loaders.
 
 3. **External shared-library ABI**
    - Validate `SINK_FUNCTIONS` layout and initialization/finalization/function-pointer compatibility.
@@ -71,15 +71,15 @@
 
 5. **Trace/logging interaction**
    - Trace calls occur from logging paths while a logging mutex may be held; validate recursion and nested-lifecycle behavior.
-   - Relevant logging code: `source/logging/kpep_logging.c` and sink implementations.
+   - Relevant logging code: `source/logging/ardent_logging.c` and sink implementations.
 
-6. **KPEP allocator contracts**
-   - Validate ownership and failure behavior for `kpep_zalloc()`, `kpep_free()`, and `kpep_cleanse()`.
+6. **ARDent allocator contracts**
+   - Validate ownership and failure behavior for `ardent_zalloc()`, `ardent_free()`, and `ardent_cleanse()`.
    - Relevant logging code: binary sink formatting and external/provider lifecycle paths.
 
 7. **Provider initialization/finalization lifecycle**
    - Validate repeated init/fini behavior and provider unload ordering.
-   - Relevant logging code: `source/logging/kpep_logging.c` and provider lifecycle callers.
+   - Relevant logging code: `source/logging/ardent_logging.c` and provider lifecycle callers.
 
 ## Collation Notes
 

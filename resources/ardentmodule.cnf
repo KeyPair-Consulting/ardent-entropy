@@ -1,6 +1,6 @@
-[kpep_sect]
+[ardent_sect]
 activate = 1
-# .include kpep.so.mac
+# .include ardent.so.mac
 
 ############################################################################################
 ############################################################################################
@@ -13,7 +13,7 @@ logging = logging_sect
 seed = seed_sect
 
 # Local IPC control endpoint (see DEBUGGING.md for full information).  
-debug-ipc-path = /home/dev/code/KeyPair/TEMP/interop.file
+debug-ipc-path = /home/dev/INTEROP_DEMO/interop.file
 
 ############################################################################################
 ############################################################################################
@@ -92,15 +92,15 @@ extseed = extseed_sect
 # entropy usage (notably, activated at startup and providing material for each gather).
 #restricted-entropy-counting = 1
 
-# KPEP can use either a synchronous or asychronous mode.  In asynchronous mode, a seed
+# ARDENT can use either a synchronous or asychronous mode.  In asynchronous mode, a seed
 # request is services immedately from a ring buffer, and background worker threads, 
 # one per seed source, refill the ring buffer.  
-# If this option is zero (0) or missing, KPEP will operate in synchronous mode with a 
+# If this option is zero (0) or missing, ARDENT will operate in synchronous mode with a 
 # single thread and will block while gathering entropy.
 async-mode = 0
 
-# KPEP will always ask the seeds sources for entropy upon receiving an 
-# entropy request from OpenSSL. KPEP can use the following set of policies to determine 
+# ARDENT will always ask the seeds sources for entropy upon receiving an 
+# entropy request from OpenSSL. ARDENT can use the following set of policies to determine 
 # the behavior around (temporrily) failed seed sources.
 #
 # The "all" and "some" settings are mutually exclusive (both cannot be "1").
@@ -126,14 +126,13 @@ req-hardware-source = 0
 ############################################################################################
 # JITTER ENTROPY seed source
 # Jitterentropy is statically linked into the provider from an externally supplied archive.
-# It must comply with all technical/compilation requirements of the KeyPair ESV Certificate
-# E239. The operational environment must be listed on the
-# certificate (or a rebranded certificate) for this source to be considered ESV-compliant.
-# These values should not be altered by vendors unless done in consultation with KeyPair.
+# It must comply with all technical/compilation requirements a valid ESV Certificate. The
+# operational environment must be listed on the certificate (or a rebranded certificate) 
+# for this source to be considered ESV-compliant. 
 
 [jitter_sect]
 activate = 0
-validated = "E239"
+validated = "Exxx"
 
 block-size = 256
 block-count = 1
@@ -207,10 +206,10 @@ block-count = 192
 
 ############################################################################################
 # EXTERNAL seed source
-# An external source is loaded from a shared object (.so/.dll) at startup.  The configuration
-# options specified here control the -side of the link and must be present.  Additional
-# source-specific configuration options can also be stored here and read by the mechanisms
-# demonstrated int he KeyPair example external seed source (see examples directory).
+# An external entropy source loaded from a shared object (.so/.dll) at startup.  The 
+# configuration below are the minimum required to describe the entropy capabilities.
+# Additonal options can be stored here and retrieved by the methods demonstrated in the 
+# example external seed source (see examples directory).
 #
 # Up to four (4) distinct external sources can be specified.  The configuration options for
 # each source must be prepended with the number (1..4).  Example below can be altered
@@ -223,7 +222,7 @@ block-count = 192
 
 [extseed_sect]
 
-# KeyPair JEnt example
+# ARDent JEnt example
 1.activate = 0
 1.block-size = 256
 1.block-count = 1

@@ -121,7 +121,7 @@ SET(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-undefined")
 # Project Information
 # ##################################################################################################
 
-PROJECT (KPEP)
+PROJECT (ARDent)
 
 # ##################################################
 # Verbose output?
@@ -141,28 +141,28 @@ IF (NOT external)
 ENDIF (NOT external)
 
 # ##################################################
-# Should we build KPEP 'utility' application?
+# Should we build ARDent 'utility' application?
 SET(utility ON CACHE BOOL "Specify to build 'utility' application (default: ON)")
 IF (NOT utility)
     MESSAGE("-- Application 'utility' is DISABLED and will not be built")
 ENDIF (NOT utility)
 
 # ##################################################
-# Should we build KPEP 'rand' application?
+# Should we build ARDent 'rand' application?
 SET(rand ON CACHE BOOL "Specify to build 'rand' application (default: ON)")
 IF (NOT rand)
     MESSAGE("-- Application 'rand' is DISABLED and will not be built")
 ENDIF (NOT rand)
 
 # ##################################################
-# Should we build KPEP 'debug' application?
+# Should we build ARDent 'debug' application?
 SET(debug ON CACHE BOOL "Specify to build 'debug' application (default: ON)")
 IF (NOT debug)
     MESSAGE("-- Application 'debug' is DISABLED and will not be built")
 ENDIF (NOT debug)
 
 # ##################################################
-# Should we build KPEP test applications?
+# Should we build ARDent test applications?
 SET(tests OFF CACHE BOOL  "Specify to build unit test and stress test applications (default: OFF)")
 IF (tests)
     MESSAGE("-- Testing applications are ENABLED and will be built")
@@ -304,12 +304,12 @@ ENDIF ()
 # OpenSSL directories
 # ##################################################################################################
 
-# Verify we have the absolute path to the KPFP Openssl Installation
+# Verify we have the absolute path to the Openssl Installation
 IF (NOT DEFINED ENV{OPENSSL_ROOT}) # This should *not* be $ENV(...)
-    MESSAGE(FATAL_ERROR "-- Missing environment variable: '$OPENSSL_ROOT' holding the absolute path to the KPFP installation ('--prefix') directory.")
+    MESSAGE(FATAL_ERROR "-- Missing environment variable: '$OPENSSL_ROOT' holding the absolute path to the OpenSSL installation ('--prefix') directory.")
 ENDIF ()
 SET(OPENSSL_ROOT $ENV{OPENSSL_ROOT})
-MESSAGE("-- Detected OpenSSL/KPFP root path: '${OPENSSL_ROOT}'")
+MESSAGE("-- Detected OpenSSL root path: '${OPENSSL_ROOT}'")
 
 # Set OpenSSL library directory (check environment)
 IF (DEFINED ENV{OPENSSL_LIBDIR}) # This should *not* be $ENV(...)
@@ -363,8 +363,8 @@ ENDIF ()
 # Include Paths
 # ##################################################################################################
 
-INCLUDE_DIRECTORIES(${KPEP_SOURCE_DIR}/include)
-INCLUDE_DIRECTORIES(${KPEP_SOURCE_DIR}/include/openssl)
+INCLUDE_DIRECTORIES(${ARDent_SOURCE_DIR}/include)
+INCLUDE_DIRECTORIES(${ARDent_SOURCE_DIR}/include/openssl)
 INCLUDE_DIRECTORIES(${OPENSSL_ROOT}/include)
 INCLUDE_DIRECTORIES(${JITTER_INCLUDE_DIRS})
 
@@ -403,22 +403,22 @@ ENDIF (tests)
 # ##################################################################################################
 
 #  Provider
-INSTALL(TARGETS KPEP_provider DESTINATION ${OPENSSL_MODULE_PATH}/
+INSTALL(TARGETS ARDent_provider DESTINATION ${OPENSSL_MODULE_PATH}/
     PERMISSIONS 
         OWNER_READ OWNER_EXECUTE OWNER_WRITE
         GROUP_READ GROUP_EXECUTE 
         WORLD_READ WORLD_EXECUTE)
-INSTALL(FILES ${KPEP_SOURCE_DIR}/resources/kpepmodule.cnf DESTINATION ${OPENSSL_SSL_PATH}/
+INSTALL(FILES ${ARDent_SOURCE_DIR}/resources/ardentmodule.cnf DESTINATION ${OPENSSL_SSL_PATH}/
     PERMISSIONS 
         OWNER_READ OWNER_WRITE
         GROUP_READ 
         WORLD_READ)
-INSTALL(FILES ${KPEP_SOURCE_DIR}/resources/personalization.cnf DESTINATION ${OPENSSL_SSL_PATH}/
+INSTALL(FILES ${ARDent_SOURCE_DIR}/resources/personalization.cnf DESTINATION ${OPENSSL_SSL_PATH}/
     PERMISSIONS 
         OWNER_READ OWNER_WRITE
         GROUP_READ 
         WORLD_READ)
-INSTALL(DIRECTORY include/kpep/ DESTINATION ${OPENSSL_ROOT}/include/kpep)
+INSTALL(DIRECTORY include/ardent/ DESTINATION ${OPENSSL_ROOT}/include/ardent)
     
 #  Utility
 IF (utility)
@@ -447,7 +447,7 @@ IF (debug)
             WORLD_READ WORLD_EXECUTE)
 ENDIF (debug)
 
-# KPEP Test Applications
+# ARDent Test Applications
 IF (tests)
     INSTALL(TARGETS APP_rand_stress DESTINATION ${OPENSSL_ROOT}/test
         PERMISSIONS 
@@ -499,5 +499,5 @@ ENDIF (example-external-logging)
 #ENDIF (FIPS_OPTEST)
 
 # Fully custom finalization script; must be run after CMake installs above (to the bin/ directory)
-INSTALL(CODE "execute_process(COMMAND ${KPEP_SOURCE_DIR}/resources/cmake_finalize_kpep.sh)")
+INSTALL(CODE "execute_process(COMMAND ${ARDent_SOURCE_DIR}/resources/cmake_finalize_ardent.sh)")
 

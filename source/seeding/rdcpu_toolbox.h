@@ -14,8 +14,8 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPEP_RDCPU_TOOLBOX_H
-#define KPEP_RDCPU_TOOLBOX_H
+#ifndef ARDENT_RDCPU_TOOLBOX_H
+#define ARDENT_RDCPU_TOOLBOX_H
 #pragma once
 
 #include <stdint.h>
@@ -99,4 +99,4 @@ int rdseed_get_bytes_step(unsigned int n, unsigned char *dest, unsigned int retr
 #ifdef __cplusplus
 }
 #endif
-#endif /* KPEP_RDCPU_TOOLBOX_H */
+#endif /* ARDENT_RDCPU_TOOLBOX_H */

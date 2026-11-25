@@ -14,8 +14,8 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPEP_DEBUG_UTILITY_H
-#define KPEP_DEBUG_UTILITY_H
+#ifndef ARDENT_DEBUG_UTILITY_H
+#define ARDENT_DEBUG_UTILITY_H
 #pragma once
 
 #include <stddef.h>
@@ -26,16 +26,16 @@
 extern "C" {
 #endif
 
-int kpep_debug_validate_filename(const char *path);
+int ardent_debug_validate_filename(const char *path);
 /* Return 1 only when the named environment variable is exactly "1". */
-int kpep_debug_is_enabled_flag(const char *name);
-int kpep_debug_is_stream_name(const char *name, FILE **out_stream);
-int kpep_debug_parse_bool(const char *value, int *out);
-uint32_t kpep_debug_parse_u32_env(const char *value);
-int kpep_debug_parse_interval(const char *value, uint32_t *out);
-void kpep_debug_report_error_once(const char *tag, const char *fmt, ...);
-uint64_t kpep_debug_monotonic_us(void);
-int kpep_debug_open_output(const char *name,
+int ardent_debug_is_enabled_flag(const char *name);
+int ardent_debug_is_stream_name(const char *name, FILE **out_stream);
+int ardent_debug_parse_bool(const char *value, int *out);
+uint32_t ardent_debug_parse_u32_env(const char *value);
+int ardent_debug_parse_interval(const char *value, uint32_t *out);
+void ardent_debug_report_error_once(const char *tag, const char *fmt, ...);
+uint64_t ardent_debug_monotonic_us(void);
+int ardent_debug_open_output(const char *name,
 						   const char *banner,
 						   FILE **out_stream,
 						   int *out_owned,
@@ -46,4 +46,4 @@ int kpep_debug_open_output(const char *name,
 }
 #endif
 
-#endif /* KPEP_DEBUG_UTILITY_H */
+#endif /* ARDENT_DEBUG_UTILITY_H */

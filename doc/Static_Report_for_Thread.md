@@ -1,7 +1,7 @@
 # Static Analysis Report — `source/thread`
 
 **Status:** Deferred; no subsystem fixes are in progress.
-**Scope:** Only `/home/dev/code/KeyPair/kpep/source/thread` and its OpenSSL-internal thread header use in context.
+**Scope:** Only `/home/dev/code/KeyPair/ardent/source/thread` and its OpenSSL-internal thread header use in context.
 **Build/lint result:** VS Code diagnostic scan found no errors in `source/thread`.
 
 ## Copied-OpenSSL Constraint
@@ -55,7 +55,7 @@ A joined-and-cleaned cancelled thread is reported as an unsuccessful join even t
 Extreme or malformed deadlines may produce invalid timeout values or an unintended immediate timeout.
 
 **Resume direction:**
-- Define valid KPEP deadline ranges.
+- Define valid ARDent deadline ranges.
 - Validate seconds, nanosecond remainder, and overflow before constructing `struct timespec`.
 - Recheck OpenSSL time conversion helpers rather than replacing upstream logic casually.
 

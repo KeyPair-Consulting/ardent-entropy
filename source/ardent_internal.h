@@ -14,11 +14,11 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPEP_INTERNAL_H
-#define KPEP_INTERNAL_H
+#ifndef ARDENT_INTERNAL_H
+#define ARDENT_INTERNAL_H
 #pragma once
 
-#include "kpep/kpep.h"  // For KPEP_RESULT
+#include "ardent/ardent.h"  // For ARDENT_RESULT
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,50 +28,50 @@ extern "C" {
  * SEED-SOURCE descriptions and Mode
  * ***********************************************************************************************/
 
-typedef struct kpep_seeding_ctx_st KPEP_SEEDING_CTX;
+typedef struct ardent_seeding_ctx_st ARDENT_SEEDING_CTX;
 
-// Get a multi-line string containing a description of all the seed sources, one per line; source in kpep_seeding.c
-const char* kpep_seeding_get_description(KPEP_SEEDING_CTX *ctx);
+// Get a multi-line string containing a description of all the seed sources, one per line; source in ardent_seeding.c
+const char* ardent_seeding_get_description(ARDENT_SEEDING_CTX *ctx);
 
 // Get a boolean (0/1) whether entropy restrive counting (Method #1) is enabled
-int kpep_seeding_get_restricted_mode(KPEP_SEEDING_CTX *ctx);
+int ardent_seeding_get_restricted_mode(ARDENT_SEEDING_CTX *ctx);
 
 // Retrieve the seeding service owned by a provider context.
-KPEP_SEEDING_CTX *kpep_provider_get_seeding(void *prov_ctx);
+ARDENT_SEEDING_CTX *ardent_provider_get_seeding(void *prov_ctx);
 
 /* ************************************************************************************************
  * ERROR Reason strings
  * ***********************************************************************************************/
 
 // Function to load the error strings into libcrypto 
-KPEP_RESULT kpep_set_openssl_reason_strings(void);
+ARDENT_RESULT ardent_set_openssl_reason_strings(void);
 
 /* ************************************************************************************************
  * SUBSYSTEM initialization
  * ***********************************************************************************************/
 
-// Initialize the logging subsystem; source in logging/kpep_logging.c */
-KPEP_RESULT kpep_logging_init(void* prov_ctx);
+// Initialize the logging subsystem; source in logging/ardent_logging.c */
+ARDENT_RESULT ardent_logging_init(void* prov_ctx);
 
-// Finalize the logging subsystem; called once during provider close; source in kpep_logging.c
-void kpep_logging_fini(void);
+// Finalize the logging subsystem; called once during provider close; source in ardent_logging.c
+void ardent_logging_fini(void);
 
 // Initialize provider-owned seed sources and DRBG state.
-KPEP_SEEDING_CTX* kpep_seeding_new(void *prov_ctx);
+ARDENT_SEEDING_CTX* ardent_seeding_new(void *prov_ctx);
 
 // Finalize provider-owned seed sources and DRBG state.
-void kpep_seeding_free(KPEP_SEEDING_CTX *ctx);
+void ardent_seeding_free(ARDENT_SEEDING_CTX *ctx);
 
-// Initialize the debug subsystem; source in debug/kpep_debug_core.c
-void kpep_debug_init(void);
+// Initialize the debug subsystem; source in debug/ardent_debug_core.c
+void ardent_debug_init(void);
 
 // Initialize immutable debug control; source in debug/debug_core.c
-void kpep_debug_control_init(void *prov_ctx);
+void ardent_debug_control_init(void *prov_ctx);
 
-// Finalize the debug subsystem; source in debug/kpep_debug_core.c
-void kpep_debug_fini(void);
+// Finalize the debug subsystem; source in debug/ardent_debug_core.c
+void ardent_debug_fini(void);
 
 #ifdef __cplusplus
 }
 #endif
-#endif /* KPEP_INTERNAL_H */
+#endif /* ARDENT_INTERNAL_H */

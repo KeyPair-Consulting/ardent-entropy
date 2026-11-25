@@ -17,7 +17,7 @@
 
 print_usage()
 {
-   echo "Compile the example external entropy source for the KeyPair Management Provider."
+   echo "Compile the example external entropy source for the ARDent Entropy Provider."
    echo
    echo "Syntax:  $0 [--libdir </path/to/dir>] [--incdir </path/to/dir>] [--debug] [--echo] [--help]"
    echo "Options:"
@@ -74,6 +74,6 @@ fi
 
 $ECHO_ME $COMPILER $DEBUG $CFLAGS -I$OPENSSL_ROOT/include -I../../include external_logging.c -o $OUTNAME \
     $OPENSSL_ROOT/$LIBDIR/libcrypto.so \
-    $OPENSSL_ROOT/$LIBDIR/ossl-modules/kpep.so
+    $OPENSSL_ROOT/$LIBDIR/ossl-modules/ardent.so
 
 

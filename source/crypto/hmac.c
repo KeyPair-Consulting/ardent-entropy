@@ -20,7 +20,7 @@
 #include "openssl/core_names.h"
 #include "openssl/core_dispatch.h"    /* OSSL Functions */
 
-#include "kpep/kpep.h"
+#include "ardent/ardent.h"
 #include "hmac.h"
 #include "sha2.h"
 
@@ -62,14 +62,14 @@ EXPORT_VISIBILITY_HIDDEN
 HMAC_CTX* hmac_ctx_new(void)
 {
     HMAC_CTX* ctx;
-    ctx = (HMAC_CTX*) kpep_zalloc(sizeof(HMAC_CTX));
+    ctx = (HMAC_CTX*) ardent_zalloc(sizeof(HMAC_CTX));
     if (ctx) {
         ctx->ictx = hash_ctx_new();
         ctx->octx = hash_ctx_new();
         if (!ctx->ictx || !ctx->octx) {
             hash_ctx_free(ctx->ictx);  // NULL safe
             hash_ctx_free(ctx->octx);  // NULL safe
-            kpep_free(ctx);
+            ardent_free(ctx);
             ctx = NULL;
         }
     }
@@ -81,11 +81,11 @@ EXPORT_VISIBILITY_HIDDEN
 void hmac_ctx_free (HMAC_CTX* ctx)
 {
     if (!ctx) return;
-    kpep_zeroize(ctx->ipad, HASH_BLOCK_SIZE);
-    kpep_zeroize(ctx->opad, HASH_BLOCK_SIZE);
+    ardent_zeroize(ctx->ipad, HASH_BLOCK_SIZE);
+    ardent_zeroize(ctx->opad, HASH_BLOCK_SIZE);
     hash_ctx_free(ctx->ictx);
     hash_ctx_free(ctx->octx);
-    kpep_free(ctx);
+    ardent_free(ctx);
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -186,8 +186,8 @@ int hmac_final(HMAC_CTX *ctx,
            (memcpy(mac, mac_temp, mac_size) != NULL));
     if (mac_len)
         *mac_len = mac_size;
-    kpep_zeroize(inner_digest, sizeof(inner_digest));
-    kpep_zeroize(mac_temp, sizeof(mac_temp));
+    ardent_zeroize(inner_digest, sizeof(inner_digest));
+    ardent_zeroize(mac_temp, sizeof(mac_temp));
     return ret;
 }
 
@@ -215,7 +215,7 @@ int hmac(const unsigned char *key, unsigned int key_size,
  * ***********************************************************************************************/
 
 EXPORT_VISIBILITY_HIDDEN
-const OSSL_DISPATCH kpep_hmac_functions[] = {
+const OSSL_DISPATCH ardent_hmac_functions[] = {
     { OSSL_FUNC_MAC_NEWCTX,  (void (*)(void))hmac_ctx_new },
     { OSSL_FUNC_MAC_FREECTX, (void (*)(void))hmac_ctx_free },
     { OSSL_FUNC_MAC_INIT,    (void (*)(void))hmac_init },

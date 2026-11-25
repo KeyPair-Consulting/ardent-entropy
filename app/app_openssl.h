@@ -14,8 +14,8 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPEP_APP_OPENSSL_H
-#define KPEP_APP_OPENSSL_H
+#ifndef ARDENT_APP_OPENSSL_H
+#define ARDENT_APP_OPENSSL_H
  
 #ifdef __cplusplus
 extern "C" {

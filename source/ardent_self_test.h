@@ -14,8 +14,8 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPEP_SELF_TEST_H
-#define KPEP_SELF_TEST_H
+#ifndef ARDENT_SELF_TEST_H
+#define ARDENT_SELF_TEST_H
 #pragma once
 
 //#include "openssl/core_dispatch.h"
@@ -55,4 +55,4 @@ void ossl_set_error_state(const char *type);
 #ifdef __cplusplus
 }
 #endif
-#endif /* KPEP_SELF_TEST_H */
+#endif /* ARDENT_SELF_TEST_H */

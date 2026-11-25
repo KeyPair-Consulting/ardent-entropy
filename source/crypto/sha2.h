@@ -14,8 +14,8 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPEP_SHA2_H
-#define KPEP_SHA2_H
+#ifndef ARDENT_SHA2_H
+#define ARDENT_SHA2_H
 
 #define SHA2_256_DIGEST_SIZE ( 256 / 8)
 #define SHA2_256_BLOCK_SIZE  ( 512 / 8)
@@ -43,5 +43,5 @@ int sha2_get_params(OSSL_PARAM params[]);
 }
 #endif
 
-#endif /* KPEP_SHA2_H */
+#endif /* ARDENT_SHA2_H */
 

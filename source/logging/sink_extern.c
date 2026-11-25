@@ -14,10 +14,10 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
- #include "kpep/kpep.h"
+ #include "ardent/ardent.h"
 
 /*  External libraries can be disabled by compilation flags */
-#ifdef KPEP_DISABLE_EXTERNAL
+#ifdef ARDENT_DISABLE_EXTERNAL
 EXPORT_VISIBILITY_HIDDEN
 SINK_FUNCTIONS sink_extern = {
 	.init_fn = NULL,
@@ -43,7 +43,7 @@ SINK_FUNCTIONS sink_extern = {
 
 #include <dlfcn.h>
 
-#include "kpep/kpep_names.h"
+#include "ardent/ardent_names.h"
 
 static LogLevel current_log_level = LOG_LVL_FATAL;
 
@@ -67,7 +67,7 @@ static const char* filename = NULL;
 
 #include "openssl/params.h"
 
-static KPEP_RESULT load_params_from_environment(void)
+static ARDENT_RESULT load_params_from_environment(void)
 {
 	char *dbgenv;
 
@@ -83,10 +83,10 @@ static KPEP_RESULT load_params_from_environment(void)
 	if (dbgenv != NULL) {
 		functions = dbgenv;
 	}
-	return KPEP_R_SUCCESS;
+	return ARDENT_R_SUCCESS;
 }
 
-static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
+static ARDENT_RESULT load_params_from_openssl(void* prov_ctx)
 {
 	const char *level_str = NULL;
 	const char *filepath_str = NULL;
@@ -95,22 +95,22 @@ static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
 
 	// Set parameters for lookup
 	*p++ = OSSL_PARAM_construct_utf8_ptr(
-		KPEP_PROV_PARAM_LOG_EXTERN_FILEPATH,
+		ARDENT_PROV_PARAM_LOG_EXTERN_FILEPATH,
 		(char **) &filepath_str,
 		sizeof(filepath_str));	
 	*p++ = OSSL_PARAM_construct_utf8_ptr(
-		KPEP_PROV_PARAM_LOG_EXTERN_FUNCTIONS,
+		ARDENT_PROV_PARAM_LOG_EXTERN_FUNCTIONS,
 		(char **) &functions_str,
 		sizeof(functions_str));
 	*p++ = OSSL_PARAM_construct_utf8_ptr(
-		KPEP_PROV_PARAM_LOG_EXTERN_LEVEL,
+		ARDENT_PROV_PARAM_LOG_EXTERN_LEVEL,
 		(char **) &level_str,
 		sizeof(level_str));
 	*p = OSSL_PARAM_construct_end();
 
 	// Lookup
-	if (!kpep_get_core_params(prov_ctx, params)) {
-        return KPEP_R_CONFIG_LOOKUP_FAILURE;
+	if (!ardent_get_core_params(prov_ctx, params)) {
+        return ARDENT_R_CONFIG_LOOKUP_FAILURE;
 	}
 
 	if (filepath_str)
@@ -122,7 +122,7 @@ static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
 	else 
 		current_log_level = LOG_LVL_ERR;
 
-	return KPEP_R_SUCCESS;
+	return ARDENT_R_SUCCESS;
 }
 
 /* ************************************************************************************************
@@ -131,12 +131,12 @@ static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
  * ************************************************************************************************
  * ***********************************************************************************************/
  
-static KPEP_RESULT init_log_extern(void* prov_ctx)
+static ARDENT_RESULT init_log_extern(void* prov_ctx)
 {
-	KPEP_RESULT rv = KPEP_R_SUCCESS;
+	ARDENT_RESULT rv = ARDENT_R_SUCCESS;
 
-	if (kpep_trace_sink_enabled) {
-		kpep_trace("KPEP-SINK", __func__);
+	if (ardent_trace_sink_enabled) {
+		ardent_trace("ARDENT-SINK", __func__);
 	}
 	rv = prov_ctx?load_params_from_openssl(prov_ctx)
 	             :load_params_from_environment();
@@ -144,19 +144,19 @@ static KPEP_RESULT init_log_extern(void* prov_ctx)
 
 	// Initialize source
 	if (!filepath || !functions) {
-		rv = KPEP_R_NULL_ARG;
+		rv = ARDENT_R_NULL_ARG;
 		goto err;
 	}
 	hnd = dlopen(filepath, RTLD_LAZY | RTLD_LOCAL);
 	if (!hnd) {
 		printf("DLOPEN error: %s\n", dlerror());
-		rv = KPEP_R_EXTERN_LOAD_FAILURE;
+		rv = ARDENT_R_EXTERN_LOAD_FAILURE;
 		goto err;
 	}
 	ext_sink = (SINK_FUNCTIONS*) dlsym(hnd, functions);
 	if (!ext_sink) {
 		printf("DLSYM error: %s\n", dlerror());
-		rv = KPEP_R_EXTERN_LOAD_FAILURE;
+		rv = ARDENT_R_EXTERN_LOAD_FAILURE;
 		goto err;
 	}
 
@@ -166,11 +166,11 @@ static KPEP_RESULT init_log_extern(void* prov_ctx)
 	// Call new on the stub
 	rv = ext_sink->init_fn(prov_ctx);
 	if (rv) {
-		printf("ERROR: Failed to initialize external log sink: %s\n", kpep_get_reason_string(rv));
+		printf("ERROR: Failed to initialize external log sink: %s\n", ardent_get_reason_string(rv));
 		goto err;
 	}
 
-	rv = KPEP_R_SUCCESS;
+	rv = ARDENT_R_SUCCESS;
 
 err:
 	if (rv && hnd) {  // Error and handle?
@@ -182,8 +182,8 @@ err:
 
 static void fini_log_extern(void)
 {
-	if (kpep_trace_sink_enabled) {
-		kpep_trace("KPEP-SINK", __func__);
+	if (ardent_trace_sink_enabled) {
+		ardent_trace("ARDENT-SINK", __func__);
 	}
 	ext_sink->fini_fn();
 	return;
@@ -201,8 +201,8 @@ static LogLevel get_level_extern(void)
 
 static void write_log_extern(LogLevel level, const char* module, const char* fmt, va_list args)
 {
-	if (kpep_trace_sink_enabled) {
-		kpep_trace("KPEP-SINK", __func__);
+	if (ardent_trace_sink_enabled) {
+		ardent_trace("ARDENT-SINK", __func__);
 	}
 	ext_sink->write_fn(level, module, fmt, args);
 	return;
@@ -210,8 +210,8 @@ static void write_log_extern(LogLevel level, const char* module, const char* fmt
 
 static void write_log_data_extern(LogLevel level, const char* module, const char* label, unsigned char *bytes, size_t bytes_len)
 {
-	if (kpep_trace_sink_enabled) {
-		kpep_trace("KPEP-SINK", __func__);
+	if (ardent_trace_sink_enabled) {
+		ardent_trace("ARDENT-SINK", __func__);
 	}
 	ext_sink->write_data_fn(level, module, label, bytes, bytes_len);
 	return;
@@ -227,4 +227,4 @@ SINK_FUNCTIONS sink_extern = {
 	.write_data_fn = &write_log_data_extern
 };
 
-#endif /* KPEP_DISABLE_EXTERNAL */
+#endif /* ARDENT_DISABLE_EXTERNAL */

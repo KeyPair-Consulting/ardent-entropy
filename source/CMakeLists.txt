@@ -19,37 +19,37 @@
 # ##################################################################################################
 
 # Provider and FIPS-critical code
-SET  (KPEP_sources kpep_provider.c kpep_self_test.c)
+SET  (ARDent_sources ardent_provider.c ardent_self_test.c)
 
 # Core functionality
-LIST (APPEND KPEP_sources kpep_internal.c kpep_integrity.c kpep_error.c)
-LIST (APPEND KPEP_sources kpep_seeding.c kpep_cpuinfo.c kpep_bio.c)
+LIST (APPEND ARDent_sources ardent_internal.c ardent_integrity.c ardent_error.c)
+LIST (APPEND ARDent_sources ardent_seeding.c ardent_cpuinfo.c ardent_bio.c)
 
 # Subsystems added by 'objects' instead of static libraries
-LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_crypto>)
-LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_thread>)
-LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_debug>)
-LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_logging>)
-LIST (APPEND KPEP_sources $<TARGET_OBJECTS:KPEP_seeding>)
+LIST (APPEND ARDent_sources $<TARGET_OBJECTS:ARDent_crypto>)
+LIST (APPEND ARDent_sources $<TARGET_OBJECTS:ARDent_thread>)
+LIST (APPEND ARDent_sources $<TARGET_OBJECTS:ARDent_debug>)
+LIST (APPEND ARDent_sources $<TARGET_OBJECTS:ARDent_logging>)
+LIST (APPEND ARDent_sources $<TARGET_OBJECTS:ARDent_seeding>)
 
 # ##################################################################################################
 # DO NOT CHANGE PAST THIS POINT
 # ##################################################################################################
 
-ADD_LIBRARY (KPEP_provider SHARED ${KPEP_sources})
+ADD_LIBRARY (ARDent_provider SHARED ${ARDent_sources})
 
-SET_TARGET_PROPERTIES  (KPEP_provider PROPERTIES OUTPUT_NAME "kpep")
-SET_TARGET_PROPERTIES  (KPEP_provider PROPERTIES PREFIX "")
-SET_TARGET_PROPERTIES  (KPEP_provider PROPERTIES SUFFIX ${CMAKE_SHARED_LIBRARY_SUFFIX})
+SET_TARGET_PROPERTIES  (ARDent_provider PROPERTIES OUTPUT_NAME "ardent")
+SET_TARGET_PROPERTIES  (ARDent_provider PROPERTIES PREFIX "")
+SET_TARGET_PROPERTIES  (ARDent_provider PROPERTIES SUFFIX ${CMAKE_SHARED_LIBRARY_SUFFIX})
 
-TARGET_COMPILE_OPTIONS (KPEP_provider PRIVATE ${KPEP_LIB_CFLAGS})
-TARGET_LINK_OPTIONS    (KPEP_provider PRIVATE ${KPEP_LIB_LDFLAGS})
+TARGET_COMPILE_OPTIONS (ARDent_provider PRIVATE ${ARDent_LIB_CFLAGS})
+TARGET_LINK_OPTIONS    (ARDent_provider PRIVATE ${ARDent_LIB_LDFLAGS})
 
-#TARGET_LINK_LIBRARIES  (KPEP_provider PRIVATE ${OPENSSL_LIB})
-TARGET_LINK_LIBRARIES  (KPEP_provider PRIVATE ${OPENSSL_LIB_PATH}/libcrypto${CMAKE_SHARED_LIBRARY_SUFFIX})
-TARGET_LINK_LIBRARIES  (KPEP_provider PRIVATE "${JITTER_LIB}")
+#TARGET_LINK_LIBRARIES  (ARDent_provider PRIVATE ${OPENSSL_LIB})
+TARGET_LINK_LIBRARIES  (ARDent_provider PRIVATE ${OPENSSL_LIB_PATH}/libcrypto${CMAKE_SHARED_LIBRARY_SUFFIX})
+TARGET_LINK_LIBRARIES  (ARDent_provider PRIVATE "${JITTER_LIB}")
 
 IF (external)
-TARGET_LINK_LIBRARIES  (KPEP_provider PRIVATE ${CMAKE_DL_LIBS})
+TARGET_LINK_LIBRARIES  (ARDent_provider PRIVATE ${CMAKE_DL_LIBS})
 ENDIF (external)
 

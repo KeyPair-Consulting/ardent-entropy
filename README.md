@@ -1,7 +1,7 @@
-# KeyPair Entropy Provider (KPEP) for OpenSSL 3.5.x
+# ARDent Entropy Provider for OpenSSL
 
-The KeyPair Entropy Provider (KPEP) is an OpenSSL 3.5.x provider that is designed
-to provide robust entropy services to other OpenSSL providers.  KPEP is designed
+The ARDent Entropy Provider (ARDent) is an OpenSSL 3.5.x provider that is designed
+to provide robust entropy services to other OpenSSL providers.  ARDent is designed
 to be fully compliant with SP 800-90C and has a variety of notable features:
 
 1) Gather from multiple entropy sources; combine according to 800-90C requirements
@@ -14,8 +14,7 @@ to be fully compliant with SP 800-90C and has a variety of notable features:
 8) Extensible through OS file system (e.g. "/dev/random" or "/dev/acme-hwrand")
 9) Extensible through 3rd party shared libraries (provided API and example)
 
-This project started as the KeyPair
-Management Provider (KPMP), part of the KeyPair FIPS Provider Plus (KPFP+) solution.
+This project began as the KeyPair Management Provider (KPMP), part of the KeyPair FIPS Provider Plus (KPFP+) solution.
 
 ## STATUS
 
@@ -23,4 +22,4 @@ This project/branch is under active development and is on-track for a Release Ca
 
 In the current form, it is a fully working provider and entropy source, and all of the nine (9) stated features above are implemented and working.  There is a TODO.md file in the root of the project that describes the roadmap to RC1.
 
-Due to scheduling, I have to put the project on hold until mid-November 2026.  Several tasks remain in-flight, notably the error handling and numbering is somewhat a mess at the moment.
+The current timeline is to release RC1 by Dec 31, 2026. Release of 1.0.0 will be follow the release of the stable OpenSSL 4.x version intended for FIPS 140-3 validation.

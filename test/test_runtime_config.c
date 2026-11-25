@@ -34,10 +34,10 @@
 #include "openssl/conf.h"
 #include "openssl/err.h"
 
-#define KPEP_CONFIG_SECTION "kpep_sect"
-#define KPEP_DEBUG_IPC_PATH_KEY "debug-ipc-path"
-#define KPEP_DEBUG_IPC_PATH_MAX 256
-#define KPEP_DEBUG_CONFIG_MAX 1024
+#define ARDENT_CONFIG_SECTION "ardent_sect"
+#define ARDENT_DEBUG_IPC_PATH_KEY "debug-ipc-path"
+#define ARDENT_DEBUG_IPC_PATH_MAX 256
+#define ARDENT_DEBUG_CONFIG_MAX 1024
 
 #define TEST_FILE_TRACE            "test_trace.log"
 #define TEST_FILE_PROFILE_SAMPLE   "test_profile_sample.log"
@@ -51,8 +51,8 @@
 #define TEST_FILE_SUMMARY_PROFILE  "test_summary_profile.log"
 
 typedef struct {
-    char trace_file[KPEP_DEBUG_IPC_PATH_MAX];
-    char profile_file[KPEP_DEBUG_IPC_PATH_MAX];
+    char trace_file[ARDENT_DEBUG_IPC_PATH_MAX];
+    char profile_file[ARDENT_DEBUG_IPC_PATH_MAX];
     const char *test_name;
 } RUNTIME_TEST_FILES;
 
@@ -94,15 +94,15 @@ static void print_usage(const char* appname)
 	const int indent = 22;
 	printf("%s --interval <integer> [--ipc-path <path>] [--preserve]\n", appname);
 	printf("\n");
-	printf("Test and validate KPEP runtime debug reconfiguration via IPC (UNIX domain socket or\n");
-	printf("Windows named pipe). Designed to run alongside an active instance of 'keypair_rand --interval <sec>'\n");
+	printf("Test and validate ARDENT runtime debug reconfiguration via IPC (UNIX domain socket or\n");
+	printf("Windows named pipe). Designed to run alongside an active instance of 'ardent_rand --interval <sec>'\n");
 	printf("to verify dynamic reconfiguration of tracing, profiling, and full debug reset.\n");
 	printf("\n");
 	printf("Arguments:\n");
 	printf("%-*s%s\n", indent, "--interval <integer>", "Specify the sleep interval (in seconds) used by the running");
-	printf("%-*s%s\n", indent, "",                  "instance of keypair_rand (required)");
+	printf("%-*s%s\n", indent, "",                  "instance of ardent_rand (required)");
 	printf("%-*s%s\n", indent, "--ipc-path <path>",   "Specify the IPC socket or named pipe path to use instead of");
-	printf("%-*s%s\n", indent, "",                  "reading '" KPEP_DEBUG_IPC_PATH_KEY "' from the OpenSSL configuration");
+	printf("%-*s%s\n", indent, "",                  "reading '" ARDENT_DEBUG_IPC_PATH_KEY "' from the OpenSSL configuration");
 	printf("%-*s%s\n", indent, "--preserve",          "Preserve test output log files on exit for inspection");
 	printf("%-*s%s\n", indent, "",                  "(default: delete all temporary log files upon completion)");
 	printf("\n");
@@ -162,10 +162,10 @@ static int get_debug_ipc_path(char *path, size_t path_len)
         return 0;
     }
 
-    value = NCONF_get_string(config, KPEP_CONFIG_SECTION, KPEP_DEBUG_IPC_PATH_KEY);
+    value = NCONF_get_string(config, ARDENT_CONFIG_SECTION, ARDENT_DEBUG_IPC_PATH_KEY);
     if (!value || value[0] == '\0') {
         fprintf(stderr, "OpenSSL configuration setting [%s] %s is required.\n",
-                KPEP_CONFIG_SECTION, KPEP_DEBUG_IPC_PATH_KEY);
+                ARDENT_CONFIG_SECTION, ARDENT_DEBUG_IPC_PATH_KEY);
         ERR_clear_error();
         NCONF_free(config);
         OPENSSL_free(default_config);
@@ -174,7 +174,7 @@ static int get_debug_ipc_path(char *path, size_t path_len)
 
     if (strlen(value) >= path_len) {
         fprintf(stderr, "OpenSSL configuration setting [%s] %s is too long.\n",
-                KPEP_CONFIG_SECTION, KPEP_DEBUG_IPC_PATH_KEY);
+                ARDENT_CONFIG_SECTION, ARDENT_DEBUG_IPC_PATH_KEY);
         NCONF_free(config);
         OPENSSL_free(default_config);
         return 0;
@@ -304,7 +304,7 @@ static int validate_log_file(const char *filename, validation_type_t expected)
     }
 
     while (fgets(line, sizeof(line), fp)) {
-        if (strstr(line, "=== KPEP Debug Output ==="))
+        if (strstr(line, "=== ARDENT Debug Output ==="))
             has_banner = 1;
         if (strstr(line, "Start:") && strstr(line, "UTC"))
             has_banner = 1;
@@ -313,7 +313,7 @@ static int validate_log_file(const char *filename, validation_type_t expected)
 
         /* Trace records contain timestamp bracket and module/submodule tags */
         if (line[0] == '[' && (strstr(line, "SEED") || strstr(line, "THREAD") ||
-            strstr(line, "SINK") || strstr(line, "KPEP") || strstr(line, "PROVIDER") ||
+            strstr(line, "SINK") || strstr(line, "ARDENT") || strstr(line, "PROVIDER") ||
             strstr(line, "RAND") || strstr(line, "JITTER") || strstr(line, "RDRAND") ||
             strstr(line, "RDSEED") || strstr(line, "OSRAND") || strstr(line, "EXTERN"))) {
             if (!strstr(line, "Start:"))
@@ -395,8 +395,8 @@ static void set_test_file(char *path, const char *directory, const char *filenam
 
 int main(int argc, char *argv[])
 {
-    char debug_ipc_path[KPEP_DEBUG_IPC_PATH_MAX] = {0};
-    char local_dir[KPEP_DEBUG_IPC_PATH_MAX] = {0};
+    char debug_ipc_path[ARDENT_DEBUG_IPC_PATH_MAX] = {0};
+    char local_dir[ARDENT_DEBUG_IPC_PATH_MAX] = {0};
     const char *debug_ipc_path_arg = NULL;
     int interval = 0;
     int preserve = 0;
@@ -443,7 +443,7 @@ int main(int argc, char *argv[])
         strcpy(debug_ipc_path, debug_ipc_path_arg);
     } else if (!get_debug_ipc_path(debug_ipc_path, sizeof(debug_ipc_path))) {
         fprintf(stderr, "Specify --ipc-path or configure [%s] %s in OPENSSL_CONF.\n",
-                KPEP_CONFIG_SECTION, KPEP_DEBUG_IPC_PATH_KEY);
+                ARDENT_CONFIG_SECTION, ARDENT_DEBUG_IPC_PATH_KEY);
         return 1;
     }
 
@@ -481,7 +481,7 @@ int main(int argc, char *argv[])
     /* Test 1: Trace Only Configuration                              */
     /* ------------------------------------------------------------- */
     {
-        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        char cfg[ARDENT_DEBUG_CONFIG_MAX];
         snprintf(cfg, sizeof(cfg),
             "[trace]\n"
             "file = %s\n"
@@ -503,7 +503,7 @@ int main(int argc, char *argv[])
     /* Test 2: Profile Sample Only (each-sample = 1, interval = 0)   */
     /* ------------------------------------------------------------- */
     {
-        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        char cfg[ARDENT_DEBUG_CONFIG_MAX];
         snprintf(cfg, sizeof(cfg),
             "[profile]\n"
             "file = %s\n"
@@ -524,7 +524,7 @@ int main(int argc, char *argv[])
     /* Test 3: Profile Summary Only (each-sample = 0, interval = 3N) */
     /* ------------------------------------------------------------- */
     {
-        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        char cfg[ARDENT_DEBUG_CONFIG_MAX];
         snprintf(cfg, sizeof(cfg),
             "[profile]\n"
             "file = %s\n"
@@ -547,7 +547,7 @@ int main(int argc, char *argv[])
     /* Test 4: Profile CSV (each-sample = 1, interval = 3N)         */
     /* ------------------------------------------------------------- */
     {
-        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        char cfg[ARDENT_DEBUG_CONFIG_MAX];
         snprintf(cfg, sizeof(cfg),
             "[profile]\n"
             "file = %s\n"
@@ -569,7 +569,7 @@ int main(int argc, char *argv[])
     /* Test 5: Combined Trace & Profile Configuration               */
     /* ------------------------------------------------------------- */
     {
-        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        char cfg[ARDENT_DEBUG_CONFIG_MAX];
         snprintf(cfg, sizeof(cfg),
             "[trace]\n"
             "file = %s\n"
@@ -599,7 +599,7 @@ int main(int argc, char *argv[])
     /* Test 6: Combined Trace & Profile to Separate Files            */
     /* ------------------------------------------------------------- */
     {
-        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        char cfg[ARDENT_DEBUG_CONFIG_MAX];
         snprintf(cfg, sizeof(cfg),
             "[trace]\n"
             "file = %s\n"
@@ -631,7 +631,7 @@ int main(int argc, char *argv[])
     /* Test 7: Combined Trace & Profile Summary to Same File         */
     /* ------------------------------------------------------------- */
     {
-        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        char cfg[ARDENT_DEBUG_CONFIG_MAX];
         snprintf(cfg, sizeof(cfg),
             "[trace]\n"
             "file = %s\n"
@@ -661,7 +661,7 @@ int main(int argc, char *argv[])
     /* Test 8: Combined Trace & Profile Summary to Separate Files    */
     /* ------------------------------------------------------------- */
     {
-        char cfg[KPEP_DEBUG_CONFIG_MAX];
+        char cfg[ARDENT_DEBUG_CONFIG_MAX];
         snprintf(cfg, sizeof(cfg),
             "[trace]\n"
             "file = %s\n"
@@ -724,7 +724,7 @@ int main(int argc, char *argv[])
         int pass_count = 0;
 
         printf("\n============================================================\n");
-        printf("              KPEP Runtime Config Test Results\n");
+        printf("              ARDENT Runtime Config Test Results\n");
         printf("============================================================\n");
         for (index = 0; index < TEST_COUNT; ++index) {
             if (test_pass[index]) {

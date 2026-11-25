@@ -15,7 +15,7 @@
  * ***********************************************************************************************/
 
 #include "app_common.h"
-#include "kpep/kpep_debug.h"
+#include "ardent/ardent_debug.h"
 
 #include <errno.h>
 
@@ -32,11 +32,11 @@
 #include "openssl/conf.h"
 #include "openssl/err.h"
 
-#define KPEP_CONFIG_SECTION "kpep_sect"
-#define KPEP_DEBUG_IPC_PATH_KEY "debug-ipc-path"
-#define KPEP_DEBUG_IPC_PATH_MAX 256
-#define KPEP_DEBUG_CONFIG_MAX 1024
-#define KPEP_TEMPLATE_FILE "kpep_trace_template.cnf"
+#define ARDENT_CONFIG_SECTION "ardent_sect"
+#define ARDENT_DEBUG_IPC_PATH_KEY "debug-ipc-path"
+#define ARDENT_DEBUG_IPC_PATH_MAX 256
+#define ARDENT_DEBUG_CONFIG_MAX 1024
+#define ARDENT_TEMPLATE_FILE "ardent_trace_template.cnf"
 
 static void print_usage(const char *appname)
 {
@@ -89,10 +89,10 @@ static int get_debug_ipc_path(char *path, size_t path_len)
         return 0;
     }
 
-    value = NCONF_get_string(config, KPEP_CONFIG_SECTION, KPEP_DEBUG_IPC_PATH_KEY);
+    value = NCONF_get_string(config, ARDENT_CONFIG_SECTION, ARDENT_DEBUG_IPC_PATH_KEY);
     if (!value || value[0] == '\0') {
         fprintf(stderr, "OpenSSL configuration setting [%s] %s is required.\n",
-                KPEP_CONFIG_SECTION, KPEP_DEBUG_IPC_PATH_KEY);
+                ARDENT_CONFIG_SECTION, ARDENT_DEBUG_IPC_PATH_KEY);
         ERR_clear_error();
         NCONF_free(config);
         OPENSSL_free(default_config);
@@ -101,7 +101,7 @@ static int get_debug_ipc_path(char *path, size_t path_len)
 
     if (strlen(value) >= path_len) {
         fprintf(stderr, "OpenSSL configuration setting [%s] %s is too long.\n",
-                KPEP_CONFIG_SECTION, KPEP_DEBUG_IPC_PATH_KEY);
+                ARDENT_CONFIG_SECTION, ARDENT_DEBUG_IPC_PATH_KEY);
         NCONF_free(config);
         OPENSSL_free(default_config);
         return 0;
@@ -145,20 +145,20 @@ static int write_template(void)
 {
     FILE *file;
 
-    file = fopen(KPEP_TEMPLATE_FILE, "w");
+    file = fopen(ARDENT_TEMPLATE_FILE, "w");
     if (!file) {
-        fprintf(stderr, "Unable to create template '%s': %s\n", KPEP_TEMPLATE_FILE, strerror(errno));
+        fprintf(stderr, "Unable to create template '%s': %s\n", ARDENT_TEMPLATE_FILE, strerror(errno));
         return 0;
     }
 
     if (fwrite(template_text, 1, sizeof(template_text) - 1, file) != sizeof(template_text) - 1) {
-        fprintf(stderr, "Unable to write template '%s': %s\n", KPEP_TEMPLATE_FILE, strerror(errno));
+        fprintf(stderr, "Unable to write template '%s': %s\n", ARDENT_TEMPLATE_FILE, strerror(errno));
         fclose(file);
         return 0;
     }
 
     if (fclose(file) != 0) {
-        fprintf(stderr, "Unable to write template '%s': %s\n", KPEP_TEMPLATE_FILE, strerror(errno));
+        fprintf(stderr, "Unable to write template '%s': %s\n", ARDENT_TEMPLATE_FILE, strerror(errno));
         return 0;
     }
 
@@ -246,8 +246,8 @@ static int trigger_reload(const char *path, const char *config, size_t config_le
 
 int main(int argc, char *argv[])
 {
-    char debug_ipc_path[KPEP_DEBUG_IPC_PATH_MAX];
-    char config[KPEP_DEBUG_CONFIG_MAX + 1];
+    char debug_ipc_path[ARDENT_DEBUG_IPC_PATH_MAX];
+    char config[ARDENT_DEBUG_CONFIG_MAX + 1];
     const char *debug_ipc_path_arg = NULL;
     const char *config_file = NULL;
     size_t config_len;
@@ -293,11 +293,11 @@ int main(int argc, char *argv[])
         strcpy(debug_ipc_path, debug_ipc_path_arg);
     } else if (!get_debug_ipc_path(debug_ipc_path, sizeof(debug_ipc_path))) {
         fprintf(stderr, "Specify --ipc-path or configure [%s] %s in OPENSSL_CONF.\n",
-                KPEP_CONFIG_SECTION, KPEP_DEBUG_IPC_PATH_KEY);
+                ARDENT_CONFIG_SECTION, ARDENT_DEBUG_IPC_PATH_KEY);
         return 1;
     }
 
-    if (!read_config_file(config_file, config, KPEP_DEBUG_CONFIG_MAX, &config_len))
+    if (!read_config_file(config_file, config, ARDENT_DEBUG_CONFIG_MAX, &config_len))
         return 1;
 
     if (!trigger_reload(debug_ipc_path, config, config_len)) {

@@ -14,10 +14,10 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#include "kpep/kpep.h"
-#include "kpep/kpep_names.h"
-#include "kpep/kpep_cpuinfo.h"
-#include "kpep/kpep_seed_stub.h"
+#include "ardent/ardent.h"
+#include "ardent/ardent_names.h"
+#include "ardent/ardent_cpuinfo.h"
+#include "ardent/ardent_seed_stub.h"
 #include "rdcpu_toolbox.h"
 #include "seed_sources.h"
 #include "ringbuffer.h"
@@ -75,7 +75,7 @@ void async_seed_free(ASYNC_CTX *ctx)
 {
     CRYPTO_THREAD_RETVAL retval;
 
-    if (kpep_trace_seed_enabled) {
+    if (ardent_trace_seed_enabled) {
         TRACE_START;
     }
 
@@ -121,9 +121,9 @@ void async_seed_free(ASYNC_CTX *ctx)
         ossl_crypto_mutex_free(&ctx->mutex);
     }
     // Free the ASYNC_CTX structure itself
-    kpep_free(ctx);
+    ardent_free(ctx);
 
-    kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async' shutdown successful");
+    ardent_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async' shutdown successful");
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -132,21 +132,21 @@ ASYNC_CTX *async_seed_new(void* prov_ctx,
                         uint32_t ring_sz, 
                         uint8_t idx, 
                         uint32_t async_mode, 
-                        KPEP_RESULT *errnum)
+                        ARDENT_RESULT *errnum)
 {
     ASYNC_CTX *ctx;
-    KPEP_RESULT rv;
+    ARDENT_RESULT rv;
     int len;
 
-    if (kpep_trace_seed_enabled) {
+    if (ardent_trace_seed_enabled) {
         TRACE_START;
     }
 
     // Allocate for source context
-    ctx = kpep_zalloc(sizeof(ASYNC_CTX));
+    ctx = ardent_zalloc(sizeof(ASYNC_CTX));
     if (ctx == NULL) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (malloc)");
-        if (errnum) *errnum = KPEP_R_MALLOC_FAIL;
+        if (errnum) *errnum = ARDENT_R_MALLOC_FAIL;
         return NULL;
     }
 
@@ -155,13 +155,13 @@ ASYNC_CTX *async_seed_new(void* prov_ctx,
     ctx->mutex = ossl_crypto_mutex_new();
     if (!ctx->mutex) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (create mutex)");
-        if (errnum) *errnum = KPEP_R_MUTEX_FAIL_START;
+        if (errnum) *errnum = ARDENT_R_MUTEX_FAIL_START;
         goto err;
     }
     ctx->cond = ossl_crypto_condvar_new();
     if (!ctx->cond) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (create condition variable)");
-        if (errnum) *errnum = KPEP_R_MUTEX_FAIL_START;
+        if (errnum) *errnum = ARDENT_R_MUTEX_FAIL_START;
         goto err;
     }
 
@@ -169,7 +169,7 @@ ASYNC_CTX *async_seed_new(void* prov_ctx,
     ctx->source_fn = stub_fn;
     ctx->source_ctx = ctx->source_fn->new_fn(prov_ctx, idx, errnum);
     if (!ctx->source_ctx) {
-        LOG_KPEP_ERROR(MODULE_NAME, *errnum);
+        LOG_ARDENT_ERROR(MODULE_NAME, *errnum);
         LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (new source)");
         goto err;
     }
@@ -192,11 +192,11 @@ ASYNC_CTX *async_seed_new(void* prov_ctx,
     if (ctx->async_mode) {
         rv = ring_new(&ctx->ring_ctx, ring_sz);
         switch (rv) {
-            case KPEP_R_SUCCESS:
+            case ARDENT_R_SUCCESS:
                 break;
-            case KPEP_R_RING_NOT_POWER_OF_TWO:
+            case ARDENT_R_RING_NOT_POWER_OF_TWO:
                 LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (size not power-of-two)");
-                if (errnum) *errnum = KPEP_R_INVALID_ARG;
+                if (errnum) *errnum = ARDENT_R_INVALID_ARG;
                 goto err;
             default:
                 LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (new ring)");
@@ -207,11 +207,11 @@ ASYNC_CTX *async_seed_new(void* prov_ctx,
 
     // Start initialized
     if (ctx->source_info->full_entropy)
-        kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async (%s)' startup successful (full entropy)", ctx->name);
+        ardent_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async (%s)' startup successful (full entropy)", ctx->name);
     else 
-        kpep_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async (%s)' startup successful (%.6f ent-per-bit)", ctx->name, ctx->source_info->entropy_per_bit);
+        ardent_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async (%s)' startup successful (%.6f ent-per-bit)", ctx->name, ctx->source_info->entropy_per_bit);
 
-    if (errnum) *errnum = KPEP_R_SUCCESS;
+    if (errnum) *errnum = ARDENT_R_SUCCESS;
     return ctx;
 
 err:
@@ -220,52 +220,52 @@ err:
 }
 
 EXPORT_VISIBILITY_HIDDEN
-KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_len, size_t nbits)
+ARDENT_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_len, size_t nbits)
 {
-    KPEP_RESULT rv = KPEP_R_SUCCESS;
+    ARDENT_RESULT rv = ARDENT_R_SUCCESS;
     size_t gather_bits, gather_bytes;
 
-    if (kpep_trace_seed_enabled) {
+    if (ardent_trace_seed_enabled) {
         TRACE_START;
     }
 
     if (!nbits)
-        return KPEP_R_SUCCESS;
+        return ARDENT_R_SUCCESS;
 
     // Validate context
     if (!ctx || !out_len) {
-        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_NULL_ARG);
-        return KPEP_R_NULL_ARG;
+        LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_NULL_ARG);
+        return ARDENT_R_NULL_ARG;
     }
 
     // Calculate gather size
     gather_bits = seed_get_gather_sz(ctx->source_info, nbits);
     gather_bytes = (gather_bits + 7) >> 3;
     if (!gather_bytes) {
-        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_INVALID_ARG);
-        return KPEP_R_INVALID_ARG;
+        LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_INVALID_ARG);
+        return ARDENT_R_INVALID_ARG;
     }
 
-    if (kpep_trace_seed_enabled) {
-        kpep_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bytes<<3);
+    if (ardent_trace_seed_enabled) {
+        ardent_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bytes<<3);
     }
 
     // Return gather size?
     if (!out) {
         *out_len = gather_bytes;
-        return KPEP_R_SUCCESS;
+        return ARDENT_R_SUCCESS;
     }
 
     // Check for adequate size
     if (*out_len < gather_bytes) {
-        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_SEED_BUFFER_TOO_SMALL);
-        return KPEP_R_SEED_BUFFER_TOO_SMALL;
+        LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_SEED_BUFFER_TOO_SMALL);
+        return ARDENT_R_SEED_BUFFER_TOO_SMALL;
     }
 
     // Check state
-    if (async_seed_get_state(ctx) != KPEP_RAND_STATE_READY) {
-        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_SEED_NOT_READY);
-        return KPEP_R_SEED_NOT_READY;
+    if (async_seed_get_state(ctx) != ARDENT_RAND_STATE_READY) {
+        LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_SEED_NOT_READY);
+        return ARDENT_R_SEED_NOT_READY;
     }
 
     // In Asynchronous mode?
@@ -277,8 +277,8 @@ KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_le
         // Error: INVALID_ARG or RING_EMPTY
         if (rv) {
             gather_bytes = 0; // We didn't gather any bytes
-            if (rv == KPEP_R_RING_EMPTY) {
-                rv = KPEP_R_SEED_NOT_READY;
+            if (rv == ARDENT_R_RING_EMPTY) {
+                rv = ARDENT_R_SEED_NOT_READY;
             }
         }
 
@@ -290,7 +290,7 @@ KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_le
         // Gather from backing seed source
         rv = ctx->source_fn->gather_fn(ctx->source_ctx, out, (size_t*)&gather_bytes, nbits);
         if (rv) {
-            LOG_KPEP_ERROR(MODULE_NAME, rv);
+            LOG_ARDENT_ERROR(MODULE_NAME, rv);
             LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' gather operation failed", ctx->source_info->name);
             goto err;
         }
@@ -303,8 +303,8 @@ KPEP_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_le
 err:
     // If no error already set, assume a general error
     if (!rv) {
-        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_ERROR_RETRIEVING_ENTROPY);
-        rv = KPEP_R_ERROR_RETRIEVING_ENTROPY;
+        LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_ERROR_RETRIEVING_ENTROPY);
+        rv = ARDENT_R_ERROR_RETRIEVING_ENTROPY;
     }
 
     // Zeroize
@@ -321,7 +321,7 @@ uint32_t async_seed_get_state(ASYNC_CTX *ctx)
     ASYNC_WORKER_STATE worker_state;
 
     if (!ctx || !ctx->source_ctx || !ctx->source_fn)
-        return KPEP_RAND_STATE_UNINITIALISED; // Value 0
+        return ARDENT_RAND_STATE_UNINITIALISED; // Value 0
 
     if (ctx->mutex)
         ossl_crypto_mutex_lock(ctx->mutex);
@@ -332,14 +332,14 @@ uint32_t async_seed_get_state(ASYNC_CTX *ctx)
     if (ctx->mutex)
         ossl_crypto_mutex_unlock(ctx->mutex);
 
-    if (stub_state == KPEP_RAND_STATE_ERROR)
-        return KPEP_RAND_STATE_ERROR;
+    if (stub_state == ARDENT_RAND_STATE_ERROR)
+        return ARDENT_RAND_STATE_ERROR;
 
     if (ctx->async_mode) {
         if (worker_state == WORKER_ERROR)
-            return KPEP_RAND_STATE_ERROR;
+            return ARDENT_RAND_STATE_ERROR;
         if (worker_state != WORKER_RUNNING && worker_state != WORKER_INITIALIZED)
-            return KPEP_RAND_STATE_UNINITIALISED;
+            return ARDENT_RAND_STATE_UNINITIALISED;
     }
 
     return stub_state;
@@ -349,7 +349,7 @@ EXPORT_VISIBILITY_HIDDEN
 const char* async_seed_get_name(ASYNC_CTX *ctx) 
 {
     if (!ctx) {
-        kpep_log(LOG_LVL_WARN, MODULE_NAME, "get_name(async) called with NULL context (should not happen)");
+        ardent_log(LOG_LVL_WARN, MODULE_NAME, "get_name(async) called with NULL context (should not happen)");
         return NULL;
     }   
     return ctx->name;
@@ -366,8 +366,8 @@ static CRYPTO_THREAD_RETVAL async_worker(void *arg)
     ASYNC_CTX *ctx = (ASYNC_CTX *)arg;
     ASYNC_WORKER_STATE local_state;
 
-    if (kpep_trace_thread_enabled) {
-        kpep_trace_fmt(MODULE_NAME, 
+    if (ardent_trace_thread_enabled) {
+        ardent_trace_fmt(MODULE_NAME, 
                 "THREAD (%p) started for %s", 
                 (void*)(ctx?ctx->thread:NULL),
                 ctx?ctx->name:"unknown");
@@ -396,8 +396,8 @@ static CRYPTO_THREAD_RETVAL async_worker(void *arg)
         ossl_crypto_mutex_unlock(ctx->mutex);
 
         if (local_state == WORKER_RUNNING) {
-            if (kpep_trace_thread_enabled) {
-                kpep_trace_fmt(MODULE_NAME, "THREAD (%p) gathering...", (void*)ctx->thread);
+            if (ardent_trace_thread_enabled) {
+                ardent_trace_fmt(MODULE_NAME, "THREAD (%p) gathering...", (void*)ctx->thread);
             }
             // Do the actual gather here!
             ossl_crypto_mutex_lock(ctx->mutex);
@@ -411,8 +411,8 @@ static CRYPTO_THREAD_RETVAL async_worker(void *arg)
         ctx->state = WORKER_STOPPED;
     ossl_crypto_mutex_unlock(ctx->mutex);
 
-    if (kpep_trace_thread_enabled) {
-        kpep_trace_fmt(MODULE_NAME, 
+    if (ardent_trace_thread_enabled) {
+        ardent_trace_fmt(MODULE_NAME, 
                 "THREAD (%p) stopped (%d: %s)", 
                 (void*)ctx->thread, 
                 (ctx->state), 
@@ -424,23 +424,23 @@ static CRYPTO_THREAD_RETVAL async_worker(void *arg)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-KPEP_RESULT async_seed_start_thread(ASYNC_CTX *ctx)
+ARDENT_RESULT async_seed_start_thread(ASYNC_CTX *ctx)
 {
-    KPEP_RESULT rv = KPEP_R_SUCCESS;
+    ARDENT_RESULT rv = ARDENT_R_SUCCESS;
 
     if (!ctx) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Thread start called with NULL context");
-        return KPEP_R_NULL_ARG;
+        return ARDENT_R_NULL_ARG;
     }
 
     if (!ctx->async_mode) {
         ctx->state = WORKER_INITIALIZED; 
-        return KPEP_R_SUCCESS;
+        return ARDENT_R_SUCCESS;
     }
 
     if (!ctx->mutex || !ctx->cond) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Thread start called with NULL mutex");
-        return KPEP_R_NULL_ARG;
+        return ARDENT_R_NULL_ARG;
     }
     
     // Lock for startup
@@ -448,12 +448,12 @@ KPEP_RESULT async_seed_start_thread(ASYNC_CTX *ctx)
 
     if (ctx->state != WORKER_UNINITIALIZED) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Thread start called with invalid state");
-        rv = KPEP_R_THREAD_NOT_READY;
+        rv = ARDENT_R_THREAD_NOT_READY;
         goto err;
     }
 
-    if (kpep_trace_thread_enabled) {
-        kpep_trace_fmt(MODULE_NAME, 
+    if (ardent_trace_thread_enabled) {
+        ardent_trace_fmt(MODULE_NAME, 
                 "THREAD starting for %s...", 
                 ctx?ctx->name:"unknown");
     }
@@ -464,19 +464,19 @@ KPEP_RESULT async_seed_start_thread(ASYNC_CTX *ctx)
     ctx->state = WORKER_INITIALIZED;  // "Initialized" state tells the thread to go
     ctx->thread = ossl_crypto_thread_native_start(async_worker, ctx, 1);
     if (!ctx->thread) {
-        if (kpep_trace_thread_enabled) {
-            kpep_trace_fmt(MODULE_NAME, 
+        if (ardent_trace_thread_enabled) {
+            ardent_trace_fmt(MODULE_NAME, 
                     "THREAD failed to start for %s...", 
                     (void*)(ctx?ctx->thread:NULL),
                     ctx?ctx->name:"unknown");
         }        
         LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to start thread");
-        rv = KPEP_R_THREAD_NOT_READY;
+        rv = ARDENT_R_THREAD_NOT_READY;
         goto err;
     }
 
-    if (kpep_trace_thread_enabled) {
-        kpep_trace_fmt(MODULE_NAME, 
+    if (ardent_trace_thread_enabled) {
+        ardent_trace_fmt(MODULE_NAME, 
                 "THREAD (%p) started for %s...", 
                 (void*)(ctx?ctx->thread:NULL),
                 ctx?ctx->name:"unknown");

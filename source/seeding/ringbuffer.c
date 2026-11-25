@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "kpep/kpep.h"
+#include "ardent/ardent.h"
 #include "ringbuffer.h"
 
 /* ***********************************************************************************************
@@ -144,28 +144,28 @@ void ring_free(RING_CTX *ring)
     if (!ring)
         return;
     if (ring->buffer)
-        kpep_cleanse(ring->buffer, ring->capacity);
-    kpep_free(ring);
+        ardent_cleanse(ring->buffer, ring->capacity);
+    ardent_free(ring);
 }
 
-KPEP_RESULT ring_new(RING_CTX **ctx, size_t capacity)
+ARDENT_RESULT ring_new(RING_CTX **ctx, size_t capacity)
 {
     RING_CTX *ring;
 
     if (!ctx || *ctx || capacity == 0)
-        return KPEP_R_INVALID_ARG;
+        return ARDENT_R_INVALID_ARG;
 
     if ((capacity & (capacity - 1)) != 0)
-        return KPEP_R_RING_NOT_POWER_OF_TWO;
+        return ARDENT_R_RING_NOT_POWER_OF_TWO;
 
-    ring = kpep_zalloc(sizeof(*ring));
+    ring = ardent_zalloc(sizeof(*ring));
     if (!ring)
-        return KPEP_R_MALLOC_FAIL;
+        return ARDENT_R_MALLOC_FAIL;
 
-    ring->buffer = kpep_zalloc(capacity);
+    ring->buffer = ardent_zalloc(capacity);
     if (!ring->buffer) {
-        kpep_free(ring);
-        return KPEP_R_MALLOC_FAIL;
+        ardent_free(ring);
+        return ARDENT_R_MALLOC_FAIL;
     }
 
     ring->capacity = capacity;
@@ -173,7 +173,7 @@ KPEP_RESULT ring_new(RING_CTX **ctx, size_t capacity)
 
     *ctx = ring;
 
-    return KPEP_R_SUCCESS;
+    return ARDENT_R_SUCCESS;
 }
 
 void ring_flush(RING_CTX *ring)
@@ -181,26 +181,26 @@ void ring_flush(RING_CTX *ring)
     if (!ring)
         return;
 
-    kpep_zeroize(ring->buffer, ring->capacity);
+    ardent_zeroize(ring->buffer, ring->capacity);
 
     ring->write_pos = 0;
     ring->read_pos = 0;
     ring->count = 0;
 }
 
-KPEP_RESULT ring_enqueue(RING_CTX *ring,
+ARDENT_RESULT ring_enqueue(RING_CTX *ring,
                          const uint8_t *restrict src,
                          size_t len)
 {
     if (!ring || !src || len == 0)
-        return KPEP_R_INVALID_ARG;
+        return ARDENT_R_INVALID_ARG;
 
 #ifdef FIPS_OPTEST
     ring_verify(ring);
 #endif
 
     if (len > ring_space(ring))
-        return KPEP_R_RING_FULL;
+        return ARDENT_R_RING_FULL;
     
     ring_copy_in(ring, ring->write_pos, src, len);
 
@@ -211,22 +211,22 @@ KPEP_RESULT ring_enqueue(RING_CTX *ring,
     ring_verify(ring);
 #endif
 
-    return KPEP_R_SUCCESS;
+    return ARDENT_R_SUCCESS;
 }
 
-KPEP_RESULT ring_dequeue(RING_CTX *ring,
+ARDENT_RESULT ring_dequeue(RING_CTX *ring,
                          uint8_t *restrict dst,
                          size_t len)
 {
     if (!ring || !dst || len == 0)
-        return KPEP_R_INVALID_ARG;
+        return ARDENT_R_INVALID_ARG;
 
 #ifdef FIPS_OPTEST
     ring_verify(ring);
 #endif
     
     if (len > ring_count(ring))
-        return KPEP_R_RING_EMPTY;
+        return ARDENT_R_RING_EMPTY;
 
     ring_copy_out(ring, ring->read_pos, dst, len);
 
@@ -239,5 +239,5 @@ KPEP_RESULT ring_dequeue(RING_CTX *ring,
     ring_verify(ring);
 #endif
 
-    return KPEP_R_SUCCESS;
+    return ARDENT_R_SUCCESS;
 }

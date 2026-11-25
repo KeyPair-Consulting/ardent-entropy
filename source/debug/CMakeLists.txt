@@ -18,16 +18,16 @@
 # Source files for debug subsystem
 # ##################################################################################################
 
-SET  (KPEP_debug_sources debug_core.c debug_utility.c)
-LIST (APPEND KPEP_debug_sources kpep_trace.c kpep_profile.c)
+SET  (ARDent_debug_sources debug_core.c debug_utility.c)
+LIST (APPEND ARDent_debug_sources ardent_trace.c ardent_profile.c)
 
 # ##################################################################################################
 # STATIC Compilation for linking
 # ##################################################################################################
 
-ADD_LIBRARY (KPEP_debug OBJECT ${KPEP_debug_sources})
+ADD_LIBRARY (ARDent_debug OBJECT ${ARDent_debug_sources})
 
-TARGET_COMPILE_OPTIONS (KPEP_debug PRIVATE ${KPEP_LIB_CFLAGS} "-fPIC")
+TARGET_COMPILE_OPTIONS (ARDent_debug PRIVATE ${ARDent_LIB_CFLAGS} "-fPIC")
 IF(CMAKE_VERSION GREATER_EQUAL 3.13.0)
-    TARGET_LINK_OPTIONS(KPEP_debug PRIVATE ${KPEP_LIB_LDFLAGS})
+    TARGET_LINK_OPTIONS(ARDent_debug PRIVATE ${ARDent_LIB_LDFLAGS})
 ENDIF ()

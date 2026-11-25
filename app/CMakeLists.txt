@@ -20,34 +20,34 @@
 
 IF (utility)
     # Set project source files
-    SET  (APP_utility_sources keypair_utility.c)
-    LIST (APPEND APP_utility_sources ../source/kpep_internal.c ../source/kpep_integrity.c)
+    SET  (APP_utility_sources ardent_utility.c)
+    LIST (APPEND APP_utility_sources ../source/ardent_internal.c ../source/ardent_integrity.c)
     LIST (APPEND APP_utility_sources ../source/crypto/sha2.c ../source/crypto/hmac.c)
 
     ADD_EXECUTABLE         (APP_utility ${APP_utility_sources})
-    SET_TARGET_PROPERTIES  (APP_utility PROPERTIES OUTPUT_NAME "keypair_utility")
+    SET_TARGET_PROPERTIES  (APP_utility PROPERTIES OUTPUT_NAME "ardent_utility")
 
-    TARGET_LINK_LIBRARIES  (APP_utility PRIVATE KPEP_provider)
+    TARGET_LINK_LIBRARIES  (APP_utility PRIVATE ARDent_provider)
     TARGET_LINK_LIBRARIES  (APP_utility PRIVATE ${OPENSSL_LIB})
 ENDIF (utility)
 
 IF (rand)
     # Set project source files
-    SET  (APP_rand_sources keypair_rand.c)
+    SET  (APP_rand_sources ardent_rand.c)
 
     ADD_EXECUTABLE         (APP_rand ${APP_rand_sources})
-    SET_TARGET_PROPERTIES  (APP_rand PROPERTIES OUTPUT_NAME "keypair_rand")
+    SET_TARGET_PROPERTIES  (APP_rand PROPERTIES OUTPUT_NAME "ardent_rand")
 
-    TARGET_LINK_LIBRARIES  (APP_rand PRIVATE KPEP_provider)
+    TARGET_LINK_LIBRARIES  (APP_rand PRIVATE ARDent_provider)
     TARGET_LINK_LIBRARIES  (APP_rand PRIVATE ${OPENSSL_LIB})
 ENDIF (rand)
 
 IF (debug)
     # Set project source files
-    SET  (APP_debug_sources keypair_debug.c)
+    SET  (APP_debug_sources ardent_debug.c)
 
     ADD_EXECUTABLE         (APP_debug ${APP_debug_sources})
-    SET_TARGET_PROPERTIES  (APP_debug PROPERTIES OUTPUT_NAME "keypair_debug")
+    SET_TARGET_PROPERTIES  (APP_debug PROPERTIES OUTPUT_NAME "ardent_debug")
 
     TARGET_LINK_LIBRARIES  (APP_debug PRIVATE ${OPENSSL_LIB})
 ENDIF (debug)

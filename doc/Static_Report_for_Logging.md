@@ -1,7 +1,7 @@
 # Static Analysis Report — `source/logging`
 
 **Status:** Deferred; no subsystem fixes are in progress.
-**Scope:** Only `/home/dev/code/KeyPair/kpep/source/logging`.
+**Scope:** Only `/home/dev/code/KeyPair/ardent/source/logging`.
 **Build/lint result:** VS Code diagnostic scan found no errors in `source/logging`.
 
 ## Deferred Findings
@@ -9,11 +9,11 @@
 ### 1. High — Logging mutex uses unsynchronized lazy initialization
 
 **Locations:**
-- `source/logging/kpep_logging.c:69-75`
-- `source/logging/kpep_logging.c:174-175`
+- `source/logging/ardent_logging.c:69-75`
+- `source/logging/ardent_logging.c:174-175`
 
 **Evidence:**
-`kpep_log_lock()` and `kpep_logging_init()` initialize `log_mutex` lazily without synchronization. `kpep_logging_fini()` does not free the mutex.
+`ardent_log_lock()` and `ardent_logging_init()` initialize `log_mutex` lazily without synchronization. `ardent_logging_fini()` does not free the mutex.
 
 **Risk:**
 Concurrent first use can create separate mutex instances, lose synchronization, or race on pointer assignment. A permanently retained mutex can also leave lifecycle cleanup incomplete.
@@ -26,12 +26,12 @@ Concurrent first use can create separate mutex instances, lose synchronization, 
 ### 2. High — Sink registration and shutdown are unsynchronized
 
 **Locations:**
-- `source/logging/kpep_logging.c:89-113`
-- `source/logging/kpep_logging.c:243-255`
-- `source/logging/kpep_logging.c:348-376`
+- `source/logging/ardent_logging.c:89-113`
+- `source/logging/ardent_logging.c:243-255`
+- `source/logging/ardent_logging.c:348-376`
 
 **Evidence:**
-`kpep_log_add_sink()` and `kpep_logging_fini()` mutate `sinks[]` directly. The logging mutex is used for writes, but it is not used by registration or finalization.
+`ardent_log_add_sink()` and `ardent_logging_fini()` mutate `sinks[]` directly. The logging mutex is used for writes, but it is not used by registration or finalization.
 
 **Risk:**
 Concurrent logging can observe sink registration/removal while pointers are changing, leading to inconsistent lifetime, use-after-free, or use-after-unload behavior.
@@ -44,10 +44,10 @@ Concurrent logging can observe sink registration/removal while pointers are chan
 ### 3. High — Sink description formatting is broken
 
 **Location:**
-- `source/logging/kpep_logging.c:260-269`
+- `source/logging/ardent_logging.c:260-269`
 
 **Evidence:**
-`kpep_get_sink_descs()` calls `sprintf()` without an output buffer argument:
+`ardent_get_sink_descs()` calls `sprintf()` without an output buffer argument:
 
 ```c
 sprintf("  Name: %-12s Lvl: %-12s\n",
@@ -160,7 +160,7 @@ Data races and inconsistent configuration snapshots during reload or repeated in
 ### 9. Low — Activation flags remain stale across repeated initialization
 
 **Locations:**
-- `source/logging/kpep_logging.c:279-330`
+- `source/logging/ardent_logging.c:279-330`
 
 **Evidence:**
 `activate_syslog`, `activate_stderr`, and `activate_extern` are not reset before a repeated parameter/environment load.
@@ -176,11 +176,11 @@ Later initialization can keep or change activation state based on stale values, 
 ### 10. Low — Partial logging initialization leaves sinks active
 
 **Locations:**
-- `source/logging/kpep_logging.c:204-236`
-- `source/logging/kpep_logging.c:243-255`
+- `source/logging/ardent_logging.c:204-236`
+- `source/logging/ardent_logging.c:243-255`
 
 **Evidence:**
-If one sink initializes and registers successfully and a later sink fails, `kpep_logging_init()` returns an error without explicitly finalizing or removing earlier registered sinks.
+If one sink initializes and registers successfully and a later sink fails, `ardent_logging_init()` returns an error without explicitly finalizing or removing earlier registered sinks.
 
 **Risk:**
 A failed initialization may leave a partially configured logging subsystem and resources that remain active or duplicate on retry.

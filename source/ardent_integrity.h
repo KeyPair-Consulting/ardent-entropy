@@ -14,40 +14,27 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPEP_CPUINFO_H
-#define KPEP_CPUINFO_H
+#ifndef ARDENT_INTEGRITY_H
+#define ARDENT_INTEGRITY_H
 #pragma once
 
-#include <stdint.h>
+#include "ardent/ardent.h"  // For ARDENT_RESULT
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef enum cpu_type_e {
-    CPU_UNKNOWN = 0,
-    CPU_INTEL,
-    CPU_AMD,
-    //CPU_ARM  /* NOT IMPLEMENTED */
-} CPU_TYPE;
+/* Default HMAC Key used for the integrity file check */
+extern const unsigned char ardent_integrity_key[];
+extern const size_t ardent_integrity_key_len;
 
-typedef struct {
-    uint32_t EAX;
-    uint32_t EBX;
-    uint32_t ECX;
-    uint32_t EDX;
-} CPUIDinfo;
-
-extern void get_cpuid(CPUIDinfo *info, const uint32_t func, const uint32_t subfunc);
-
-extern int  check_is_amd(void);
-extern int  check_is_intel(void);
-
-extern int  check_aesni_support(void);
-extern int  check_rdrand_support(void);
-extern int  check_rdseed_support(void);
+/* Generate a MAC for the target of the given filename */
+/* Pass in (NULL, 0) for the (key, key_len) to use the default key (above) */
+ARDENT_RESULT integrity_check_file(const char* filename, 
+                                   const unsigned char *key, size_t key_len,
+                                   unsigned char *mac, size_t *mac_len);
 
 #ifdef __cplusplus
 }
 #endif
-#endif /* KPEP_CPUINFO_H */
+#endif /* ARDENT_INTEGRITY_H */

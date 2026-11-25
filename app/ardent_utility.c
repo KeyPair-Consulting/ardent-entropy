@@ -16,7 +16,7 @@
 
 //  Includes
 #include "app_common.h"  //  Includes <stdlib.h>, <stdio.h>, and <string.h>
-#include "kpep/kpep.h"
+#include "ardent/ardent.h"
 #include "../source/integrity.h"
 
 // OpenSSL Includes
@@ -41,7 +41,7 @@ void print_usage(const char* appname)
 	printf("%*s [--mac <filename>]\n", len, "");
 	printf("%*s [-v]\n", len, "");
 	printf("\n");
-	printf("This utility performs several helpful operations in conjunction with the KeyPair Management Provider ().\n");
+	printf("This utility performs several helpful operations for Operational Testing.\n");
 	printf("Only one operation will be performed for each invocation of the binary.\n");
 	printf("\n");
 	printf("OP: PROVIDER INFORMATION\n");
@@ -59,7 +59,7 @@ void print_usage(const char* appname)
 	printf("\n");
 	printf("  %-24s%s\n", "--fetch-hash <hash-algo> <properties>", "");
 	printf("  %-24s%s\n", "", "Fetch the named hash algorithm using the provided properties string");
-	printf("  %-24s%s\n", "", "Example: --fetch-hash SHA3-256 \"provider=kpfp\"");
+	printf("  %-24s%s\n", "", "Example: --fetch-hash SHA3-256 \"fips=yes\"");
 	printf("  %-24s%s\n", "--fetch-cipher <hash-algo> <properties>", "");
 	printf("  %-24s%s\n", "", "Fetch the named cipher algorithm using the provided properties string");
 	printf("  %-24s%s\n", "", "Example: --fetch-cipher AES-256-CBC \"fips=yes\"");
@@ -68,7 +68,7 @@ void print_usage(const char* appname)
 	printf("Generate a FIPS 140-3 HMAC integrity file for a named file\n");
 	printf("\n");
 	printf("  %-24s%s\n", "--mac <filename>", "Generate an HMAC-SHA2-256 of the named file and write to a file.  This is used");
-	printf("  %-24s%s\n", "", "exclusively for the creation of FIPS 140-3 integrity files. Use the 'kpep_filecheck'");
+	printf("  %-24s%s\n", "", "exclusively for the creation of FIPS 140-3 integrity files. Use the 'ardent_filecheck'");
 	printf("  %-24s%s\n", "", "app for a general solution to file integrity and verification.");
 	printf("\n");
 	printf("GENERAL\n");
@@ -260,7 +260,7 @@ static int query_provider(OSSL_PROVIDER *prov, int verbose)
 					printf("%-*s : %d\n", col_width, d->param->key, d->data.uints);
 					break;
 				case OSSL_PARAM_UTF8_PTR:
-					if (0 == strcmp(d->param->key, KPEP_PROV_PARAM_SEED_SOURCES)) {
+					if (0 == strcmp(d->param->key, ARDENT_PROV_PARAM_SEED_SOURCES)) {
 						char *tok, buf[SEED_CONTROL_DESCRIPTION_MAX] = { 0 };
 						strcpy(buf, d->data.ptr);
 						tok = strtok(buf, "\n");
@@ -484,7 +484,7 @@ static int fetch_algo(OSSL_LIB_CTX *libctx,
 
 static int generate_mac(OSSL_LIB_CTX *libctx, const char *filename, int verbose)
 {
-	int rv = KPEP_R_SUCCESS; // Assume success
+	int rv = ARDENT_R_SUCCESS; // Assume success
 	int i;
 	unsigned char mac[32] = { 0 };
 	size_t mac_len = sizeof(mac);
@@ -499,16 +499,16 @@ static int generate_mac(OSSL_LIB_CTX *libctx, const char *filename, int verbose)
 		return 0;
 
 	// Do the HMAC
-	if ((rv = integrity_check_file(filename, kpep_integrity_key, kpep_integrity_key_len, mac, &mac_len)) != KPEP_R_SUCCESS) {
-		printf("Failed to generate the HMAC for file '%s': %s\n", filename, kpep_get_reason_string(rv));
+	if ((rv = integrity_check_file(filename, ardent_integrity_key, ardent_integrity_key_len, mac, &mac_len)) != ARDENT_R_SUCCESS) {
+		printf("Failed to generate the HMAC for file '%s': %s\n", filename, ardent_get_reason_string(rv));
 		goto err;		
 	}
 
 	// Filename
 	out_filename_len = strlen(filename)+5;
-	out_filename = kpep_zalloc(out_filename_len);
+	out_filename = ardent_zalloc(out_filename_len);
 	if (!out_filename) {
-		rv = KPEP_R_MALLOC_FAIL;
+		rv = ARDENT_R_MALLOC_FAIL;
 		goto err;
 	}
 	strcpy(out_filename, filename);
@@ -517,7 +517,7 @@ static int generate_mac(OSSL_LIB_CTX *libctx, const char *filename, int verbose)
 	// Open
 	bio = BIO_new_file(out_filename, "w");
 	if (bio == NULL) {
-		rv = KPEP_R_FILE_OPEN_ERROR;
+		rv = ARDENT_R_FILE_OPEN_ERROR;
 		printf("Failed to open file '%s' for writing\n", out_filename);
 		goto err;
 	}

@@ -22,9 +22,9 @@
 
 DEFINE_STACK_OF(char)
 
-#include "kpep/kpep.h"
-#include "kpep/kpep_names.h"
-#include "kpep/kpep_seed_stub.h"
+#include "ardent/ardent.h"
+#include "ardent/ardent_names.h"
+#include "ardent/ardent_seed_stub.h"
 #include "seed_control.h"
 #include "seed_sources.h"
 #include "async_seed.h"
@@ -61,7 +61,7 @@ struct seed_control_ctx_st {
     SEED_STUB addl [SEED_COUNT_MAX+1];  // +1 so there is always a tombstone for ptr-based access
 };
 
-static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx);
+static ARDENT_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx);
 
 /* ************************************************************************************************
  * ***********************************************************************************************
@@ -74,7 +74,7 @@ void seed_control_free(SEED_CONTROL_CTX *ctx)
 {
     uint32_t i;
 
-    if (kpep_trace_seed_enabled) {
+    if (ardent_trace_seed_enabled) {
         TRACE_START;
     }
 
@@ -94,25 +94,25 @@ void seed_control_free(SEED_CONTROL_CTX *ctx)
             ctx->addl[i].seed_ctx = NULL;
         }
     }
-    kpep_cleanse(ctx, sizeof(SEED_CONTROL_CTX));
+    ardent_cleanse(ctx, sizeof(SEED_CONTROL_CTX));
 }
 
 EXPORT_VISIBILITY_HIDDEN
-SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, KPEP_RESULT *errnum)
+SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, ARDENT_RESULT *errnum)
 {
-    KPEP_RESULT rv = KPEP_R_SUCCESS;
+    ARDENT_RESULT rv = ARDENT_R_SUCCESS;
     SEED_CONTROL_CTX *ctx = NULL;
     uint32_t i;
 
-    if (kpep_trace_seed_enabled) {
+    if (ardent_trace_seed_enabled) {
         TRACE_START;
     }
 
     // Allocate for source context
-    ctx = kpep_zalloc(sizeof(SEED_CONTROL_CTX));
+    ctx = ardent_zalloc(sizeof(SEED_CONTROL_CTX));
     if (!ctx) {
-        rv = KPEP_R_MALLOC_FAIL;
-        LOG_KPEP_ERROR(MODULE_NAME, rv);
+        rv = ARDENT_R_MALLOC_FAIL;
+        LOG_ARDENT_ERROR(MODULE_NAME, rv);
         goto err;
     }
 
@@ -124,7 +124,7 @@ SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, KPEP_RESULT *errnum)
 
     // Must have a validated source
     if (!ctx->valid[0].seed_ctx) {
-        rv = KPEP_R_CONFIG_PARAMETER_MISSING;
+        rv = ARDENT_R_CONFIG_PARAMETER_MISSING;
         LOG_SIMPLE_ERROR(MODULE_NAME, "No validated source specified; one is required");
         goto err;
     }
@@ -135,7 +135,7 @@ SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, KPEP_RESULT *errnum)
         for (found=0, i=0; i < ctx->v_count; ++i)
             found |= ctx->valid[i].hardware_source;
         if (!found) {
-            rv = KPEP_R_CONFIG_PARAMETER_MISSING;
+            rv = ARDENT_R_CONFIG_PARAMETER_MISSING;
             LOG_SIMPLE_ERROR(MODULE_NAME, "No hardware source specified with 'restrictive entropy counting' enabled; one is required");
             goto err;
         }
@@ -145,7 +145,7 @@ SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, KPEP_RESULT *errnum)
     if (ctx->async_mode) {
         for (i = 0; i < ctx->v_count; ++i) {
             if (ctx->valid[i].seed_ctx) {
-                KPEP_RESULT rv = async_seed_start_thread(ctx->valid[i].seed_ctx);
+                ARDENT_RESULT rv = async_seed_start_thread(ctx->valid[i].seed_ctx);
                 if (rv) {
                     LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to start thread for validated source");
                     goto err;
@@ -154,7 +154,7 @@ SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, KPEP_RESULT *errnum)
         }
         for (i = 0; i < ctx->a_count; ++i) {
             if (ctx->addl[i].seed_ctx) {
-                KPEP_RESULT rv = async_seed_start_thread(ctx->addl[i].seed_ctx);
+                ARDENT_RESULT rv = async_seed_start_thread(ctx->addl[i].seed_ctx);
                 if (rv) {
                     LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to start thread for additional source");
                     goto err;
@@ -165,13 +165,13 @@ SEED_CONTROL_CTX* seed_control_new(void* prov_ctx, KPEP_RESULT *errnum)
 
     // Success!
     ctx->initialized = 1;
-    if (errnum) *errnum = KPEP_R_SUCCESS;
+    if (errnum) *errnum = ARDENT_R_SUCCESS;
     return ctx;
 
 err:
     if (!rv)
-        rv = (seed_control_get_state(ctx) == KPEP_RAND_STATE_ERROR  ? KPEP_R_SEED_IN_ERROR_STATE
-                                                                    : KPEP_R_SEED_NOT_INSTANTIATED);
+        rv = (seed_control_get_state(ctx) == ARDENT_RAND_STATE_ERROR  ? ARDENT_R_SEED_IN_ERROR_STATE
+                                                                    : ARDENT_R_SEED_NOT_INSTANTIATED);
     seed_control_free(ctx);
     if (errnum) *errnum = rv;
     return NULL;
@@ -183,18 +183,18 @@ uint32_t seed_control_get_state(SEED_CONTROL_CTX* ctx)
     SEED_STUB *seed = NULL;
 
     if (!ctx || !ctx->initialized) 
-        return KPEP_RAND_STATE_UNINITIALISED; // Value 0
+        return ARDENT_RAND_STATE_UNINITIALISED; // Value 0
 
     // Need to have at least one Validated source (also must be hardware if restrictive mode)
     seed = ctx->valid;
     while (seed->seed_ctx) {    
         if ((!ctx->req_hardware || seed->hardware_source) && 
-            async_seed_get_state(seed->seed_ctx) == KPEP_RAND_STATE_READY) {
-            return KPEP_RAND_STATE_READY;
+            async_seed_get_state(seed->seed_ctx) == ARDENT_RAND_STATE_READY) {
+            return ARDENT_RAND_STATE_READY;
         }
         seed++;
     }
-    return KPEP_RAND_STATE_ERROR;
+    return ARDENT_RAND_STATE_ERROR;
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -297,11 +297,11 @@ int seed_control_get_restricted_mode(SEED_CONTROL_CTX* ctx)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx, 
+ARDENT_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx, 
                                 unsigned char **out, size_t *out_len, 
                                 size_t nbits, int validated)
 {
-    KPEP_RESULT    rv = KPEP_R_SUCCESS;
+    ARDENT_RESULT    rv = ARDENT_R_SUCCESS;
     SEED_STUB     *source = NULL;
     unsigned char *buffer = NULL;
     size_t         buf_len[SEED_COUNT_MAX] = { 0 };
@@ -312,19 +312,19 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
 //    uint32_t       gather_state[SEED_COUNT_MAX] = { 0 };
     uint32_t       successful = 0;
 
-    if (kpep_trace_seed_enabled) {
+    if (ardent_trace_seed_enabled) {
         TRACE_START;
     }
 
     if (!ctx || !out || *out || !out_len) {
-        return KPEP_R_INVALID_ARG;
+        return ARDENT_R_INVALID_ARG;
     }
 
     // Non-validated (additional input) is optional
     if (!validated && !ctx->addl[0].seed_ctx) {
         *out_len = 0;
         *out = NULL;
-        return KPEP_R_SUCCESS;
+        return ARDENT_R_SUCCESS;
     }
 
     // Get total size
@@ -334,7 +334,7 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
         if (!rv) {
             successful++;
             if (buf_len[idx] > SIZE_MAX - buf_total) {
-                rv = KPEP_R_INVALID_ARG;
+                rv = ARDENT_R_INVALID_ARG;
                 goto err;
             }
             buf_total += buf_len[idx];
@@ -347,14 +347,14 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
     // Check seed sources
     if (validated) {
         if (ctx->req_all_sources && successful != ctx->v_count) {
-            rv = KPEP_R_SEED_INSUFFICIENT_ENTROPY;
+            rv = ARDENT_R_SEED_INSUFFICIENT_ENTROPY;
             goto err;
         }
     }
     else if (successful == 0) {
         *out_len = 0;
         *out = NULL;
-        return KPEP_R_SUCCESS;
+        return ARDENT_R_SUCCESS;
     }
 
     // Each source was asked for nbits, and added at least that to buf_total on success.
@@ -363,23 +363,23 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
         if (!validated) {
             *out_len = 0;
             *out = NULL;
-            return KPEP_R_SUCCESS;
+            return ARDENT_R_SUCCESS;
         }
-        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_SEED_INSUFFICIENT_ENTROPY);
-        rv = KPEP_R_SEED_INSUFFICIENT_ENTROPY;
+        LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_SEED_INSUFFICIENT_ENTROPY);
+        rv = ARDENT_R_SEED_INSUFFICIENT_ENTROPY;
         goto err;
     }
 
     // Allocate
-    buffer = kpep_zalloc(buf_total);
+    buffer = ardent_zalloc(buf_total);
     if (!buffer) {
         if (!validated) {
             *out_len = 0;
             *out = NULL;
-            return KPEP_R_SUCCESS;
+            return ARDENT_R_SUCCESS;
         }
-        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_MALLOC_FAIL);
-        rv = KPEP_R_MALLOC_FAIL;
+        LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_MALLOC_FAIL);
+        rv = ARDENT_R_MALLOC_FAIL;
         goto err;
     }
 
@@ -391,7 +391,7 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
         rv = async_seed_gather(source->seed_ctx, buffer+accum, &buf_len[idx], nbits);
         if (!rv) {
             if (buf_len[idx] > SIZE_MAX - accum) {
-                rv = KPEP_R_INVALID_ARG;
+                rv = ARDENT_R_INVALID_ARG;
                 goto err;
             }
             successful++;
@@ -405,26 +405,26 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
 
     if (validated && ctx->req_all_sources &&
         successful != ctx->v_count) {
-        rv = KPEP_R_SEED_INSUFFICIENT_ENTROPY;
+        rv = ARDENT_R_SEED_INSUFFICIENT_ENTROPY;
         goto err;
     }
 
     if (!validated) {
         if (accum == 0) {
-            kpep_cleanse(buffer, buf_total);
+            ardent_cleanse(buffer, buf_total);
             *out_len = 0;
             *out = NULL;
-            return KPEP_R_SUCCESS;
+            return ARDENT_R_SUCCESS;
         }
         *out = buffer;
         *out_len = accum;
-        return KPEP_R_SUCCESS;
+        return ARDENT_R_SUCCESS;
     }
 
     // Check seed source counting method #1 requirements for at least one (1) hardware source
     if (ctx->req_hardware && validated && !hardware) {
-        rv = KPEP_R_SEED_CONTROL_FATAL;
-        LOG_KPEP_ERROR(MODULE_NAME, rv);
+        rv = ARDENT_R_SEED_CONTROL_FATAL;
+        LOG_ARDENT_ERROR(MODULE_NAME, rv);
         goto err;    
     }
 
@@ -434,18 +434,18 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
     // or more (N) sources, and contains (N * nbits) of qualified entropy, although the
     // actual number of bits may be very large if using low entropy sources.
     if (accum < (nbits>>3)) {
-        rv = KPEP_R_SEED_CONTROL_FATAL;
-        LOG_KPEP_ERROR(MODULE_NAME, rv);
+        rv = ARDENT_R_SEED_CONTROL_FATAL;
+        LOG_ARDENT_ERROR(MODULE_NAME, rv);
         goto err;
     }
 
     // Success
     *out = buffer;
     *out_len = accum;
-    return KPEP_R_SUCCESS;
+    return ARDENT_R_SUCCESS;
 
 err:
-    kpep_cleanse(buffer, buf_total);
+    ardent_cleanse(buffer, buf_total);
     *out = NULL;
     *out_len = 0;
     return rv;
@@ -453,15 +453,15 @@ err:
 
 /* ***********************************************************************************************
  * ***********************************************************************************************
- * Parameters from 'kpepmodule.cnf'
+ * Parameters from 'ardentmodule.cnf'
  * ***********************************************************************************************
  * ***********************************************************************************************/
 
 #define LOOKUP_KEY_LENGTH 64
 
-static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
+static ARDENT_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
 {
-    KPEP_RESULT rv = KPEP_R_SUCCESS;
+    ARDENT_RESULT rv = ARDENT_R_SUCCESS;
     OSSL_PARAM  params[5], *p = params;
     SEED_STUB  *seed = NULL;
     uint32_t   *seed_cnt = NULL;
@@ -479,23 +479,23 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
     const SEED_SOURCE_DEF *def = NULL;
 
     if (!prov_ctx) {
-        return KPEP_R_NULL_ARG;
+        return ARDENT_R_NULL_ARG;
     }
     if (!ctx) {
-        return KPEP_R_NULL_ARG;
+        return ARDENT_R_NULL_ARG;
     }
 
     // Get additional configuration parameters
     ctx->req_all_sources =
-        kpep_get_core_param_bool(prov_ctx, KPEP_PROV_PARAM_REQ_ALL_SOURCES, 0); 
+        ardent_get_core_param_bool(prov_ctx, ARDENT_PROV_PARAM_REQ_ALL_SOURCES, 0); 
     ctx->req_hardware =
-        kpep_get_core_param_bool(prov_ctx, KPEP_PROV_PARAM_REQ_HARDWARE_SOURCE, 0);
+        ardent_get_core_param_bool(prov_ctx, ARDENT_PROV_PARAM_REQ_HARDWARE_SOURCE, 0);
     ctx->async_mode = 
-        kpep_get_core_param_bool(prov_ctx, KPEP_PROV_PARAM_SEED_ASYNC_MODE, 0);
+        ardent_get_core_param_bool(prov_ctx, ARDENT_PROV_PARAM_SEED_ASYNC_MODE, 0);
     if (ctx->async_mode)
-        kpep_log(LOG_LVL_INFO, MODULE_NAME, "KPEP starting in asynchronous mode (gather from worker threads through ringbuffers)");
+        ardent_log(LOG_LVL_INFO, MODULE_NAME, "ARDENT starting in asynchronous mode (gather from worker threads through ringbuffers)");
     else
-        kpep_log(LOG_LVL_INFO, MODULE_NAME, "KPEP starting in synchronous mode (block while gathering entropy)");
+        ardent_log(LOG_LVL_INFO, MODULE_NAME, "ARDENT starting in synchronous mode (block while gathering entropy)");
 
     // Initialize each seed source
     for (def = seed_source_defs; def->desc; ++def) {
@@ -510,19 +510,19 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
         else
             sprintf(key_start, "%s", def->prefix);
 
-        sprintf(act_key, "%s.%s", key_start, KPEP_PROV_PARAM_SEED_ACTIVATE);
+        sprintf(act_key, "%s.%s", key_start, ARDENT_PROV_PARAM_SEED_ACTIVATE);
         *p++ = OSSL_PARAM_construct_utf8_ptr(act_key, (char **) &act_value, sizeof(act_value));
-        sprintf(val_key, "%s.%s", key_start, KPEP_PROV_PARAM_SEED_VALIDATED);
+        sprintf(val_key, "%s.%s", key_start, ARDENT_PROV_PARAM_SEED_VALIDATED);
         *p++ = OSSL_PARAM_construct_utf8_ptr(val_key, (char **) &val_value, sizeof(val_value));
-        sprintf(hard_key, "%s.%s", key_start, KPEP_PROV_PARAM_SEED_HARDWARE);
+        sprintf(hard_key, "%s.%s", key_start, ARDENT_PROV_PARAM_SEED_HARDWARE);
         *p++ = OSSL_PARAM_construct_utf8_ptr(hard_key, (char **) &hard_value, sizeof(hard_value));
-        sprintf(ring_key, "%s.%s",key_start, KPEP_PROV_PARAM_SEED_RING_SIZE);
+        sprintf(ring_key, "%s.%s",key_start, ARDENT_PROV_PARAM_SEED_RING_SIZE);
         *p++ = OSSL_PARAM_construct_utf8_ptr(ring_key, (char **) &ring_value, sizeof(ring_value));
         *p = OSSL_PARAM_construct_end();
 
-        if (!kpep_get_core_params(prov_ctx, params)) {
-            LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_LOOKUP_FAILURE);
-            return KPEP_R_CONFIG_LOOKUP_FAILURE;
+        if (!ardent_get_core_params(prov_ctx, params)) {
+            LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_CONFIG_LOOKUP_FAILURE);
+            return ARDENT_R_CONFIG_LOOKUP_FAILURE;
         }
 
         if (!act_value || strncmp(act_value, "1", 1)) {
@@ -531,14 +531,14 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
 
         if (val_value && strncmp(val_value, "0", 1)) {
             if (!strncmp(val_value, "1", 1)) {
-                kpep_log(LOG_LVL_INFO, MODULE_NAME,
+                ardent_log(LOG_LVL_INFO, MODULE_NAME,
                          "Seed source '%s' marked validated '1', should be identifier",
                          def->desc);
             }
             seed_cnt = &ctx->v_count;
             if (*seed_cnt >= SEED_COUNT_MAX) {
-                LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_NO_SLOTS);
-                return KPEP_R_NO_SLOTS;
+                LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_NO_SLOTS);
+                return ARDENT_R_NO_SLOTS;
             }
             seed = &ctx->valid[*seed_cnt];
             if (def->force_hardware || (hard_value && !strncmp(hard_value, "1", 1))) {
@@ -548,8 +548,8 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
         else {
             seed_cnt = &ctx->a_count;
             if (*seed_cnt >= SEED_COUNT_MAX) {
-                LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_NO_SLOTS);
-                return KPEP_R_NO_SLOTS;
+                LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_NO_SLOTS);
+                return ARDENT_R_NO_SLOTS;
             }
             seed = &ctx->addl[*seed_cnt];
         }
@@ -557,12 +557,12 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
         if (ring_value) {
             ring_sz = strtol(ring_value, NULL, 10);
             if (ring_sz <= 0 || ring_sz > INT32_MAX) {
-                LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_RING_INVALID_SIZE);
-                return KPEP_R_RING_INVALID_SIZE;
+                LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_RING_INVALID_SIZE);
+                return ARDENT_R_RING_INVALID_SIZE;
             }
             if ((ring_sz & (ring_sz - 1)) != 0) {
-                LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_RING_NOT_POWER_OF_TWO);
-                return KPEP_R_RING_NOT_POWER_OF_TWO;
+                LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_RING_NOT_POWER_OF_TWO);
+                return ARDENT_R_RING_NOT_POWER_OF_TWO;
             }
         }
         else {
@@ -576,9 +576,9 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
                                 ctx->async_mode,
                                 &rv);
         if (!handle) {
-            LOG_KPEP_ERROR(MODULE_NAME, rv);
+            LOG_ARDENT_ERROR(MODULE_NAME, rv);
             LOG_FORMATTED_ERROR(MODULE_NAME, "Failed to initialize seed source '%s'.", def->desc);
-            rv = KPEP_R_SUCCESS;
+            rv = ARDENT_R_SUCCESS;
             continue;
         }
 
@@ -586,7 +586,7 @@ static KPEP_RESULT load_params(void* prov_ctx, SEED_CONTROL_CTX *ctx)
         *seed_cnt += 1;
     }
 
-    rv = KPEP_R_SUCCESS;
+    rv = ARDENT_R_SUCCESS;
 err:
     return rv;
 }

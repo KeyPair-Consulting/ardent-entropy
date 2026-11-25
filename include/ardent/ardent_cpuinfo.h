@@ -14,12 +14,11 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPMP_CPUINFO_H
-#define KPMP_CPUINFO_H
+#ifndef ARDENT_CPUINFO_H
+#define ARDENT_CPUINFO_H
 #pragma once
 
 #include <stdint.h>
-#include "openssl/e_os2.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,7 +28,7 @@ typedef enum cpu_type_e {
     CPU_UNKNOWN = 0,
     CPU_INTEL,
     CPU_AMD,
-    CPU_ARM  /* Detection, not support; dummy functions implemented */
+    //CPU_ARM  /* NOT IMPLEMENTED */
 } CPU_TYPE;
 
 typedef struct {
@@ -41,14 +40,14 @@ typedef struct {
 
 extern void get_cpuid(CPUIDinfo *info, const uint32_t func, const uint32_t subfunc);
 
-extern int  check_is_intel(void);
 extern int  check_is_amd(void);
-extern int  check_is_arm(void);
+extern int  check_is_intel(void);
 
+extern int  check_aesni_support(void);
 extern int  check_rdrand_support(void);
 extern int  check_rdseed_support(void);
 
 #ifdef __cplusplus
 }
 #endif
-#endif /* KPMP_CPUINFO_H */
+#endif /* ARDENT_CPUINFO_H */

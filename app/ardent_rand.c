@@ -27,7 +27,7 @@
 
 //  Includes
 #include "app_common.h"  //  Includes <stdlib.h>, <stdio.h>, and <string.h>
-#include "kpep/kpep.h"
+#include "ardent/ardent.h"
 
 static volatile sig_atomic_t g_keep_running = 1;
 
@@ -57,12 +57,12 @@ void print_usage(const char* appname)
 	printf("Arguments for RAND_bytes_ex() interface:\n");
 	printf("%-*s%s\n", indent, "--prov <name>", "Specify the provider to use with RAND_bytes_ex().  This method only works");
 	printf("%-*s%s\n", indent, "",              "with providers that implement the 'OSSL_FUNC_PROVIDER_RANDOM_BYTES' function");
-	printf("%-*s%s\n", indent, "",              "as defined in their provider dispatch table.  The 'fips' and 'kpep' providers");
+	printf("%-*s%s\n", indent, "",              "as defined in their provider dispatch table.  The 'fips' and 'ardent' providers");
 	printf("%-*s%s\n", indent, "",              "implement this, but the 'default' and 'base' providers do not.");
 	printf("\n");
 	printf("Arguments for EVP_RAND_* interface:\n");
 	printf("%-*s%s\n", indent, "--impl <name>", "Use the EVP_RAND_* interface and fetch the specified implementation.");
-	printf("%-*s%s\n", indent, "",              "Examples: \"SEED-SRC\", \"KPEP-SEED\", \"CTR-DRBG\", \"HMAC-DRBG\", \"HASH-DRBG\"");
+	printf("%-*s%s\n", indent, "",              "Examples: \"SEED-SRC\", \"ARDENT-SEED\", \"CTR-DRBG\", \"HMAC-DRBG\", \"HASH-DRBG\"");
 	printf("%-*s%s\n", indent, "--algo <name>", "Specify the algorithm for the specified implementation.  Any valid string");
 	printf("%-*s%s\n", indent, "",              "will be used in the fetch.  This argument may or may not be required; this");
 	printf("%-*s%s\n", indent, "",              "is implementation-dependent.  It is required for all '*-DRBG' type");
@@ -72,7 +72,7 @@ void print_usage(const char* appname)
 	printf("%-*s%s\n", indent, "",              "  \"SHA2-224\", \"SHA2-256\", \"SHA2-384\", \"SHA2-512\",");
 	printf("%-*s%s\n", indent, "",              "  \"SHA2-512/224\", \"SHA2-512/256\",  \"SHA1\"");
 	printf("%-*s%s\n", indent, "--propq <name>", "Specify the properties for the fetch query.  Using quoted strings is advised.");
-	printf("%-*s%s\n", indent, "",              "Examples: \"fips=yes\", \"?fips=no\", \"provider=kpep\"");
+	printf("%-*s%s\n", indent, "",              "Examples: \"fips=yes\", \"?fips=no\", \"provider=ardent\"");
 	printf("\n");
 	printf("Arguments for all interfaces:\n");
 	printf("%-*s%s\n", indent, "--size <integer>", "Specify the number of bytes to retrieve (default 32)");
@@ -196,7 +196,7 @@ int main(int argc, char* argv[])
 		}
 		else if (0 == strncmp(argv[ind], "--prov", 6)) {
 			if ((argc <= ind+1) || (argv[ind+1][0]=='-')) {
-				printf("Argument '--prov' requires an additional argument with the name of the provider to query (e.g. 'kpfp').\n");
+				printf("Argument '--prov' requires an additional argument with the name of the provider to query (e.g. 'ardent').\n");
 				return 1;
 			}
 			prov_arg = argv[++ind];

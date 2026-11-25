@@ -23,9 +23,9 @@
 #include "openssl/proverr.h"
 #include "internal/tsan_assist.h"
 
-#include "kpep_internal.h"
+#include "ardent_internal.h"
 #include "integrity.h"
-#include "kpep_self_test.h"
+#include "ardent_self_test.h"
 #include "crypto/sha3.h"
 #include "crypto/hmac.h"
 #include "crypto/drbg_acvp.h"
@@ -205,7 +205,7 @@ static void debug_print_bytes(const char* label, const unsigned char *buf, int l
  * ************************************************************************************************
  * ***********************************************************************************************/
 
-#include "kpep_self_test.inc"   // Self-test data
+#include "ardent_self_test.inc"   // Self-test data
 
 /* ************************************************************************************************
  * HMAC-SHA2-256
@@ -215,16 +215,16 @@ static
 int hmac_cast(SELF_TEST_PARAMS *st, OSSL_SELF_TEST *ev) 
 {
     int ok = 0;
-    unsigned char mac[KPEP_GLOBAL_DIGEST_SIZE] = { 0 };
+    unsigned char mac[ARDENT_GLOBAL_DIGEST_SIZE] = { 0 };
 
     OSSL_SELF_TEST_onbegin(ev, OSSL_SELF_TEST_TYPE_KAT_INTEGRITY, 
                                OSSL_SELF_TEST_DESC_INTEGRITY_HMAC);
 
-    ok = hmac(kpep_integrity_key, kpep_integrity_key_len,
+    ok = hmac(ardent_integrity_key, ardent_integrity_key_len,
               kat_pt, sizeof(kat_pt),
-              mac, KPEP_GLOBAL_DIGEST_SIZE);
+              mac, ARDENT_GLOBAL_DIGEST_SIZE);
     if (!ok) {
-        kpep_log(LOG_LVL_FATAL, MODULE_NAME, "HMAC CAST failure (primitive)\n");
+        ardent_log(LOG_LVL_FATAL, MODULE_NAME, "HMAC CAST failure (primitive)\n");
         ERR_raise(ERR_LIB_PROV, PROV_R_SELF_TEST_KAT_FAILURE);
         return 0;
     }
@@ -232,13 +232,13 @@ int hmac_cast(SELF_TEST_PARAMS *st, OSSL_SELF_TEST *ev)
     /* Optional corruption */
     OSSL_SELF_TEST_oncorrupt_byte(ev, mac);
 
-    ok = !memcmp(mac, hmac_kat_mac, KPEP_GLOBAL_DIGEST_SIZE); // Success on zero
+    ok = !memcmp(mac, hmac_kat_mac, ARDENT_GLOBAL_DIGEST_SIZE); // Success on zero
     if (!ok) {
-        kpep_log(LOG_LVL_FATAL, MODULE_NAME, "HMAC CAST failure (compare)");
+        ardent_log(LOG_LVL_FATAL, MODULE_NAME, "HMAC CAST failure (compare)");
         ERR_raise(ERR_LIB_PROV, PROV_R_SELF_TEST_KAT_FAILURE);
         #ifdef DEBUG_CAST
-        debug_print_bytes("HMAC CAST CALC: ", mac, KPEP_GLOBAL_DIGEST_SIZE, 1);
-        debug_print_bytes("HMAC CAST EXP : ", hmac_kat_mac, KPEP_GLOBAL_DIGEST_SIZE, 1);
+        debug_print_bytes("HMAC CAST CALC: ", mac, ARDENT_GLOBAL_DIGEST_SIZE, 1);
+        debug_print_bytes("HMAC CAST EXP : ", hmac_kat_mac, ARDENT_GLOBAL_DIGEST_SIZE, 1);
         #endif
     }
 
@@ -254,14 +254,14 @@ static
 int sha3_cast(SELF_TEST_PARAMS *st, OSSL_SELF_TEST *ev) 
 {
     int ok = 0;
-    unsigned char digest[KPEP_GLOBAL_DIGEST_SIZE] = { 0 };
+    unsigned char digest[ARDENT_GLOBAL_DIGEST_SIZE] = { 0 };
 
     OSSL_SELF_TEST_onbegin(ev, OSSL_SELF_TEST_TYPE_KAT_DIGEST, 
                                OSSL_SELF_TEST_DESC_MD_SHA3);
 
     ok = sha3_oneshot(kat_pt, sizeof(kat_pt), digest);
     if (!ok) {
-        kpep_log(LOG_LVL_FATAL, MODULE_NAME, "HASH CAST failure (primitive)\n");
+        ardent_log(LOG_LVL_FATAL, MODULE_NAME, "HASH CAST failure (primitive)\n");
         ERR_raise(ERR_LIB_PROV, PROV_R_SELF_TEST_KAT_FAILURE);
         return 0;
     }
@@ -269,13 +269,13 @@ int sha3_cast(SELF_TEST_PARAMS *st, OSSL_SELF_TEST *ev)
     /* Optional corruption */
     OSSL_SELF_TEST_oncorrupt_byte(ev, digest);
 
-    ok = !memcmp(digest, hash_kat_digest, KPEP_GLOBAL_DIGEST_SIZE); // Success on zero
+    ok = !memcmp(digest, hash_kat_digest, ARDENT_GLOBAL_DIGEST_SIZE); // Success on zero
     if (!ok) {
-        kpep_log(LOG_LVL_FATAL, MODULE_NAME, "HASH CAST failure (compare)");
+        ardent_log(LOG_LVL_FATAL, MODULE_NAME, "HASH CAST failure (compare)");
         ERR_raise(ERR_LIB_PROV, PROV_R_SELF_TEST_KAT_FAILURE);
         #ifdef DEBUG_CAST
-        debug_print_bytes("HASH CAST CALC: ", digest, KPEP_GLOBAL_DIGEST_SIZE, 1);
-        debug_print_bytes("HASH CAST EXP : ", hash_kat_digest, KPEP_GLOBAL_DIGEST_SIZE, 1);
+        debug_print_bytes("HASH CAST CALC: ", digest, ARDENT_GLOBAL_DIGEST_SIZE, 1);
+        debug_print_bytes("HASH CAST EXP : ", hash_kat_digest, ARDENT_GLOBAL_DIGEST_SIZE, 1);
         #endif
     }
 
@@ -299,7 +299,7 @@ int drbg_cast(SELF_TEST_PARAMS *st, OSSL_SELF_TEST *ev)
     const uint32_t addl_len    = sizeof(drbg_gen1_addl);
     const uint32_t exp_len     = sizeof(drbg_expected);
 
-    KPEP_DRBG_CTX* ctx = NULL;
+    ARDENT_DRBG_CTX* ctx = NULL;
 
     OSSL_SELF_TEST_onbegin(ev, OSSL_SELF_TEST_TYPE_DRBG, 
                                OSSL_SELF_TEST_DESC_DRBG_HASH);
@@ -320,11 +320,11 @@ int drbg_cast(SELF_TEST_PARAMS *st, OSSL_SELF_TEST *ev)
         // Check result
         ok = !memcmp(buffer, drbg_expected, exp_len);  // Success on zero
         if (!ok) {
-            kpep_log(LOG_LVL_FATAL, MODULE_NAME, "DRBG CAST failure (compare)");
+            ardent_log(LOG_LVL_FATAL, MODULE_NAME, "DRBG CAST failure (compare)");
             ERR_raise(ERR_LIB_PROV, PROV_R_SELF_TEST_KAT_FAILURE);
             #ifdef DEBUG_CAST
-            debug_print_bytes("DRBG CAST CALC: ", buffer, KPEP_GLOBAL_DIGEST_SIZE, 1);
-            debug_print_bytes("DRBG CAST EXP : ", drbg_expected, KPEP_GLOBAL_DIGEST_SIZE, 1);
+            debug_print_bytes("DRBG CAST CALC: ", buffer, ARDENT_GLOBAL_DIGEST_SIZE, 1);
+            debug_print_bytes("DRBG CAST EXP : ", drbg_expected, ARDENT_GLOBAL_DIGEST_SIZE, 1);
             #endif
         }
     }
@@ -352,9 +352,9 @@ int integrity_test(SELF_TEST_PARAMS *st, OSSL_SELF_TEST *ev)
 {
     int ok = 0;  // Default fail
     int rv;
-    unsigned char mac[KPEP_GLOBAL_DIGEST_SIZE];
-    unsigned char exp[KPEP_GLOBAL_DIGEST_SIZE];
-    size_t mac_len = KPEP_GLOBAL_DIGEST_SIZE;
+    unsigned char mac[ARDENT_GLOBAL_DIGEST_SIZE];
+    unsigned char exp[ARDENT_GLOBAL_DIGEST_SIZE];
+    size_t mac_len = ARDENT_GLOBAL_DIGEST_SIZE;
     size_t exp_len;
 
     OSSL_SELF_TEST_onbegin(ev, OSSL_SELF_TEST_TYPE_MODULE_INTEGRITY, 
@@ -373,13 +373,13 @@ int integrity_test(SELF_TEST_PARAMS *st, OSSL_SELF_TEST *ev)
 
     // Load expected mac
     if (!OPENSSL_hexstr2buf_ex(exp, sizeof(exp), &exp_len, st->module_mac_data, INTEGRITY_DATA_DELIM_CHAR)) {
-        kpep_log(LOG_LVL_ERR, MODULE_NAME, "Failed to convert expected MAC value for integrity test");
+        ardent_log(LOG_LVL_ERR, MODULE_NAME, "Failed to convert expected MAC value for integrity test");
         goto err;
     }
 
     // Do the file HMAC, get the MAC
-    if ((rv = integrity_check_file(st->module_filename, NULL, 0, mac, &mac_len)) != KPEP_R_SUCCESS) {
-        kpep_log(LOG_LVL_ERR, MODULE_NAME, "Failed to perform the integrity test: %s", kpep_get_reason_string(rv));
+    if ((rv = integrity_check_file(st->module_filename, NULL, 0, mac, &mac_len)) != ARDENT_R_SUCCESS) {
+        ardent_log(LOG_LVL_ERR, MODULE_NAME, "Failed to perform the integrity test: %s", ardent_get_reason_string(rv));
         goto err;
     }
 
@@ -387,15 +387,15 @@ int integrity_test(SELF_TEST_PARAMS *st, OSSL_SELF_TEST *ev)
     OSSL_SELF_TEST_oncorrupt_byte(ev, mac);
 
     // Check the calculated vs expected
-    ok = (memcmp(mac, exp, KPEP_GLOBAL_DIGEST_SIZE) == 0);
+    ok = (memcmp(mac, exp, ARDENT_GLOBAL_DIGEST_SIZE) == 0);
 
 err:
     if (!ok) {
-        kpep_log(LOG_LVL_WARN, MODULE_NAME, "Integrity test failure (compare)");
+        ardent_log(LOG_LVL_WARN, MODULE_NAME, "Integrity test failure (compare)");
         ERR_raise(ERR_LIB_PROV, PROV_R_MODULE_INTEGRITY_FAILURE);
         #ifdef DEBUG_INTEGRITY
-        debug_print_bytes("INTEGRITY CALC: ", mac, KPEP_GLOBAL_DIGEST_SIZE, 1);
-        debug_print_bytes("INTEGRITY EXP : ", exp, KPEP_GLOBAL_DIGEST_SIZE, 1);
+        debug_print_bytes("INTEGRITY CALC: ", mac, ARDENT_GLOBAL_DIGEST_SIZE, 1);
+        debug_print_bytes("INTEGRITY EXP : ", exp, ARDENT_GLOBAL_DIGEST_SIZE, 1);
         #endif
     }
     // Zeroize, as per AS05.10
@@ -452,12 +452,12 @@ int ossl_prov_is_running(void)
 EXPORT_VISIBILITY_HIDDEN
 int SELF_TEST_post(SELF_TEST_PARAMS *st, int on_demand_test)
 {
-    KPEP_RESULT rv;
+    ARDENT_RESULT rv;
     OSSL_SELF_TEST *ev = NULL;
     int loclstate, ok = 0;
 
-    if (kpep_trace_seed_enabled) {
-        kpep_trace("KPEP-CAST", "START");
+    if (ardent_trace_seed_enabled) {
+        ardent_trace("ARDENT-CAST", "START");
     }
 
     if (!RUN_ONCE(&fips_self_test_init, do_fips_self_test_init)) {
@@ -515,15 +515,15 @@ int SELF_TEST_post(SELF_TEST_PARAMS *st, int on_demand_test)
         set_fips_state(FIPS_STATE_RUNNING);
     }
     else {
-        kpep_log(LOG_LVL_ERR, MODULE_NAME, "POST failure\n");
+        ardent_log(LOG_LVL_ERR, MODULE_NAME, "POST failure\n");
         ossl_set_error_state(OSSL_SELF_TEST_TYPE_NONE);
     }
     CRYPTO_THREAD_unlock(self_test_lock);
 
 err:
 
-    if (kpep_trace_seed_enabled) {
-        kpep_trace("KPEP-CAST", "END");
+    if (ardent_trace_seed_enabled) {
+        ardent_trace("ARDENT-CAST", "END");
     }
 
     return ok;
