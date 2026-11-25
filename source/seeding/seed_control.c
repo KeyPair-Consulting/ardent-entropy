@@ -222,7 +222,7 @@ void seed_control_get_description(SEED_CONTROL_CTX* ctx, char *buffer)
         while (seed->seed_ctx) {
             char namebuf[SEED_CONTROL_DESCRIPTION_MAX];
             const char *name = async_seed_get_name(seed->seed_ctx);
-
+            if (!name) name = "(Unknown)";  // Should never happen
             if (ctx->req_hardware && seed->hardware_source)
                 snprintf(namebuf, sizeof(namebuf), "%s [H]", name ? name : "");
             else
@@ -385,6 +385,7 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
 
     // Gather from each
     idx = 0;
+    successful = 0;
     source = (validated)?ctx->valid:ctx->addl;
     while (source->seed_ctx) {
         rv = async_seed_gather(source->seed_ctx, buffer+accum, &buf_len[idx], nbits);
@@ -393,12 +394,19 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
                 rv = KPEP_R_INVALID_ARG;
                 goto err;
             }
+            successful++;
             accum += buf_len[idx];
             if (validated && ctx->req_hardware && source->hardware_source)
                 hardware = 1;
         }
         idx++;
         source++;
+    }
+
+    if (validated && ctx->req_all_sources &&
+        successful != ctx->v_count) {
+        rv = KPEP_R_SEED_INSUFFICIENT_ENTROPY;
+        goto err;
     }
 
     if (!validated) {
