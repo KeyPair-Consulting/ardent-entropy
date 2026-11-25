@@ -44,18 +44,6 @@ void sha3_ctx_free(SHA3_CTX* ctx)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-void* sha3_ctx_dup(void* ctx)
-{
-    SHA3_CTX *newctx = NULL;
-    if (!ctx)
-        return NULL;
-    newctx = sha3_ctx_new();
-    if (newctx)
-        memcpy(newctx, ctx, sizeof(SHA3_CTX));
-    return newctx;
-}
-
-EXPORT_VISIBILITY_HIDDEN
 int sha3_init(SHA3_CTX* ctx, ossl_unused const OSSL_PARAM params[])
 {
     if (!ctx)
@@ -87,14 +75,21 @@ int sha3_final(SHA3_CTX* ctx, unsigned char *digest, size_t *digest_len)
 EXPORT_VISIBILITY_HIDDEN
 int sha3_oneshot(const unsigned char *message, unsigned int len, unsigned char *digest)
 {
-    SHA3_CTX ctx;
+    SHA3_CTX *ctx = NULL;
+    int ret;
 
     if (!digest || (!message && len > 0))
         return 0;
-    jent_sha3_256_init(&ctx);
-    jent_sha3_update(&ctx, message, len);
-    jent_sha3_final(&ctx, digest);
-    return 1;
+
+    ctx = sha3_ctx_new();
+    if (!ctx)
+        return 0;
+
+    jent_sha3_256_init(ctx);
+    jent_sha3_update(ctx, message, len);
+    jent_sha3_final(ctx, digest);
+    sha3_ctx_free(ctx);
+    return ret;
 }
 
 /* ************************************************************************************************
@@ -157,7 +152,6 @@ EXPORT_VISIBILITY_HIDDEN
 const OSSL_DISPATCH kpep_sha3_digest_functions[] = {
     { OSSL_FUNC_DIGEST_NEWCTX,          (void (*)(void))sha3_ctx_new },
     { OSSL_FUNC_DIGEST_FREECTX,         (void (*)(void))sha3_ctx_free },
-    { OSSL_FUNC_DIGEST_DUPCTX,          (void (*)(void))sha3_ctx_dup },
     { OSSL_FUNC_DIGEST_INIT,            (void (*)(void))sha3_init },
     { OSSL_FUNC_DIGEST_UPDATE,          (void (*)(void))sha3_update },
     { OSSL_FUNC_DIGEST_FINAL,           (void (*)(void))sha3_final },

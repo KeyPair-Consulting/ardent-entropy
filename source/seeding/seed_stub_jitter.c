@@ -162,22 +162,6 @@ err:
 }
 
 EXPORT_VISIBILITY_HIDDEN
-JITTER_CTX* pubapi_jitter_new(size_t osr)
-{
-    KPEP_RESULT rv = KPEP_R_SUCCESS;
-    JITTER_CTX* ctx = NULL;
-
-    if (kpep_trace_seed_enabled) {
-        TRACE_START;
-    }
-
-    ctx = stub_jitter_new(NULL, 0, &rv);
-    if (ctx)
-        ctx->osr = osr;
-    return ctx;
-}
-
-EXPORT_VISIBILITY_HIDDEN
 KPEP_RESULT stub_jitter_gather(void *stub_ctx, unsigned char *out, size_t *out_len, size_t nbits)
 {
     JITTER_CTX *ctx = (JITTER_CTX *)stub_ctx;
@@ -215,6 +199,10 @@ KPEP_RESULT stub_jitter_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     if (!ctx || !out || !out_len) {
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_NULL_ARG);
         return KPEP_R_NULL_ARG;
+    }
+    if (nbits < KPEP_SECURITY_STRENGTH_BITS) {
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_INVALID_ARG);
+        return KPEP_R_INVALID_ARG;
     }
 
     // Calculate gather size
@@ -364,8 +352,7 @@ static KPEP_RESULT load_params(void* prov_ctx, JITTER_CTX *ctx)
 
     // Oversample Rate
     if (osr_str) {
-        ctx->osr = atoi(osr_str);
-        if (errno) {
+        if (!parse_uint32(osr_str, &ctx->osr) || ctx->osr == 0) {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }
@@ -382,8 +369,7 @@ static KPEP_RESULT load_params(void* prov_ctx, JITTER_CTX *ctx)
 
     // Block Size
     if (bsize_str) {
-        ctx->block_size = atoi(bsize_str);
-        if (errno) {
+        if (!parse_uint32(bsize_str, &ctx->block_size) || ctx->block_size == 0) {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }
@@ -400,8 +386,7 @@ static KPEP_RESULT load_params(void* prov_ctx, JITTER_CTX *ctx)
 
     // Block Count
     if (bcount_str) {
-        ctx->block_count = atoi(bcount_str);
-        if (errno) {
+        if (!parse_uint32(bcount_str, &ctx->block_count) || ctx->block_count == 0) {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }

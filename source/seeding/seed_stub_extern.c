@@ -79,6 +79,9 @@ void stub_extern_free(void *stub_ctx)
         TRACE_START;
     }
 
+    if (ctx->ext_stub && ctx->ext_stub->free_fn)
+        ctx->ext_stub->free_fn(ctx->ext_ctx);
+
     if (ctx->hnd && dlclose(ctx->hnd)) {
         printf("DLCLOSE error: %s\n", dlerror());
     }
@@ -126,7 +129,13 @@ void* stub_extern_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
     }
 
     // Set entropy factors
-    full_entropy_sz = ctx->block_size * ctx->block_count;
+    if (ctx->block_size == 0 || ctx->block_count == 0 ||
+        ctx->block_size > SIZE_MAX / ctx->block_count) { 
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'external' failed startup (block size overflow)");
+        if (errnum) *errnum = KPEP_R_INVALID_ARG;
+        goto err;
+    }
+    full_entropy_sz = (size_t)ctx->block_size * (size_t)ctx->block_count;
     if (full_entropy_sz < KPEP_SECURITY_STRENGTH_BITS) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'external' failed startup (block size check)");
         if (errnum) *errnum = KPEP_R_INVALID_ARG;
@@ -147,6 +156,15 @@ void* stub_extern_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
     ctx->ext_stub = (STUB_FUNCTIONS*) dlsym(ctx->hnd, ctx->symbol);
     if (!ctx->ext_stub) {
         LOG_FORMATTED_ERROR(MODULE_NAME, "DLSYM error: %s", dlerror());
+        if (errnum) *errnum = KPEP_R_EXTERN_LOAD_FAILURE;
+        goto err;
+    }
+    if (!ctx->ext_stub->new_fn || 
+        !ctx->ext_stub->gather_fn || 
+        !ctx->ext_stub->free_fn || 
+        !ctx->ext_stub->get_name_fn ||
+        !ctx->ext_stub->get_state_fn) {
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Seed source 'external' failed startup (missing required functions)");
         if (errnum) *errnum = KPEP_R_EXTERN_LOAD_FAILURE;
         goto err;
     }
@@ -186,6 +204,12 @@ void* stub_extern_new(void* prov_ctx, uint32_t idx, KPEP_RESULT *errnum)
     return ctx;
 
 err:
+    if (ctx) {
+        if (ctx->ext_ctx)
+            ctx->ext_stub->free_fn(ctx->ext_ctx);
+        if (ctx->hnd)
+            dlclose(ctx->hnd);
+    }
     kpep_cleanse(ctx, sizeof(EXTERNAL_CTX));
     return NULL;
 }
@@ -226,6 +250,10 @@ KPEP_RESULT stub_extern_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     if (!ctx || !out || !out_len) {
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_NULL_ARG);
         return KPEP_R_NULL_ARG;
+    }
+    if (nbits < KPEP_SECURITY_STRENGTH_BITS) {
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_INVALID_ARG);
+        return KPEP_R_INVALID_ARG;
     }
 
     // Calculate gather size
@@ -375,8 +403,7 @@ static uint32_t load_params(void* prov_ctx, EXTERNAL_CTX *ctx)
 
     // Block Size
     if (bsize_str) {
-        ctx->block_size = atoi(bsize_str);
-        if (errno) {
+        if (!parse_uint32(bsize_str, &ctx->block_size) || ctx->block_size == 0) {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }
@@ -388,8 +415,7 @@ static uint32_t load_params(void* prov_ctx, EXTERNAL_CTX *ctx)
 
     // Block Count
     if (bcount_str) {
-        ctx->block_count = atoi(bcount_str);
-        if (errno) {
+        if (!parse_uint32(bcount_str, &ctx->block_count) || ctx->block_count == 0) {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }

@@ -192,6 +192,10 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_NULL_ARG);
         return KPEP_R_NULL_ARG;
     }
+    if (nbits < KPEP_SECURITY_STRENGTH_BITS) {
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_INVALID_ARG);
+        return KPEP_R_INVALID_ARG;
+    }
 
     // Calculate gather size
     gather_bits = seed_get_gather_sz((SEED_STUB_INFO*)ctx, nbits);
@@ -214,7 +218,7 @@ KPEP_RESULT stub_osrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
     }
 
     // Get the entropy from OS
-    fp = fopen(ctx->filepath, "r");
+    fp = fopen(ctx->filepath, "rb");
     if (!fp) {
         rv = KPEP_R_FILE_OPEN_ERROR;
         LOG_FORMATTED_ERROR(MODULE_NAME, "Error opening file '%s' for reading seed", ctx->filepath);
@@ -359,8 +363,7 @@ static KPEP_RESULT load_params(void* prov_ctx, OSRAND_CTX *ctx)
     
     // Block Size
     if (bsize_str) {
-        ctx->block_size = atoi(bsize_str);
-        if (errno) {
+        if (!parse_uint32(bsize_str, &ctx->block_size) || ctx->block_size == 0) {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }
@@ -372,8 +375,7 @@ static KPEP_RESULT load_params(void* prov_ctx, OSRAND_CTX *ctx)
 
     // Block Count
     if (bcount_str) {
-        ctx->block_count = atoi(bcount_str);
-        if (errno) {
+        if (!parse_uint32(bcount_str, &ctx->block_count) || ctx->block_count == 0) {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }

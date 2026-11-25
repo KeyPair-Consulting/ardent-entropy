@@ -153,8 +153,16 @@ int rdrand_get_bytes_step(unsigned int n, unsigned char *dest, unsigned int retr
     uint64_t temprand;
     unsigned int length;
 
+    if (!n || !dest)
+        return 0;
+        
     /* Compute the address of the first 64 bit aligned block in the destination buffer */
     start = dest;
+
+    // Guard alignment for small n
+    if (n < 8 - ((unsigned int)((uint64_t)start % 8)))
+        return 0;
+
     if (((uint64_t)start % (uint64_t)8) == 0) {
         blockstart = (uint64_t *)start;
         count = n;
@@ -223,8 +231,16 @@ int rdseed_get_bytes_step(unsigned int n, unsigned char *dest, unsigned int retr
     uint64_t temprand;
     unsigned int length;
 
+    if (!n || !dest)
+        return 0;
+
     /* Compute the address of the first 64 bit aligned block in the destination buffer */
     start = dest;
+
+    // Guard alignment for small n
+    if (n < 8 - ((unsigned int)((uint64_t)start % 8)))
+        return 0;
+
     if (((uint64_t)start % (uint64_t)8) == 0) {
         blockstart = (uint64_t *)start;
         count = n;

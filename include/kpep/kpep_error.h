@@ -46,7 +46,7 @@ extern int ERR_LIB_KPEP;           // Handle for accessing OpenSSL error functio
 
 #define KPEP_R_EXTERN_LOAD_FAILURE       106  /* Problem in DLSYM loading */
 #define KPEP_R_INTERNAL_HASH_FAIL        107
-#define KPEP_R_RESERVED_108              108
+#define KPEP_R_INTEGRITY_FAIL            108
 #define KPEP_R_NO_SLOTS                  109
 #define KPEP_R_LOG_BUGFIX_FAIL           110
 

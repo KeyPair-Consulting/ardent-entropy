@@ -255,8 +255,31 @@ uint64_t kpep_debug_monotonic_us(void)
     uint64_t elapsed_us;
 
     if (QueryPerformanceFrequency(&freq) && QueryPerformanceCounter(&count)) {
-        elapsed_us = (uint64_t)((count.QuadPart * 1000000ULL) / freq.QuadPart);
-        return elapsed_us;
+        uint64_t ticks;
+        uint64_t frequency;
+        uint64_t whole_seconds;
+        uint64_t remainder;
+        long double elapsed;
+
+        if (freq.QuadPart <= 0 || count.QuadPart < 0)
+            return 0;
+
+        ticks = (uint64_t)count.QuadPart;
+        frequency = (uint64_t)freq.QuadPart;
+        whole_seconds = ticks / frequency;
+        remainder = ticks % frequency;
+
+        if (whole_seconds > (UINT64_MAX / 1000000ULL))
+            return UINT64_MAX;
+
+        elapsed = (long double)whole_seconds * 1000000.0L;
+        elapsed += ((long double)remainder * 1000000.0L) /
+                   (long double)frequency;
+
+        if (elapsed >= (long double)UINT64_MAX)
+            return UINT64_MAX;
+
+        return (uint64_t)elapsed;
     }
 
     {

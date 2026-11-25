@@ -73,6 +73,9 @@ void* kpep_zalloc(size_t size);              // Allocate and set to zero
 // large enough to store the result.  If it is too small, the output is truncated.
 size_t kpep_trimwhitespace(char *out, size_t len, const char *str);
 
+// Use atoi to parse a string into a uint32_t value safely
+int parse_uint32(const char *text, uint32_t *value);
+
 // Manage visibility of functions
 #define EXPORT_VISIBILITY_HIDDEN  __attribute__((visibility ("hidden")))
 #define EXPORT_VISIBILITY_DEFAULT __attribute__((visibility("default")))

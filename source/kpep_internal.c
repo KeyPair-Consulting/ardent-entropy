@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
+#include <errno.h>
 
 #include "kpep/kpep.h"
 #include "kpep_internal.h"
@@ -69,7 +70,7 @@ size_t kpep_trimwhitespace(char *out, size_t len, const char *str)
 	const char *end;
 	size_t out_size;
 
-	if (len == 0)
+	if (!str || !out || len == 0)
 		return 0;
 
 	// Trim leading space
@@ -96,3 +97,24 @@ size_t kpep_trimwhitespace(char *out, size_t len, const char *str)
 	return out_size;
 }
 
+EXPORT_VISIBILITY_DEFAULT
+int parse_uint32(const char *text, uint32_t *value)
+{
+    char *end = NULL;
+    unsigned long parsed;
+
+    if (!text || !*text)
+        return 0;
+
+    errno = 0;
+    parsed = strtoul(text, &end, 10);
+
+    if (errno == ERANGE ||
+        end == text ||
+        *end != '\0' ||
+        parsed > UINT32_MAX)
+        return 0;
+
+    *value = (uint32_t)parsed;
+    return 1;
+}

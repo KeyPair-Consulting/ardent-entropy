@@ -177,16 +177,25 @@ KPEP_RESULT integrity_check_file(const char* filename,
     errno = 0;
 
     // Iterate through the file by block size
-    hmac_init(hctx, key, key_len, NULL);
+    if (!hmac_init(hctx, key, key_len, NULL)) {
+        rv = KPEP_R_INTEGRITY_FAIL;
+        goto err;
+    }
     while ((bytes_read = fread(buffer, 1, FILE_BUFFER_SIZE, fp)) > 0) {
-        hmac_update(hctx, buffer, bytes_read);
+        if (!hmac_update(hctx, buffer, bytes_read)) {
+            rv = KPEP_R_INTEGRITY_FAIL;
+            goto err;
+        }
     }
     if (ferror(fp) || !feof(fp)) {
         rv = KPEP_R_FILE_UNEXPECTED;
         clearerr(fp);
         goto err;
     }
-    hmac_final(hctx, mac, NULL, KPEP_GLOBAL_DIGEST_SIZE);
+    if (!hmac_final(hctx, mac, NULL, KPEP_GLOBAL_DIGEST_SIZE)) {
+        rv = KPEP_R_INTEGRITY_FAIL;
+        goto err;
+    }
     *mac_len = KPEP_GLOBAL_DIGEST_SIZE;
 
     // If we got here, rv is still zero and we have SUCCESS!

@@ -129,22 +129,6 @@ void* stub_example_new(void* prov_ctx, uint8_t idx, KPEP_RESULT *errnum)
 }
 
 EXPORT_VISIBILITY_HIDDEN
-JITTER_CTX* pubapi_jitter_new(size_t osr)
-{
-    KPEP_RESULT rv = KPEP_R_SUCCESS;
-    JITTER_CTX* ctx = NULL;
-
-    if (kpep_trace_seed_enabled) {
-        printf("*** %s: %s\n", MODULE_NAME, __func__);
-    }
-
-    ctx = stub_example_new(NULL, 0, &rv);
-    if (ctx)
-        ctx->osr = osr;
-    return ctx;
-}
-
-EXPORT_VISIBILITY_HIDDEN
 KPEP_RESULT stub_example_gather(void *stub_ctx, unsigned char *out, size_t *out_len, size_t nbits)
 {
     JITTER_CTX *ctx = (JITTER_CTX *)stub_ctx;

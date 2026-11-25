@@ -132,16 +132,12 @@ int kpep_set_openssl_reason_strings(void)
 }
 
 EXPORT_VISIBILITY_DEFAULT
-const char* kpep_get_reason_string(KPEP_RESULT result)
+const char* kpep_get_reason_string(KPEP_RESULT result, const char *module)
 {
-	static char err_string[64];
-
 	if ((result < KPEP_R_START) || (result > KPEP_R_END))  {
-		memset(err_string, 0, sizeof(err_string));
-		sprintf(err_string, "Error number out of range (got %d, expected %d..%d).", result, KPEP_R_START, KPEP_R_END);
-		return err_string;
+		LOG_FORMATTED_ERROR(module, "Error number out of range (got %3d, expected %3d..%3d).", result, KPEP_R_START, KPEP_R_END);
+		return "Error number out of range";
 	}
-	
 	return reasons[result-KPEP_R_START].string;
 }
 

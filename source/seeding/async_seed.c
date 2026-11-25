@@ -176,10 +176,7 @@ ASYNC_CTX *async_seed_new(void* prov_ctx,
     ctx->source_info = (SEED_STUB_INFO*) ctx->source_ctx;
 
     // Safely create seed source name (do not fail on error)
-    len = snprintf(ctx->name,
-               sizeof(ctx->name),
-               "async (%s)",
-               ctx->source_info->name);
+    len = snprintf(ctx->name, sizeof(ctx->name), "%s", ctx->source_info->name);
     if (len < 0) {
         LOG_SIMPLE_ERROR(MODULE_NAME, "Unable to format source name");
         memset(ctx->name, 0, sizeof(ctx->name));

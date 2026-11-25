@@ -15,9 +15,12 @@
  * ***********************************************************************************************/
 
 #include <string.h>
-#include <errno.h>
-#include <ctype.h>
+#include <stdint.h>
 #include "openssl/params.h"
+#include "openssl/crypto.h"
+#include "openssl/safestack.h"
+
+DEFINE_STACK_OF(char)
 
 #include "kpep/kpep.h"
 #include "kpep/kpep_names.h"
@@ -198,35 +201,93 @@ EXPORT_VISIBILITY_HIDDEN
 void seed_control_get_description(SEED_CONTROL_CTX* ctx, char *buffer)
 {
     SEED_STUB *seed;
+    STACK_OF(char) *lines;
+    char *line;
+    size_t used = 0;
+    int idx;
 
-    if (ctx && buffer) {
-        memset(buffer, 0, SEED_CONTROL_DESCRIPTION_MAX);
+    if (!ctx || !buffer)
+        return;
 
-        // Validated sources
-        if (ctx->valid[0].seed_ctx) {
-            seed = ctx->valid;
-            while (seed->seed_ctx) {
-                sprintf(buffer+strlen(buffer), "%s%s\n", async_seed_get_name(seed->seed_ctx),
-                (ctx->req_hardware && seed->hardware_source)?" [H]":"");
-                seed++;
-            }
-        }
-        else {
-            sprintf(buffer, "No validated sources detected.\n");
-            return;
-        }
-
-        // Additional sources
-        if (ctx->addl[0].seed_ctx) {
-            seed = ctx->addl;
-            while (seed->seed_ctx) {
-                sprintf(buffer+strlen(buffer), "%s\n", async_seed_get_name(seed->seed_ctx));
-                seed++;
-            }
-        }
-        sprintf(buffer+strlen(buffer), "%s%s\n", "[...] indicates a validated source",
-                        ctx->req_hardware?"\n[H] indicates a hardware source":"");
+    memset(buffer, 0, SEED_CONTROL_DESCRIPTION_MAX);
+    lines = sk_char_new_null();
+    if (!lines) {
+        snprintf(buffer, SEED_CONTROL_DESCRIPTION_MAX,
+                 "Unable to allocate source description.\n");
+        return;
     }
+
+    if (ctx->valid[0].seed_ctx) {
+        seed = ctx->valid;
+        while (seed->seed_ctx) {
+            char namebuf[SEED_CONTROL_DESCRIPTION_MAX];
+            const char *name = async_seed_get_name(seed->seed_ctx);
+
+            if (ctx->req_hardware && seed->hardware_source)
+                snprintf(namebuf, sizeof(namebuf), "%s [H]", name ? name : "");
+            else
+                snprintf(namebuf, sizeof(namebuf), "%s", name ? name : "");
+
+            line = OPENSSL_strdup(namebuf);
+            if (line && sk_char_push(lines, line) <= 0) {
+                OPENSSL_free(line);
+            }
+            seed++;
+        }
+
+        seed = ctx->addl;
+        if (seed->seed_ctx) {
+            while (seed->seed_ctx) {
+                const char *name = async_seed_get_name(seed->seed_ctx);
+                line = OPENSSL_strdup(name ? name : "");
+                if (line && sk_char_push(lines, line) <= 0) {
+                    OPENSSL_free(line);
+                }
+                seed++;
+            }
+        }
+
+        line = OPENSSL_strdup("[...] indicates a validated source");
+        if (line && sk_char_push(lines, line) <= 0) {
+            OPENSSL_free(line);
+        }
+        if (ctx->req_hardware) {
+            line = OPENSSL_strdup("[H] indicates a hardware source");
+            if (line && sk_char_push(lines, line) <= 0) {
+                OPENSSL_free(line);
+            }
+        }
+    }
+    else {
+        line = OPENSSL_strdup("No validated sources detected.");
+        if (line && sk_char_push(lines, line) <= 0) {
+            OPENSSL_free(line);
+        }
+    }
+
+    for (idx = 0; idx < sk_char_num(lines); idx++) {
+        line = sk_char_value(lines, idx);
+        if (!line)
+            continue;
+
+        used += snprintf(buffer + used,
+                         used < SEED_CONTROL_DESCRIPTION_MAX
+                             ? SEED_CONTROL_DESCRIPTION_MAX - used
+                             : 0,
+                         "%s\n", line);
+
+        if (used >= SEED_CONTROL_DESCRIPTION_MAX) {
+            used = SEED_CONTROL_DESCRIPTION_MAX - 1;
+            buffer[used] = '\0';
+            break;
+        }
+    }
+
+    for (idx = 0; idx < sk_char_num(lines); idx++) {
+        line = sk_char_value(lines, idx);
+        OPENSSL_free(line);
+    }
+    sk_char_free(lines);
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -241,17 +302,22 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
                                 size_t nbits, int validated)
 {
     KPEP_RESULT    rv = KPEP_R_SUCCESS;
-    SEED_STUB     *seed = NULL;
+    SEED_STUB     *source = NULL;
     unsigned char *buffer = NULL;
     size_t         buf_len[SEED_COUNT_MAX] = { 0 };
     size_t         buf_total = 0, accum = 0;
     uint32_t       idx = 0;
     uint32_t       hardware = 0;
 
-    uint32_t       gather_state[SEED_COUNT_MAX] = { 0 };
+//    uint32_t       gather_state[SEED_COUNT_MAX] = { 0 };
+    uint32_t       successful = 0;
 
     if (kpep_trace_seed_enabled) {
         TRACE_START;
+    }
+
+    if (!ctx || !out || *out || !out_len) {
+        return KPEP_R_INVALID_ARG;
     }
 
     // Non-validated (additional input) is optional
@@ -262,29 +328,33 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
     }
 
     // Get total size
-    seed = (validated)?ctx->valid:ctx->addl;
-    while (seed->seed_ctx) {
-        rv = async_seed_gather(seed->seed_ctx, NULL, &buf_len[idx], nbits);
+    source = (validated)?ctx->valid:ctx->addl;
+    while (source->seed_ctx) {
+        rv = async_seed_gather(source->seed_ctx, NULL, &buf_len[idx], nbits);
         if (!rv) {
+            successful++;
+            if (buf_len[idx] > SIZE_MAX - buf_total) {
+                rv = KPEP_R_INVALID_ARG;
+                goto err;
+            }
             buf_total += buf_len[idx];
-            gather_state[idx]++;
+            // gather_state[idx]++;
         }
         idx++;
-        seed++;
+        source++;
     }
 
     // Check seed sources
-    rv = KPEP_R_SUCCESS;
-    for (idx = 0; idx < SEED_COUNT_MAX; idx++) {
-        if (gather_state[idx] > 0) {
-            if (!ctx->req_all_sources)
-                break; // OK
-        }
-        else if (ctx->req_all_sources) {
-            LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_SEED_INSUFFICIENT_ENTROPY);
+    if (validated) {
+        if (ctx->req_all_sources && successful != ctx->v_count) {
             rv = KPEP_R_SEED_INSUFFICIENT_ENTROPY;
             goto err;
         }
+    }
+    else if (successful == 0) {
+        *out_len = 0;
+        *out = NULL;
+        return KPEP_R_SUCCESS;
     }
 
     // Each source was asked for nbits, and added at least that to buf_total on success.
@@ -315,17 +385,20 @@ KPEP_RESULT seed_control_gather(SEED_CONTROL_CTX *ctx,
 
     // Gather from each
     idx = 0;
-    seed = (validated)?ctx->valid:ctx->addl;
-    while (seed->seed_ctx) {
-        rv = async_seed_gather(seed->seed_ctx, buffer+accum, &buf_len[idx], nbits);
+    source = (validated)?ctx->valid:ctx->addl;
+    while (source->seed_ctx) {
+        rv = async_seed_gather(source->seed_ctx, buffer+accum, &buf_len[idx], nbits);
         if (!rv) {
+            if (buf_len[idx] > SIZE_MAX - accum) {
+                rv = KPEP_R_INVALID_ARG;
+                goto err;
+            }
             accum += buf_len[idx];
-            gather_state[idx]++;
-            if (ctx->req_hardware && validated && seed->hardware_source)
+            if (validated && ctx->req_hardware && source->hardware_source)
                 hardware = 1;
         }
         idx++;
-        seed++;
+        source++;
     }
 
     if (!validated) {

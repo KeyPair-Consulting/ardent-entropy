@@ -32,8 +32,9 @@ typedef struct ring_ctx_st {
     size_t capacity;      /* Must be a power of two */
     size_t mask;          /* capacity - 1 */
 
-    size_t write_pos;     /* Monotonically increasing */
-    size_t read_pos;      /* Monotonically increasing */
+    size_t write_pos;     /* [0, capacity) */
+    size_t read_pos;      /* [0, capacity) */
+    size_t count;         /* Occupied bytes */
 } RING_CTX;
 
 typedef struct ring_split_st {
@@ -50,7 +51,7 @@ typedef struct ring_split_st {
 
 size_t ring_count(const RING_CTX *ring) 
 {
-    return ring->write_pos - ring->read_pos;
+    return ring->count;
 }
 
 size_t ring_space(const RING_CTX *ring)
@@ -124,12 +125,12 @@ static inline void ring_verify(const RING_CTX *ring)
     assert((ring->capacity & (ring->capacity - 1)) == 0);
     assert(ring->mask == ring->capacity - 1);
 
-    assert(ring->write_pos >= ring->read_pos);
+    assert(ring->write_pos < ring->capacity);
+    assert(ring->read_pos < ring->capacity);
 
     assert(ring_count(ring) <= ring->capacity);
 
-    assert((ring->write_pos & ring->mask) < ring->capacity);
-    assert((ring->read_pos & ring->mask) < ring->capacity);
+    assert(ring->write_pos == ((ring->read_pos + ring_count(ring)) & ring->mask));
 }
 #endif
 /* ***********************************************************************************************
@@ -184,6 +185,7 @@ void ring_flush(RING_CTX *ring)
 
     ring->write_pos = 0;
     ring->read_pos = 0;
+    ring->count = 0;
 }
 
 KPEP_RESULT ring_enqueue(RING_CTX *ring,
@@ -202,7 +204,8 @@ KPEP_RESULT ring_enqueue(RING_CTX *ring,
     
     ring_copy_in(ring, ring->write_pos, src, len);
 
-    ring->write_pos += len;
+    ring->write_pos = (ring->write_pos + len) & ring->mask;
+    ring->count += len;
 
 #ifdef FIPS_OPTEST
     ring_verify(ring);
@@ -229,13 +232,8 @@ KPEP_RESULT ring_dequeue(RING_CTX *ring,
 
     ring_zero(ring, ring->read_pos, len);
 
-    ring->read_pos += len;
-
-    // Reset counters if empty
-    if (ring->read_pos == ring->write_pos) {
-        ring->read_pos = 0;
-        ring->write_pos = 0;
-    }
+    ring->read_pos = (ring->read_pos + len) & ring->mask;
+    ring->count -= len;
 
 #ifdef FIPS_OPTEST
     ring_verify(ring);

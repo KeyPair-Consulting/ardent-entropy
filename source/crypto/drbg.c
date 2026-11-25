@@ -169,10 +169,13 @@ KPEP_RESULT hash_df(KPEP_DRBG_CTX* ctx,
 
 	while (remaining > 0) {
 		// Do derivation hash
-		sha2_init  (ctx->hash_ctx, NULL);
-		sha2_update(ctx->hash_ctx, output_len_bytes, 5);
-		sha2_update(ctx->hash_ctx, input, input_len);
-		sha2_final (ctx->hash_ctx, digest, NULL);
+		if (!sha2_init  (ctx->hash_ctx, NULL) ||
+			!sha2_update(ctx->hash_ctx, output_len_bytes, 5) ||
+			!sha2_update(ctx->hash_ctx, input, input_len) ||
+			!sha2_final (ctx->hash_ctx, digest, NULL)) {
+			kpep_zeroize(digest, sizeof(digest));
+			return KPEP_R_INTERNAL_HASH_FAIL;
+		}
 
 		// Full or partial block?
 		if (remaining >SHA2_256_DIGEST_SIZE) {
@@ -660,7 +663,7 @@ KPEP_RESULT drbg_generate_ex(KPEP_DRBG_CTX* ctx,
 
 	// Zeroize on error
 	if (rv)
-		kpep_cleanse(rand, rand_len);
+		kpep_zeroize(rand, rand_len);
 
 	// Cleanup state and temp
 	kpep_cleanse(buffer, SEED_BYTE_LENGTH+1);  // NULL safe

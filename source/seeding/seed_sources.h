@@ -66,7 +66,7 @@ static SEED_SOURCE_DEF seed_source_defs[] = {
     { NULL, NULL, 0, 0, NULL }
 };
 
-#define STUB_NAME_LENGTH 32
+#define STUB_NAME_LENGTH 48
 
 /*
  * This definition is REQUIRED to be the first item in every seed_stud_source context variable.

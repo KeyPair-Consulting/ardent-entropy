@@ -394,7 +394,12 @@ static void kpep_ctx_free(KPEP_PROVIDER_CTX *ctx)
     if (!ctx) 
         return;
     
-    kpep_cleanse(ctx->st, sizeof(SELF_TEST_PARAMS));
+    if (ctx->corebiometh)
+        BIO_meth_free(ctx->corebiometh);
+    if (ctx->st)
+        kpep_cleanse(ctx->st, sizeof(SELF_TEST_PARAMS));
+    if (ctx->libctx)
+        OSSL_LIB_CTX_free(ctx->libctx);
     kpep_cleanse(ctx, sizeof(KPEP_PROVIDER_CTX));
     kpep_log(LOG_LVL_INFO, MODULE_NAME, "Provider teardown complete");
 }
@@ -409,10 +414,6 @@ static void kpep_teardown(void *provctx)
     kpep_seeding_free(ctx->seeding);
 	kpep_debug_fini();  // Trace teardown stays after seeding; core cleanup happens here
 	kpep_logging_fini(); // Must be last so all messages are flushed
-    if (ctx->libctx) {
-        OSSL_LIB_CTX_free(ctx->libctx);
-        ctx->libctx = NULL;
-    }
     kpep_ctx_free((KPEP_PROVIDER_CTX*)provctx);
 }
 
@@ -450,8 +451,7 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
     }
 
     // Load our error strings into OpenSSL
-    rv = kpep_set_openssl_reason_strings();  // Init with OpenSSL
-    if (rv) {
+    if (!kpep_set_openssl_reason_strings()) {
         ERR_raise(ERR_LIB_PROV, PROV_R_VALUE_ERROR);
     }
 
@@ -494,13 +494,25 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
     }
 
     // if libctx not yet existing, create a new one
-    if ( ((corebiometh = kpep_bio_prov_init_bio_method()) == NULL) ||
-         ((libctx = OSSL_LIB_CTX_new_child(handle, orig_in)) == NULL) ||
-         ((newctx = kpep_ctx_new(libctx, handle, corebiometh)) == NULL ) ) { 
-        kpep_log(LOG_LVL_ERR, MODULE_NAME, "Error creating new provider context\n");
-        OSSL_LIB_CTX_free(libctx);
-    	goto err;
+    if ((corebiometh = kpep_bio_prov_init_bio_method()) == NULL) {
+        kpep_log(LOG_LVL_ERR, MODULE_NAME, "Error creating new BIO handle\n");
+    	goto ret;
     }
+
+    if ((libctx = OSSL_LIB_CTX_new_child(handle, orig_in)) == NULL) { 
+        kpep_log(LOG_LVL_ERR, MODULE_NAME, "Error creating new library context\n");
+        BIO_meth_free(corebiometh);
+    	goto ret;
+    }
+
+    if ((newctx = kpep_ctx_new(libctx, handle, corebiometh)) == NULL ) { 
+        kpep_log(LOG_LVL_ERR, MODULE_NAME, "Error creating new provider context\n");
+        BIO_meth_free(corebiometh);
+        OSSL_LIB_CTX_free(libctx);
+    	goto ret;
+    }
+    newctx->corebiometh = corebiometh;
+    newctx->libctx = libctx;
 
     // Load our configuration from the core
     if (!kpep_get_params_from_core(newctx)) {

@@ -212,6 +212,10 @@ KPEP_RESULT stub_rdrand_gather(void *stub_ctx, unsigned char *out, size_t *out_l
         LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_NULL_ARG);
         return KPEP_R_NULL_ARG;
     }
+    if (nbits < KPEP_SECURITY_STRENGTH_BITS) {
+        LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_INVALID_ARG);
+        return KPEP_R_INVALID_ARG;
+    }
 
     // Calculate gather size
     gather_bits = seed_get_gather_sz((SEED_STUB_INFO*)ctx, nbits);
@@ -337,8 +341,7 @@ static KPEP_RESULT load_params(void* prov_ctx, RDRAND_CTX *ctx)
 
     // Block Size
     if (bsize_str) {
-        ctx->block_size = atoi(bsize_str);
-        if (!ctx->block_size || ctx->block_size < 0 || errno) {
+        if (!parse_uint32(bsize_str, &ctx->block_size) || ctx->block_size == 0) {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }
@@ -350,8 +353,7 @@ static KPEP_RESULT load_params(void* prov_ctx, RDRAND_CTX *ctx)
 
     // Block Count
     if (bcount_str) {
-        ctx->block_count = atoi(bcount_str);
-        if (!ctx->block_count || ctx->block_count < 0 || errno) {
+        if (!parse_uint32(bcount_str, &ctx->block_count) || ctx->block_count == 0) {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }
@@ -363,8 +365,7 @@ static KPEP_RESULT load_params(void* prov_ctx, RDRAND_CTX *ctx)
 
     // Retry Count (optional)
     if (retry_str) {
-        ctx->retry_count = atoi(retry_str);
-        if (!ctx->retry_count || ctx->retry_count < 0 || errno) {
+        if (!parse_uint32(retry_str, &ctx->retry_count) || ctx->retry_count == 0) {
             LOG_KPEP_ERROR(MODULE_NAME, KPEP_R_CONFIG_PARAMETER_INVALID);
             return KPEP_R_CONFIG_PARAMETER_INVALID;
         }
