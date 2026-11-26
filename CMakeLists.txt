@@ -304,51 +304,71 @@ ENDIF ()
 # OpenSSL directories
 # ##################################################################################################
 
-# Verify we have the absolute path to the Openssl Installation
-IF (NOT DEFINED ENV{OPENSSL_ROOT}) # This should *not* be $ENV(...)
-    MESSAGE(FATAL_ERROR "-- Missing environment variable: '$OPENSSL_ROOT' holding the absolute path to the OpenSSL installation ('--prefix') directory.")
-ENDIF ()
-SET(OPENSSL_ROOT $ENV{OPENSSL_ROOT})
-MESSAGE("-- Detected OpenSSL root path: '${OPENSSL_ROOT}'")
+SET(OPENSSL_ROOT "" CACHE PATH "OpenSSL installation prefix")
+SET(OPENSSL_LIBDIR "" CACHE PATH "OpenSSL library directory")
+SET(OPENSSL_BINDIR "" CACHE PATH "OpenSSL binary directory")
+SET(OPENSSL_SSLDIR "" CACHE PATH "OpenSSL SSL/configuration directory")
+SET(OPENSSL_MODULES "" CACHE PATH "OpenSSL provider module directory")
 
-# Set OpenSSL library directory (check environment)
-IF (DEFINED ENV{OPENSSL_LIBDIR}) # This should *not* be $ENV(...)
-    SET(OPENSSL_LIB_PATH $ENV{OPENSSL_MODULES})
-ELSE ()
-    # Set the OpenSSL library path from the OPENSSL_ROOT; based on OS/Architecture
-    IF     (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-        SET(OPENSSL_LIB_PATH ${OPENSSL_ROOT}/lib64)
-    ELSEIF (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-        SET(OPENSSL_LIB_PATH ${OPENSSL_ROOT}/lib)
-    ELSEIF (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-        SET(OPENSSL_LIB_PATH ${OPENSSL_ROOT}/lib)
-    ELSEIF (${CMAKE_SYSTEM_NAME} MATCHES "SunOS")
-        SET(OPENSSL_LIB_PATH ${OPENSSL_ROOT}/lib/64)
-    ELSEIF (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-        SET(OPENSSL_LIB_PATH ${OPENSSL_ROOT}/lib)
-    ELSEIF (${CMAKE_SYSTEM_NAME} MATCHES "AIX")
-        # Check 64-bit flag
-        IF (aix64)
-            SET(OPENSSL_LIB_PATH ${OPENSSL_ROOT}/usr/lib)
-        ELSE ()
-            SET(OPENSSL_LIB_PATH ${OPENSSL_ROOT}/usr/lib)
-        ENDIF ()
+IF (OPENSSL_ROOT)
+    GET_FILENAME_COMPONENT(OPENSSL_ROOT "${OPENSSL_ROOT}" ABSOLUTE)
+
+    IF (NOT OPENSSL_LIBDIR)
+        IF     (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+            SET(OPENSSL_LIBDIR "${OPENSSL_ROOT}/lib64")
+        ELSEIF (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+            SET(OPENSSL_LIBDIR "${OPENSSL_ROOT}/lib")
+        ELSEIF (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+            SET(OPENSSL_LIBDIR "${OPENSSL_ROOT}/lib")
+        ELSEIF (${CMAKE_SYSTEM_NAME} MATCHES "SunOS")
+            SET(OPENSSL_LIBDIR "${OPENSSL_ROOT}/lib/64")
+        ELSEIF (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+            SET(OPENSSL_LIBDIR "${OPENSSL_ROOT}/lib")
+        ELSEIF (${CMAKE_SYSTEM_NAME} MATCHES "AIX")
+            SET(OPENSSL_LIBDIR "${OPENSSL_ROOT}/usr/lib")
+        ENDIF()
     ENDIF()
-ENDIF ()
 
-# Set OpenSSL configuration directory
-IF (DEFINED ENV{OPENSSL_SSLDIR}) # This should *not* be $ENV(...)
-    SET(OPENSSL_SSL_PATH $ENV{OPENSSL_SSLDIR})
-ELSE ()
-    SET(OPENSSL_SSL_PATH ${OPENSSL_ROOT}/ssl)
-ENDIF ()
+    IF (NOT OPENSSL_BINDIR)
+        IF (${CMAKE_SYSTEM_NAME} MATCHES "AIX")
+            SET(OPENSSL_BINDIR "${OPENSSL_ROOT}/bin")
+        ELSE()
+            SET(OPENSSL_BINDIR "${OPENSSL_ROOT}/bin")
+        ENDIF()
+    ENDIF()
 
-# Set OpenSSL modules directory
-IF (DEFINED ENV{OPENSSL_MODULES}) # This should *not* be $ENV(...)
-    SET(OPENSSL_MODULE_PATH $ENV{OPENSSL_MODULES})
-ELSE ()
-    SET(OPENSSL_MODULE_PATH ${OPENSSL_LIB_PATH}/ossl-modules)
-ENDIF ()
+    IF (NOT OPENSSL_SSLDIR)
+        SET(OPENSSL_SSLDIR "${OPENSSL_ROOT}/ssl")
+    ENDIF()
+ENDIF()
+
+IF (NOT OPENSSL_LIBDIR)
+    MESSAGE(FATAL_ERROR "OpenSSL library directory is unknown. Specify -DOPENSSL_LIBDIR=/path/to/lib or -DOPENSSL_ROOT=/path/to/openssl.")
+ENDIF()
+IF (NOT OPENSSL_BINDIR)
+    MESSAGE(FATAL_ERROR "OpenSSL binary directory is unknown. Specify -DOPENSSL_BINDIR=/path/to/bin or -DOPENSSL_ROOT=/path/to/openssl.")
+ENDIF()
+IF (NOT OPENSSL_SSLDIR)
+    MESSAGE(FATAL_ERROR "OpenSSL SSL directory is unknown. Specify -DOPENSSL_SSLDIR=/path/to/ssl or -DOPENSSL_ROOT=/path/to/openssl.")
+ENDIF()
+
+IF (NOT OPENSSL_MODULES)
+    SET(OPENSSL_MODULES "${OPENSSL_LIBDIR}/ossl-modules")
+ENDIF()
+
+GET_FILENAME_COMPONENT(OPENSSL_LIBDIR "${OPENSSL_LIBDIR}" ABSOLUTE)
+GET_FILENAME_COMPONENT(OPENSSL_BINDIR "${OPENSSL_BINDIR}" ABSOLUTE)
+GET_FILENAME_COMPONENT(OPENSSL_SSLDIR "${OPENSSL_SSLDIR}" ABSOLUTE)
+GET_FILENAME_COMPONENT(OPENSSL_MODULES "${OPENSSL_MODULES}" ABSOLUTE)
+
+MESSAGE("-- OpenSSL SSL directory:     '${OPENSSL_SSLDIR}'")
+MESSAGE("-- OpenSSL binary directory:  '${OPENSSL_BINDIR}'")
+MESSAGE("-- OpenSSL library directory: '${OPENSSL_LIBDIR}'")
+MESSAGE("-- OpenSSL module directory:  '${OPENSSL_MODULES}'")
+
+SET(OPENSSL_LIB_PATH "${OPENSSL_LIBDIR}")
+SET(OPENSSL_SSL_PATH "${OPENSSL_SSLDIR}")
+SET(OPENSSL_MODULE_PATH "${OPENSSL_MODULES}")
 
 # This is a list of the shared objects that should be linked against
 IF (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
@@ -363,9 +383,15 @@ ENDIF ()
 # Include Paths
 # ##################################################################################################
 
+IF (OPENSSL_ROOT)
+    SET(OPENSSL_INCLUDEDIR "${OPENSSL_ROOT}/include")
+ELSE()
+    GET_FILENAME_COMPONENT(OPENSSL_INCLUDEDIR "${OPENSSL_LIBDIR}/../include" ABSOLUTE)
+ENDIF()
+
 INCLUDE_DIRECTORIES(${ARDent_SOURCE_DIR}/include)
 INCLUDE_DIRECTORIES(${ARDent_SOURCE_DIR}/include/openssl)
-INCLUDE_DIRECTORIES(${OPENSSL_ROOT}/include)
+INCLUDE_DIRECTORIES(${OPENSSL_INCLUDEDIR})
 INCLUDE_DIRECTORIES(${JITTER_INCLUDE_DIRS})
 
 # ##################################################################################################
@@ -418,11 +444,11 @@ INSTALL(FILES ${ARDent_SOURCE_DIR}/resources/personalization.cnf DESTINATION ${O
         OWNER_READ OWNER_WRITE
         GROUP_READ 
         WORLD_READ)
-INSTALL(DIRECTORY include/ardent/ DESTINATION ${OPENSSL_ROOT}/include/ardent)
+INSTALL(DIRECTORY include/ardent/ DESTINATION ${OPENSSL_INCLUDEDIR}/ardent)
     
 #  Utility
 IF (utility)
-    INSTALL(TARGETS APP_utility DESTINATION ${OPENSSL_ROOT}/bin
+    INSTALL(TARGETS APP_utility DESTINATION ${OPENSSL_BINDIR}
         PERMISSIONS 
             OWNER_READ OWNER_EXECUTE OWNER_WRITE
             GROUP_READ GROUP_EXECUTE
@@ -431,7 +457,7 @@ ENDIF (utility)
 
 #  Rand
 IF (rand)
-    INSTALL(TARGETS APP_rand DESTINATION ${OPENSSL_ROOT}/bin
+    INSTALL(TARGETS APP_rand DESTINATION ${OPENSSL_BINDIR}
         PERMISSIONS 
             OWNER_READ OWNER_EXECUTE OWNER_WRITE
             GROUP_READ GROUP_EXECUTE
@@ -440,7 +466,7 @@ ENDIF (rand)
 
 #  Debug
 IF (debug)
-    INSTALL(TARGETS APP_debug DESTINATION ${OPENSSL_ROOT}/bin
+    INSTALL(TARGETS APP_debug DESTINATION ${OPENSSL_BINDIR}
         PERMISSIONS 
             OWNER_READ OWNER_EXECUTE OWNER_WRITE
             GROUP_READ GROUP_EXECUTE
@@ -449,17 +475,17 @@ ENDIF (debug)
 
 # ARDent Test Applications
 IF (tests)
-    INSTALL(TARGETS APP_rand_stress DESTINATION ${OPENSSL_ROOT}/test
+    INSTALL(TARGETS APP_rand_stress DESTINATION ${OPENSSL_BINDIR}
         PERMISSIONS 
             OWNER_READ OWNER_EXECUTE OWNER_WRITE
             GROUP_READ GROUP_EXECUTE 
             WORLD_READ WORLD_EXECUTE)
-    INSTALL(TARGETS APP_test_ringbuffer DESTINATION ${OPENSSL_ROOT}/test
+    INSTALL(TARGETS APP_test_ringbuffer DESTINATION ${OPENSSL_BINDIR}
         PERMISSIONS 
             OWNER_READ OWNER_EXECUTE OWNER_WRITE
             GROUP_READ GROUP_EXECUTE 
             WORLD_READ WORLD_EXECUTE)
-    INSTALL(TARGETS APP_test_runtime_config DESTINATION ${OPENSSL_ROOT}/test
+    INSTALL(TARGETS APP_test_runtime_config DESTINATION ${OPENSSL_BINDIR}
         PERMISSIONS 
             OWNER_READ OWNER_EXECUTE OWNER_WRITE
             GROUP_READ GROUP_EXECUTE 
@@ -486,12 +512,12 @@ ENDIF (example-external-logging)
 
 # FIPS Operational Testing tools
 #IF (FIPS_OPTEST)
-#    INSTALL(TARGETS TOOL_optest DESTINATION ${OPENSSL_ROOT}/bin
+#    INSTALL(TARGETS TOOL_optest DESTINATION ${OPENSSL_BINDIR}
 #        PERMISSIONS 
 #            OWNER_READ OWNER_EXECUTE OWNER_WRITE
 #            GROUP_READ GROUP_EXECUTE
 #            WORLD_READ WORLD_EXECUTE)
-#    INSTALL(TARGETS TOOL_edkex DESTINATION ${OPENSSL_ROOT}/bin
+#    INSTALL(TARGETS TOOL_edkex DESTINATION ${OPENSSL_BINDIR}
 #        PERMISSIONS 
 #            OWNER_READ OWNER_EXECUTE OWNER_WRITE
 #            GROUP_READ GROUP_EXECUTE
@@ -499,5 +525,5 @@ ENDIF (example-external-logging)
 #ENDIF (FIPS_OPTEST)
 
 # Fully custom finalization script; must be run after CMake installs above (to the bin/ directory)
-INSTALL(CODE "execute_process(COMMAND ${ARDent_SOURCE_DIR}/resources/cmake_finalize_ardent.sh)")
+INSTALL(CODE "execute_process(COMMAND ${ARDent_SOURCE_DIR}/resources/cmake_finalize_ardent.sh --libdir ${OPENSSL_LIBDIR} --bindir ${OPENSSL_BINDIR} --ssldir ${OPENSSL_SSLDIR} --modules ${OPENSSL_MODULES})")
 
