@@ -22,12 +22,13 @@ print_usage()
    echo "Set the personalization string for this machine."
    echo
    echo "Syntax:  set_personalization_string.sh [--root </path/to/dir>]"
+   echo "                                       [--ssldir </path/to/dir>]"
    echo "                                       [--out </path/to/file>]"
    echo "                                       [--string <string-literal>]"
    echo "                                       [--help]" 
    echo
    echo "--root          Set the directory name for the OSSL3 library directory (no default)."
-   echo "                This value can be set using the 'OPENSSL_ROOT' environment variable."
+   echo "--ssldir        Set the directory name for the OpenSSL SSL directory (no default)."
    echo "--out           Set the file name to write the personalization string. This defaults"
    echo "                to 'personalization.cnf' in the \$OPENSSL_SSLDIR directory."
    echo "--string        Set the personalization string to the string literal specified in the"
@@ -40,14 +41,10 @@ print_usage()
 
 ##########################################################################################
 
-# Get default values from environment
-if [[ ! -z "${OPENSSL_ROOT}" ]]; then
-	  OSSL_ROOT="${OPENSSL_ROOT}"
-else
-    OSSL_ROOT=""
-fi
-OUTFILE=
-PERSO_STRING=
+OSSL_ROOT=""
+OSSL_SSLDIR=""
+OUTFILE=""
+PERSO_STRING=""
 
 # Process CLI arguments
 while test $# -gt 0
@@ -59,6 +56,9 @@ do
     --root)   shift
               OSSL_ROOT="$1"
               ;;
+    --ssldir) shift
+              OSSL_SSLDIR="$1"
+              ;;
     --out)    shift
               OUTFILE="$1"
               ;;
@@ -66,7 +66,6 @@ do
               PERSO_STRING="$1"
               ;;
     *)        echo "Unknown argument: $1"
-              echo
               print_usage
               exit 1
               ;;
@@ -83,14 +82,15 @@ if [[ ! $PERSO_STRING ]]; then
 fi
 
 # Set the output filename (if none provided)
-if [[ ! $OUTFILE ]]; then 
-    # Check for location of root directory
-    if [[ ! $OSSL_ROOT ]]; then 
-        echo "Setting the default file requires the path to the 'root' or 'prefix' folder for the OpenSSL installation to use."
-        echo "The variable can be provided by setting an environment variable 'OPENSSL_ROOT', or using the '--root' argument."
-      exit 1
+if [[ ! $OUTFILE ]]; then
+    if [[ $OSSL_SSLDIR ]]; then
+        OUTFILE="$OSSL_SSLDIR/personalization.cnf"
+    elif [[ $OSSL_ROOT ]]; then
+        OUTFILE="$OSSL_ROOT/ssl/personalization.cnf"
+    else
+        echo "Setting the default file requires --ssldir or --root"
+        exit 1
     fi
-    OUTFILE=$OPENSSL_ROOT"/ssl/personalization.cnf"
 fi
 
 # Set the personalization string

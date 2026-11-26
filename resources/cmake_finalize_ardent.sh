@@ -28,51 +28,33 @@ print_usage()
 {
    echo "Install ARDent files and complete the installation process"
    echo
-   echo "Syntax:  ardent_install.sh [--root </path/to/dir>] [--modules </path/to/dir>]"
-   echo "                         [--libdir </path/to/dir>] [--ssldir </path/to/dir>]"
-   echo "                         [--verbose | -v] [--quiet | -q] [--info] [--cast] [--help]" 
+   echo "Syntax:  ardent_install.sh [--root </path/to/dir>] [--libdir </path/to/dir>]"
+   echo "                         [--bindir </path/to/dir>] [--ssldir </path/to/dir>]"
+   echo "                         [--modules </path/to/dir>] [--verbose | -v] [--quiet | -q]"
+   echo "                         [--info] [--cast] [--help]"
    echo
-   echo "--root          Set the directory name for the OSSL3 library directory (no default)."
-   echo "                This value can be set using the 'OPENSSL_ROOT' environment variable"
-   echo "--libdir        Set the directory name for the OSSL3 library directory (default 'OPENSSL_ROOT/lib64')."
-   echo "                This value can be set using the 'OPENSSL_LIBDIR' environment variable"
-   echo "--ssldir        Set the directory name for the OSSL3 'ssldirs' directory (default 'OPENSSL_ROOT/ssl')."
-   echo "                This value can be set using the 'OPENSSL_SSLDIR' environment variable"
-   echo "--modules       Set the directory name for the OSSL3 'modules' directory (default 'OPENSSL_ROOT/lib64/ossl-modules')."
-   echo "                This value can be set using the 'OPENSSL_MODULES' environment variable"
+   echo "--root          OpenSSL installation prefix. Used to derive any unspecified directories."
+   echo "--libdir        OpenSSL library directory."
+   echo "--bindir        OpenSSL binary directory."
+   echo "--ssldir        OpenSSL SSL/configuration directory."
+   echo "--modules       OpenSSL provider module directory."
    echo
    echo "Options:"
    echo "--verbose, -v   Display additional output for debugging"
    echo "--quiet, -q     Suppress all output"
-   echo "--info          After installation, display the configuration information for each provider."
-   echo "--cast          After installation, perform the Cryptographic Algorithm Self-Tests (CASTs) on each provider."
+   echo "--info          After installation, display provider configuration information."
+   echo "--cast          After installation, perform the Cryptographic Algorithm Self-Tests (CASTs)."
    echo "--help          Print this message and exit"
-   echo
 }
 
 ##########################################################################################
 
-# Get default values from environment
-if [[ ! -z "${OPENSSL_ROOT}" ]]; then
-	OSSL_ROOT="${OPENSSL_ROOT}"
-else
-    OSSL_ROOT=""
-fi
-if [[ ! -z "${OPENSSL_LIBDIR}" ]]; then
-	OSSL_LIBDIR="${OPENSSL_LIBDIR}"
-else
-    OSSL_LIBDIR=""
-fi
-if [[ ! -z "${OPENSSL_SSLDIRS}" ]]; then
-	OSSL_SSLDIR="${OPENSSL_SSLDIRS}"
-else
-    OSSL_SSLDIR=""
-fi
-if [[ ! -z "${OPENSSL_MODULES}" ]]; then
-	OSSL_MODULES="${OPENSSL_MODULES}"
-else
-    OSSL_MODULES=""
-fi
+# Remove environment-variable path defaults; all paths are supplied by arguments or root derivation.
+OSSL_ROOT=""
+OSSL_LIBDIR=""
+OSSL_BINDIR=""
+OSSL_SSLDIR=""
+OSSL_MODULES=""
 
 # Action/Operation flags
 QUIET=0
@@ -92,6 +74,9 @@ do
               ;;
     --libdir) shift
               OSSL_LIBDIR="$1"
+              ;;
+    --bindir) shift
+              OSSL_BINDIR="$1"
               ;;
     --ssldir) shift
               OSSL_SSLDIR="$1"
@@ -118,19 +103,34 @@ do
     shift
 done
 
-if [[ ! $OSSL_ROOT ]]; then 
-    echo "This script requires the path to the 'root' or 'prefix' folder for the OpenSSL installation to use. The"
-    echo "variable can be provided by setting an environment variable 'OPENSSL_ROOT', or using the '--root' argument."
-	exit 1
-fi
-if [[ ! $OSSL_LIBDIR ]]; then 
+if [[ $OSSL_ROOT && ! $OSSL_LIBDIR ]]; then
     OSSL_LIBDIR="$OSSL_ROOT/lib64"
 fi
-if [[ ! $OSSL_SSLDIR ]]; then 
+if [[ $OSSL_ROOT && ! $OSSL_BINDIR ]]; then
+    OSSL_BINDIR="$OSSL_BINDIR"
+fi
+if [[ $OSSL_ROOT && ! $OSSL_SSLDIR ]]; then
     OSSL_SSLDIR="$OSSL_ROOT/ssl"
 fi
-if [[ ! $OSSL_MODULES ]]; then
+if [[ $OSSL_LIBDIR && ! $OSSL_MODULES ]]; then
     OSSL_MODULES="$OSSL_LIBDIR/ossl-modules"
+fi
+
+if [[ ! $OSSL_LIBDIR ]]; then
+    echo "Missing OpenSSL library directory: specify --libdir or --root"
+    exit 1
+fi
+if [[ ! $OSSL_BINDIR ]]; then
+    echo "Missing OpenSSL binary directory: specify --bindir or --root"
+    exit 1
+fi
+if [[ ! $OSSL_SSLDIR ]]; then
+    echo "Missing OpenSSL SSL directory: specify --ssldir or --root"
+    exit 1
+fi
+if [[ ! $OSSL_MODULES ]]; then
+    echo "Missing OpenSSL module directory: specify --modules, --libdir, or --root"
+    exit 1
 fi
 
 if [ $VERBOSE -eq 1 ]; then
@@ -147,7 +147,7 @@ fi
 
 ### Generate HMAC for ARDENT
 (LD_LIBRARY_PATH=$OSSL_LIBDIR:$OSSL_MODULES \
-    $OSSL_ROOT/bin/ardent_utility --hmac $OSSL_MODULES/ardent.so)
+    $OSSL_BINDIR/ardent_utility --hmac $OSSL_MODULES/ardent.so)
 # Fix the .include for the MAC
 sed -i 's@.*include.*ardent.so.mac@.include '$OSSL_MODULES'/ardent.so.mac@g' $OSSL_SSLDIR/ardentmodule.cnf
 # Fix the .include for the personalization file
@@ -165,14 +165,14 @@ fi
 if [ $RUN_CAST == 1 ]; then
     echo
     echo " Self-Tests:"
-    (LD_LIBRARY_PATH=$OSSL_LIBDIR:$OSSL_MODULES $OSSL_ROOT/bin/ardent_utility --cast ardent)
+    (LD_LIBRARY_PATH=$OSSL_LIBDIR:$OSSL_MODULES $OSSL_BINDIR/ardent_utility --cast ardent)
 fi
 
 # Show module info
 if [ $SHOW_INFO == 1 ]; then
     echo
     echo " Provider Info:"
-    (LD_LIBRARY_PATH=$OSSL_LIBDIR:$OSSL_MODULES $OSSL_ROOT/bin/ardent_utility --info ardent)
+    (LD_LIBRARY_PATH=$OSSL_LIBDIR:$OSSL_MODULES $OSSL_BINDIR/ardent_utility --info ardent)
 fi
 
 
