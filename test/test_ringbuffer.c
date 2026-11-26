@@ -13,7 +13,7 @@
  * 
  * Author: Randall Steck
  * ***********************************************************************************************
- * Simple producer/consumer stress test for seed_ringbuffer.c
+ * Simple producer/consumer stress test for ringbuffer.c
  *
  * Usage:
  *
@@ -34,8 +34,8 @@
  
  #include <openssl/rand.h>
  
- #include "kpep/kpep.h"
- #include "../source/seeding/seed_ringbuffer.h"
+ #include "ardent/ardent.h"
+ #include "../source/seeding/ringbuffer.h"
  
  #define BLOCK_SIZE          32
  #define PREFILL_BLOCKS      8
@@ -193,14 +193,14 @@ static void *producer_thread(void *arg)
                     block,
                     BLOCK_SIZE);
 
-            KPEP_RESULT rv =
+            ARDENT_RESULT rv =
                 ring_enqueue(ctx->ring,
                              block,
                              BLOCK_SIZE);
 
             pthread_mutex_unlock(&ctx->lock);
 
-            if (rv == KPEP_R_SUCCESS)
+            if (rv == ARDENT_R_SUCCESS)
                 break;
 
             ctx->enqueue_retries++;
@@ -242,14 +242,14 @@ static void *consumer_thread(void *arg)
 
             pthread_mutex_lock(&ctx->lock);
 
-            KPEP_RESULT rv =
+            ARDENT_RESULT rv =
                 ring_dequeue(ctx->ring,
                              block,
                              BLOCK_SIZE);
 
             pthread_mutex_unlock(&ctx->lock);
 
-            if (rv == KPEP_R_SUCCESS)
+            if (rv == ARDENT_R_SUCCESS)
                 break;
 
             ctx->dequeue_retries++;
@@ -331,7 +331,7 @@ static void *consumer_thread(void *arg)
          return EXIT_FAILURE;
      }
  
-     if (ring_new(&ctx.ring, ctx.ring_size) != KPEP_R_SUCCESS) {
+     if (ring_new(&ctx.ring, ctx.ring_size) != ARDENT_R_SUCCESS) {
          fprintf(stderr,
                  "ring_new() failed\n");
          return EXIT_FAILURE;
@@ -373,7 +373,7 @@ static void *consumer_thread(void *arg)
  
          if (ring_enqueue(ctx.ring,
                           block,
-                          BLOCK_SIZE) != KPEP_R_SUCCESS) {
+                          BLOCK_SIZE) != ARDENT_R_SUCCESS) {
  
              fprintf(stderr,
                      "Prefill enqueue failed\n");

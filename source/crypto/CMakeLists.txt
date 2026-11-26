@@ -19,17 +19,17 @@
 # ##################################################################################################
 
 # Set project source files
-SET (KPEP_crypto_sources sha2.c sha3_jent_wrapper.c hmac.c drbg.c)
+SET (ARDent_crypto_sources sha2.c sha3_jent_wrapper.c hmac.c drbg.c)
 
 # ##################################################################################################
 # STATIC Compilation for linking
 # ##################################################################################################
 
 # Rest of libacvpro
-ADD_LIBRARY (KPEP_crypto OBJECT ${KPEP_crypto_sources})
-TARGET_COMPILE_OPTIONS (KPEP_crypto PRIVATE ${KPEP_LIB_CFLAGS} "-fPIC")
+ADD_LIBRARY (ARDent_crypto OBJECT ${ARDent_crypto_sources})
+TARGET_COMPILE_OPTIONS (ARDent_crypto PRIVATE ${ARDent_LIB_CFLAGS} "-fPIC")
 IF(CMAKE_VERSION GREATER_EQUAL 3.13.0)
-    TARGET_LINK_OPTIONS(KPEP_crypto PRIVATE ${KPEP_LIB_LDFLAGS})
+    TARGET_LINK_OPTIONS(ARDent_crypto PRIVATE ${ARDent_LIB_LDFLAGS})
 ENDIF ()
 
 

@@ -121,7 +121,7 @@ SET(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-undefined")
 # Project Information
 # ##################################################################################################
 
-PROJECT (KPEP)
+PROJECT (ARDent)
 
 # ##################################################
 # Verbose output?
@@ -141,25 +141,79 @@ IF (NOT external)
 ENDIF (NOT external)
 
 # ##################################################
-# Should we build KPEP 'utility' application?
+# Should we build ARDent 'utility' application?
 SET(utility ON CACHE BOOL "Specify to build 'utility' application (default: ON)")
 IF (NOT utility)
     MESSAGE("-- Application 'utility' is DISABLED and will not be built")
 ENDIF (NOT utility)
 
 # ##################################################
-# Should we build KPEP 'rand' application?
+# Should we build ARDent 'rand' application?
 SET(rand ON CACHE BOOL "Specify to build 'rand' application (default: ON)")
 IF (NOT rand)
     MESSAGE("-- Application 'rand' is DISABLED and will not be built")
 ENDIF (NOT rand)
 
 # ##################################################
-# Should we build KPEP test applications?
+# Should we build ARDent 'debug' application?
+SET(debug ON CACHE BOOL "Specify to build 'debug' application (default: ON)")
+IF (NOT debug)
+    MESSAGE("-- Application 'debug' is DISABLED and will not be built")
+ENDIF (NOT debug)
+
+# ##################################################
+# Should we build ARDent test applications?
 SET(tests OFF CACHE BOOL  "Specify to build unit test and stress test applications (default: OFF)")
 IF (tests)
     MESSAGE("-- Testing applications are ENABLED and will be built")
 ENDIF (tests)
+
+# ##################################################
+# Jitterentropy dependency
+SET(jitter-source "" CACHE PATH "Jitterentropy source checkout containing a prebuilt libjitterentropy.a")
+SET(jitter-lib "" CACHE FILEPATH "Path to an external libjitterentropy.a archive")
+SET(jitter-include "" CACHE PATH "Flat directory containing the Jitterentropy headers")
+
+IF (jitter-source)
+    IF (jitter-lib OR jitter-include)
+        MESSAGE(FATAL_ERROR "Specify either -Djitter-source=... or both -Djitter-lib=... and -Djitter-include=..., not both modes.")
+    ENDIF ()
+
+    SET(JITTER_SOURCE_DIR "${jitter-source}")
+    SET(JITTER_LIB "${JITTER_SOURCE_DIR}/libjitterentropy.a")
+    SET(JITTER_INCLUDE_DIRS "${JITTER_SOURCE_DIR}" "${JITTER_SOURCE_DIR}/src")
+
+    IF (NOT EXISTS "${JITTER_LIB}")
+        MESSAGE(FATAL_ERROR "Jitterentropy archive not found: '${JITTER_LIB}'. Build libjitterentropy.a in the source checkout or specify -Djitter-lib=... with -Djitter-include=....")
+    ENDIF ()
+    IF (NOT EXISTS "${JITTER_SOURCE_DIR}/jitterentropy.h" OR
+        NOT EXISTS "${JITTER_SOURCE_DIR}/jitterentropy-base-user.h" OR
+        NOT EXISTS "${JITTER_SOURCE_DIR}/src/jitterentropy-sha3.h" OR
+        NOT EXISTS "${JITTER_SOURCE_DIR}/src/jitterentropy-internal.h")
+        MESSAGE(FATAL_ERROR "Required Jitterentropy headers were not found in '${JITTER_SOURCE_DIR}' and '${JITTER_SOURCE_DIR}/src'.")
+    ENDIF ()
+ELSEIF (jitter-lib OR jitter-include)
+    IF (NOT jitter-lib OR NOT jitter-include)
+        MESSAGE(FATAL_ERROR "The separate Jitterentropy mode requires both -Djitter-lib=... and -Djitter-include=....")
+    ENDIF ()
+
+    SET(JITTER_LIB "${jitter-lib}")
+    SET(JITTER_INCLUDE_DIRS "${jitter-include}")
+
+    IF (NOT EXISTS "${JITTER_LIB}")
+        MESSAGE(FATAL_ERROR "Jitterentropy archive not found: '${JITTER_LIB}'.")
+    ENDIF ()
+    IF (NOT IS_DIRECTORY "${jitter-include}")
+        MESSAGE(FATAL_ERROR "Jitterentropy include directory not found: '${jitter-include}'.")
+    ENDIF ()
+    FOREACH (JITTER_HEADER jitterentropy.h jitterentropy-base-user.h jitterentropy-sha3.h jitterentropy-internal.h)
+        IF (NOT EXISTS "${jitter-include}/${JITTER_HEADER}")
+            MESSAGE(FATAL_ERROR "Jitterentropy header not found: '${jitter-include}/${JITTER_HEADER}'. The separate include directory must contain all required headers in one flat directory.")
+        ENDIF ()
+    ENDFOREACH ()
+ELSE ()
+    MESSAGE(FATAL_ERROR "Jitterentropy is required. Specify -Djitter-source=... or both -Djitter-lib=... and -Djitter-include=....")
+ENDIF ()
 
 # ##################################################
 # Should we build the EXAMPLE external jitter source?
@@ -179,20 +233,6 @@ ENDIF (example-external-logging)
 # External exclusion check
 IF ((NOT external) AND (example-external-jitter OR example-external-logging))
     MESSAGE(FATAL_ERROR "-- Invalid configuration: support for external libraries is disabled, but example external components are enabled.")
-ENDIF ()
-
-# ##################################################
-# Tracing option
-SET(TRACE_SEED OFF CACHE BOOL "Enable additional output for SEED processing (default: OFF)")
-SET(TRACE_SINK OFF CACHE BOOL "Enable additional output for SINK processing (default: OFF)")
-
-IF (TRACE_SEED)
-    MESSAGE("-- Detected 'TRACE_SEED' flag; Adding debug statements to seeding subsystem")
-    ADD_DEFINITIONS(-DKPEP_TRACE_SEED)
-ENDIF ()
-IF (TRACE_SINK)
-    MESSAGE("-- Detected 'TRACE_SINK' flag; Adding debug statements to logging subsystem")
-    ADD_DEFINITIONS(-D_TRACE_SINK)
 ENDIF ()
 
 # ##################################################
@@ -264,12 +304,12 @@ ENDIF ()
 # OpenSSL directories
 # ##################################################################################################
 
-# Verify we have the absolute path to the KPFP Openssl Installation
+# Verify we have the absolute path to the Openssl Installation
 IF (NOT DEFINED ENV{OPENSSL_ROOT}) # This should *not* be $ENV(...)
-    MESSAGE(FATAL_ERROR "-- Missing environment variable: '$OPENSSL_ROOT' holding the absolute path to the KPFP installation ('--prefix') directory.")
+    MESSAGE(FATAL_ERROR "-- Missing environment variable: '$OPENSSL_ROOT' holding the absolute path to the OpenSSL installation ('--prefix') directory.")
 ENDIF ()
 SET(OPENSSL_ROOT $ENV{OPENSSL_ROOT})
-MESSAGE("-- Detected OpenSSL/KPFP root path: '${OPENSSL_ROOT}'")
+MESSAGE("-- Detected OpenSSL root path: '${OPENSSL_ROOT}'")
 
 # Set OpenSSL library directory (check environment)
 IF (DEFINED ENV{OPENSSL_LIBDIR}) # This should *not* be $ENV(...)
@@ -323,9 +363,10 @@ ENDIF ()
 # Include Paths
 # ##################################################################################################
 
-INCLUDE_DIRECTORIES(${KPEP_SOURCE_DIR}/include)
-INCLUDE_DIRECTORIES(${KPEP_SOURCE_DIR}/include/openssl)
+INCLUDE_DIRECTORIES(${ARDent_SOURCE_DIR}/include)
+INCLUDE_DIRECTORIES(${ARDent_SOURCE_DIR}/include/openssl)
 INCLUDE_DIRECTORIES(${OPENSSL_ROOT}/include)
+INCLUDE_DIRECTORIES(${JITTER_INCLUDE_DIRS})
 
 # ##################################################################################################
 # Source  Paths
@@ -338,18 +379,19 @@ INCLUDE_DIRECTORIES(${OPENSSL_ROOT}/include)
 # Subdirectories containing core  source files
 ADD_SUBDIRECTORY ("source")
 ADD_SUBDIRECTORY ("source/crypto")
+ADD_SUBDIRECTORY ("source/thread")
 ADD_SUBDIRECTORY ("source/seeding")
 ADD_SUBDIRECTORY ("source/logging")
-ADD_SUBDIRECTORY ("source/jitterentropy")
+ADD_SUBDIRECTORY ("source/debug")
 
 # Subdirectories containing  support applications
 ADD_SUBDIRECTORY ("app")
 ADD_SUBDIRECTORY ("example")
 
 # OpTest Tools?
-IF (FIPS_OPTEST)
-    ADD_SUBDIRECTORY ("optest")
-ENDIF (FIPS_OPTEST)
+#IF (FIPS_OPTEST)
+#    ADD_SUBDIRECTORY ("optest")
+#ENDIF (FIPS_OPTEST)
 
 # Test Applications?
 IF (tests)
@@ -361,22 +403,22 @@ ENDIF (tests)
 # ##################################################################################################
 
 #  Provider
-INSTALL(TARGETS KPEP_provider DESTINATION ${OPENSSL_MODULE_PATH}/
+INSTALL(TARGETS ARDent_provider DESTINATION ${OPENSSL_MODULE_PATH}/
     PERMISSIONS 
         OWNER_READ OWNER_EXECUTE OWNER_WRITE
         GROUP_READ GROUP_EXECUTE 
         WORLD_READ WORLD_EXECUTE)
-INSTALL(FILES ${KPEP_SOURCE_DIR}/resources/kpepmodule.cnf DESTINATION ${OPENSSL_SSL_PATH}/
+INSTALL(FILES ${ARDent_SOURCE_DIR}/resources/ardentmodule.cnf DESTINATION ${OPENSSL_SSL_PATH}/
     PERMISSIONS 
         OWNER_READ OWNER_WRITE
         GROUP_READ 
         WORLD_READ)
-INSTALL(FILES ${KPEP_SOURCE_DIR}/resources/personalization.cnf DESTINATION ${OPENSSL_SSL_PATH}/
+INSTALL(FILES ${ARDent_SOURCE_DIR}/resources/personalization.cnf DESTINATION ${OPENSSL_SSL_PATH}/
     PERMISSIONS 
         OWNER_READ OWNER_WRITE
         GROUP_READ 
         WORLD_READ)
-INSTALL(DIRECTORY include/kpep/ DESTINATION ${OPENSSL_ROOT}/include/kpep)
+INSTALL(DIRECTORY include/ardent/ DESTINATION ${OPENSSL_ROOT}/include/ardent)
     
 #  Utility
 IF (utility)
@@ -396,18 +438,32 @@ IF (rand)
             WORLD_READ WORLD_EXECUTE)
 ENDIF (rand)
 
-# KPEP Test Applications
+#  Debug
+IF (debug)
+    INSTALL(TARGETS APP_debug DESTINATION ${OPENSSL_ROOT}/bin
+        PERMISSIONS 
+            OWNER_READ OWNER_EXECUTE OWNER_WRITE
+            GROUP_READ GROUP_EXECUTE
+            WORLD_READ WORLD_EXECUTE)
+ENDIF (debug)
+
+# ARDent Test Applications
 IF (tests)
+    INSTALL(TARGETS APP_rand_stress DESTINATION ${OPENSSL_ROOT}/test
+        PERMISSIONS 
+            OWNER_READ OWNER_EXECUTE OWNER_WRITE
+            GROUP_READ GROUP_EXECUTE 
+            WORLD_READ WORLD_EXECUTE)
     INSTALL(TARGETS APP_test_ringbuffer DESTINATION ${OPENSSL_ROOT}/test
         PERMISSIONS 
             OWNER_READ OWNER_EXECUTE OWNER_WRITE
             GROUP_READ GROUP_EXECUTE 
             WORLD_READ WORLD_EXECUTE)
-    INSTALL(TARGETS APP_rand_stress DESTINATION ${OPENSSL_ROOT}/test
+    INSTALL(TARGETS APP_test_runtime_config DESTINATION ${OPENSSL_ROOT}/test
         PERMISSIONS 
             OWNER_READ OWNER_EXECUTE OWNER_WRITE
             GROUP_READ GROUP_EXECUTE 
-            WORLD_READ WORLD_EXECUTE)            
+            WORLD_READ WORLD_EXECUTE)       
 ENDIF (tests)
 
 # Example external entropy source using libjitterentropy.a
@@ -429,19 +485,19 @@ IF (example-external-logging)
 ENDIF (example-external-logging)
 
 # FIPS Operational Testing tools
-IF (FIPS_OPTEST)
-    INSTALL(TARGETS TOOL_optest DESTINATION ${OPENSSL_ROOT}/bin
-        PERMISSIONS 
-            OWNER_READ OWNER_EXECUTE OWNER_WRITE
-            GROUP_READ GROUP_EXECUTE
-            WORLD_READ WORLD_EXECUTE)
-    INSTALL(TARGETS TOOL_edkex DESTINATION ${OPENSSL_ROOT}/bin
-        PERMISSIONS 
-            OWNER_READ OWNER_EXECUTE OWNER_WRITE
-            GROUP_READ GROUP_EXECUTE
-            WORLD_READ WORLD_EXECUTE)
-ENDIF (FIPS_OPTEST)
+#IF (FIPS_OPTEST)
+#    INSTALL(TARGETS TOOL_optest DESTINATION ${OPENSSL_ROOT}/bin
+#        PERMISSIONS 
+#            OWNER_READ OWNER_EXECUTE OWNER_WRITE
+#            GROUP_READ GROUP_EXECUTE
+#            WORLD_READ WORLD_EXECUTE)
+#    INSTALL(TARGETS TOOL_edkex DESTINATION ${OPENSSL_ROOT}/bin
+#        PERMISSIONS 
+#            OWNER_READ OWNER_EXECUTE OWNER_WRITE
+#            GROUP_READ GROUP_EXECUTE
+#            WORLD_READ WORLD_EXECUTE)
+#ENDIF (FIPS_OPTEST)
 
 # Fully custom finalization script; must be run after CMake installs above (to the bin/ directory)
-INSTALL(CODE "execute_process(COMMAND ${KPEP_SOURCE_DIR}/resources/cmake_finalize_kpep.sh)")
+INSTALL(CODE "execute_process(COMMAND ${ARDent_SOURCE_DIR}/resources/cmake_finalize_ardent.sh)")
 

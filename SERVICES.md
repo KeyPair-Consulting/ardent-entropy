@@ -1,33 +1,43 @@
 
-# The KeyPair Entropy Provider (KPEP) Runtime Services
+# The ARDent Runtime Services
+
+This file list all of the services ARDent provides outside of the OpenSSL provider interface.
+
+## Status
+
+This file is currently out-of-date and will be refreshed before release.  Many functions
+currently remain marked with "default" visibility, making them available to external callers.
+One of the cleanup steps before release will be to mark nearly every function as "hidden" so
+they cannot be called.  The list below (from KPMP, with edits) is the retained to serve as
+a list of expected functions that will be exposed in the RC1 release.
 
 ## Command to generate list
 
-    objdump -T kpep.so
+    objdump -T ardent.so
 
 ## Module Services (by accessible function calls)
 
  Provider interaction
 
     0000000000004747 g    DF .text	000000000000046c  Base        OSSL_provider_init
-    00000000000050c8 g    DF .text	0000000000000038  Base        kemp_get_core_params
-    0000000000005100 g    DF .text	0000000000000042  Base        kemp_get_core_param_bool
+    00000000000050c8 g    DF .text	0000000000000038  Base        ardent_get_core_params
+    0000000000005100 g    DF .text	0000000000000042  Base        ardent_get_core_param_bool
 
 Logging subsystem
 
-    0000000000007c70 g    DF .text	0000000000000188  Base        kemp_log
-    000000000000766f g    DF .text	00000000000000c5  Base        kemp_log_data
-    000000000000746c g    DF .text	00000000000000e7  Base        kemp_log_add_sink
-    0000000000006ace g    DF .text	0000000000000087  Base        kemp_get_reason_string
+    0000000000007c70 g    DF .text	0000000000000188  Base        ardent_log
+    000000000000766f g    DF .text	00000000000000c5  Base        ardent_log_data
+    000000000000746c g    DF .text	00000000000000e7  Base        ardent_log_add_sink
+    0000000000006ace g    DF .text	0000000000000087  Base        ardent_get_reason_string
     000000000000770b g    DF .text	0000000000000032  Base        get_log_level_string
     0000000000007553 g    DF .text	00000000000001b8  Base        read_log_level_string
 
 Memory and String utilities
 
-    00000000000065f4 g    DF .text	0000000000000028  Base        kpep_free
-    000000000000661c g    DF .text	0000000000000041  Base        kpep_cleanse
-    000000000000665d g    DF .text	0000000000000051  Base        kpep_zalloc
-    00000000000066ae g    DF .text	000000000000010f  Base        kpep_trimwhitespace
+    00000000000065f4 g    DF .text	0000000000000028  Base        ardent_free
+    000000000000661c g    DF .text	0000000000000041  Base        ardent_cleanse
+    000000000000665d g    DF .text	0000000000000051  Base        ardent_zalloc
+    00000000000066ae g    DF .text	000000000000010f  Base        ardent_trimwhitespace
 
 CPU Info utilities
 

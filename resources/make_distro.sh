@@ -50,7 +50,7 @@ mkdir build
 
 # Make the tarball
 cd ..
-tar czhf KeyPair-MGMT-Provider-${BASEVER}.tar.gz ${TEMPDIR}
+tar czhf ARDent-Entropy-Provider-${BASEVER}.tar.gz ${TEMPDIR}
 rm -rf ${TEMPDIR}
 cd ..
 

@@ -17,7 +17,7 @@
 
 print_usage()
 {
-   echo "Compile the example external entropy source for the KeyPair Management Provider."
+   echo "Compile the example external entropy source for the ARDent Entropy Provider."
    echo
    echo "Syntax:  $0 [--libdir </path/to/dir>] [--incdir </path/to/dir>] [--debug] [--echo] [--help]"
    echo "Options:"

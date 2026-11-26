@@ -20,7 +20,7 @@
 #include "openssl/core_names.h"
 #include "openssl/core_dispatch.h"    /* OSSL Functions */
 
-#include "../jitterentropy/jitterentropy-sha3.h"
+#include "jitterentropy-sha3.h"
 #include "sha3.h"
 
 /* ************************************************************************************************
@@ -41,18 +41,6 @@ EXPORT_VISIBILITY_HIDDEN
 void sha3_ctx_free(SHA3_CTX* ctx)
 {
     jent_sha3_dealloc(ctx);
-}
-
-EXPORT_VISIBILITY_HIDDEN
-void* sha3_ctx_dup(void* ctx)
-{
-    SHA3_CTX *newctx = NULL;
-    if (!ctx)
-        return NULL;
-    newctx = sha3_ctx_new();
-    if (newctx)
-        memcpy(newctx, ctx, sizeof(SHA3_CTX));
-    return newctx;
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -87,14 +75,21 @@ int sha3_final(SHA3_CTX* ctx, unsigned char *digest, size_t *digest_len)
 EXPORT_VISIBILITY_HIDDEN
 int sha3_oneshot(const unsigned char *message, unsigned int len, unsigned char *digest)
 {
-    SHA3_CTX ctx;
+    SHA3_CTX *ctx = NULL;
+    int ret;
 
-    if (!digest)
+    if (!digest || (!message && len > 0))
         return 0;
-    jent_sha3_256_init(&ctx);
-    jent_sha3_update(&ctx, message, len);
-    jent_sha3_final(&ctx, digest);
-    return 1;
+
+    ctx = sha3_ctx_new();
+    if (!ctx)
+        return 0;
+
+    jent_sha3_256_init(ctx);
+    jent_sha3_update(ctx, message, len);
+    jent_sha3_final(ctx, digest);
+    sha3_ctx_free(ctx);
+    return ret;
 }
 
 /* ************************************************************************************************
@@ -103,7 +98,7 @@ int sha3_oneshot(const unsigned char *message, unsigned int len, unsigned char *
  * ************************************************************************************************
  * ***********************************************************************************************/
 
-static const OSSL_PARAM kpep_sha3_known_gettable_params[] = {
+static const OSSL_PARAM ardent_sha3_known_gettable_params[] = {
     OSSL_PARAM_size_t(OSSL_DIGEST_PARAM_BLOCK_SIZE, NULL),
     OSSL_PARAM_size_t(OSSL_DIGEST_PARAM_SIZE, NULL),
     OSSL_PARAM_int(OSSL_DIGEST_PARAM_XOF, NULL),
@@ -114,7 +109,7 @@ static const OSSL_PARAM kpep_sha3_known_gettable_params[] = {
 EXPORT_VISIBILITY_HIDDEN
 const OSSL_PARAM *sha3_gettable_params(void *provctx)
 {
-    return kpep_sha3_known_gettable_params;
+    return ardent_sha3_known_gettable_params;
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -124,24 +119,24 @@ int sha3_get_params(OSSL_PARAM params[])
 
     p = OSSL_PARAM_locate(params, OSSL_DIGEST_PARAM_BLOCK_SIZE);
     if (p != NULL && !OSSL_PARAM_set_size_t(p, JENT_SHA3_256_SIZE_BLOCK)) {
-        kpep_log(LOG_LVL_ERR, "SHA3", "Failed to set parameter 'blocksize'");
+        ardent_log(LOG_LVL_ERR, "SHA3", "Failed to set parameter 'blocksize'");
         return 0;
     }
     p = OSSL_PARAM_locate(params, OSSL_DIGEST_PARAM_SIZE);
     if (p != NULL && !OSSL_PARAM_set_size_t(p, JENT_SHA3_256_SIZE_DIGEST)) {
-        kpep_log(LOG_LVL_ERR, "SHA3", "Failed to set parameter 'size'");
+        ardent_log(LOG_LVL_ERR, "SHA3", "Failed to set parameter 'size'");
         return 0;
     }
     p = OSSL_PARAM_locate(params, OSSL_DIGEST_PARAM_XOF);
     if (p != NULL
         && !OSSL_PARAM_set_int(p, 0)) {
-        kpep_log(LOG_LVL_ERR, "SHA3", "Failed to set parameter 'xof'");
+        ardent_log(LOG_LVL_ERR, "SHA3", "Failed to set parameter 'xof'");
         return 0;
     }
     p = OSSL_PARAM_locate(params, OSSL_DIGEST_PARAM_ALGID_ABSENT);
     if (p != NULL
         && !OSSL_PARAM_set_int(p, 0)) {
-        kpep_log(LOG_LVL_ERR, "SHA3", "Failed to set parameter 'algid-absent'");
+        ardent_log(LOG_LVL_ERR, "SHA3", "Failed to set parameter 'algid-absent'");
         return 0;
     }
     return 1;
@@ -154,10 +149,9 @@ int sha3_get_params(OSSL_PARAM params[])
  * ***********************************************************************************************/
 
 EXPORT_VISIBILITY_HIDDEN
-const OSSL_DISPATCH kpep_sha3_digest_functions[] = {
+const OSSL_DISPATCH ardent_sha3_digest_functions[] = {
     { OSSL_FUNC_DIGEST_NEWCTX,          (void (*)(void))sha3_ctx_new },
     { OSSL_FUNC_DIGEST_FREECTX,         (void (*)(void))sha3_ctx_free },
-    { OSSL_FUNC_DIGEST_DUPCTX,          (void (*)(void))sha3_ctx_dup },
     { OSSL_FUNC_DIGEST_INIT,            (void (*)(void))sha3_init },
     { OSSL_FUNC_DIGEST_UPDATE,          (void (*)(void))sha3_update },
     { OSSL_FUNC_DIGEST_FINAL,           (void (*)(void))sha3_final },

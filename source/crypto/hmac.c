@@ -20,7 +20,7 @@
 #include "openssl/core_names.h"
 #include "openssl/core_dispatch.h"    /* OSSL Functions */
 
-#include "kpep/kpep.h"
+#include "ardent/ardent.h"
 #include "hmac.h"
 #include "sha2.h"
 
@@ -46,7 +46,7 @@
 
 /* ************************************************************************************************
 * ************************************************************************************************
-* HMAC-SHA3-256 functions
+* HMAC-SHA2-256 functions
 * ************************************************************************************************
 * ***********************************************************************************************/
 
@@ -62,14 +62,14 @@ EXPORT_VISIBILITY_HIDDEN
 HMAC_CTX* hmac_ctx_new(void)
 {
     HMAC_CTX* ctx;
-    ctx = (HMAC_CTX*) kpep_zalloc(sizeof(HMAC_CTX));
+    ctx = (HMAC_CTX*) ardent_zalloc(sizeof(HMAC_CTX));
     if (ctx) {
         ctx->ictx = hash_ctx_new();
         ctx->octx = hash_ctx_new();
         if (!ctx->ictx || !ctx->octx) {
             hash_ctx_free(ctx->ictx);  // NULL safe
             hash_ctx_free(ctx->octx);  // NULL safe
-            kpep_free(ctx);
+            ardent_free(ctx);
             ctx = NULL;
         }
     }
@@ -81,9 +81,11 @@ EXPORT_VISIBILITY_HIDDEN
 void hmac_ctx_free (HMAC_CTX* ctx)
 {
     if (!ctx) return;
+    ardent_zeroize(ctx->ipad, HASH_BLOCK_SIZE);
+    ardent_zeroize(ctx->opad, HASH_BLOCK_SIZE);
     hash_ctx_free(ctx->ictx);
     hash_ctx_free(ctx->octx);
-    kpep_free(ctx);
+    ardent_free(ctx);
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -165,22 +167,28 @@ int hmac_final(HMAC_CTX *ctx,
     unsigned char inner_digest[HASH_DIGEST_SIZE];
     unsigned char mac_temp[HASH_DIGEST_SIZE];
     size_t tmp_len = HASH_DIGEST_SIZE;
+    int ret = 0;
 
     if (!ctx || !mac)
         return 0;
+    if (mac_size == 0 || mac_size > HASH_DIGEST_SIZE)
+        return 0;
+    if (mac_len) { 
+        if (*mac_len == 0 || *mac_len > HASH_DIGEST_SIZE)
+            return 0;
+        if (*mac_len < mac_size)
+            mac_size = *mac_len;
+    }
 
-    // Finalize steps 6
-    hash_final(ctx->ictx, inner_digest, &tmp_len);
-    // Step 8
-    hash_update(ctx->octx, inner_digest, HASH_DIGEST_SIZE);
-    // Step 9
-    hash_final(ctx->octx, mac_temp, mac_len);
-    // Copy result
-    memcpy(mac, mac_temp, mac_size);
-    // If result mac length is requested, provide it
-    //if (mac_len)
-    //    *mac_len = HASH_DIGEST_SIZE;
-    return 1;
+    ret = (hash_final(ctx->ictx, inner_digest, &tmp_len) && 
+           hash_update(ctx->octx, inner_digest, HASH_DIGEST_SIZE) && 
+           hash_final(ctx->octx, mac_temp, &tmp_len) && 
+           (memcpy(mac, mac_temp, mac_size) != NULL));
+    if (mac_len)
+        *mac_len = mac_size;
+    ardent_zeroize(inner_digest, sizeof(inner_digest));
+    ardent_zeroize(mac_temp, sizeof(mac_temp));
+    return ret;
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -207,7 +215,7 @@ int hmac(const unsigned char *key, unsigned int key_size,
  * ***********************************************************************************************/
 
 EXPORT_VISIBILITY_HIDDEN
-const OSSL_DISPATCH kpep_hmac_functions[] = {
+const OSSL_DISPATCH ardent_hmac_functions[] = {
     { OSSL_FUNC_MAC_NEWCTX,  (void (*)(void))hmac_ctx_new },
     { OSSL_FUNC_MAC_FREECTX, (void (*)(void))hmac_ctx_free },
     { OSSL_FUNC_MAC_INIT,    (void (*)(void))hmac_init },

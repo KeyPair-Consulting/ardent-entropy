@@ -26,8 +26,8 @@
 #include <errno.h>
 #include <pthread.h>
 
-#include "kpep/kpep.h"
-#include "kpep/kpep_names.h"
+#include "ardent/ardent.h"
+#include "ardent/ardent_names.h"
 
 static const char alloc_msg[] = "Memory allocation error writing log entry";
 
@@ -43,7 +43,7 @@ static int my_custom_int = 0;
 
 #include "openssl/params.h"
 
-static KPEP_RESULT load_params_from_environment(void)
+static ARDENT_RESULT load_params_from_environment(void)
 {
 	char *dbgenv;
 
@@ -51,10 +51,10 @@ static KPEP_RESULT load_params_from_environment(void)
 	if (dbgenv != NULL) {
 		current_log_level = read_log_level_string(dbgenv);
 	}
-	return KPEP_R_SUCCESS;
+	return ARDENT_R_SUCCESS;
 }
 
-static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
+static ARDENT_RESULT load_params_from_openssl(void* prov_ctx)
 {
 	// OpenSSL parameters must be read initially as a string.
 	// Create one for each configuration option
@@ -73,21 +73,21 @@ static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
 		sizeof(custom_str));
 	*p = OSSL_PARAM_construct_end();
 
-	// Retrieve the parameters from 'kpepmodule.cnf'
-	if (!kpep_get_core_params(prov_ctx, params))
-		return KPEP_R_CONFIG_LOOKUP_FAILURE;
+	// Retrieve the parameters from 'ardentmodule.cnf'
+	if (!ardent_get_core_params(prov_ctx, params))
+		return ARDENT_R_CONFIG_LOOKUP_FAILURE;
 
 	// This parameter must be present
 	if (level_str)
 		current_log_level = read_log_level_string(level_str);
 	else
-		return KPEP_R_NULL_ARG;
+		return ARDENT_R_NULL_ARG;
 
 	// It's OK if this key isn't present -- it's already defaulted to zero
 	if (custom_str)
 		my_custom_int = atoi(custom_str);
 
-	return KPEP_R_SUCCESS;
+	return ARDENT_R_SUCCESS;
 }
  
 /* ************************************************************************************************
@@ -96,9 +96,9 @@ static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
  * ************************************************************************************************
  * ***********************************************************************************************/
  
-static KPEP_RESULT init_log_example(void* prov_ctx)
+static ARDENT_RESULT init_log_example(void* prov_ctx)
 {
-	KPEP_RESULT rv = KPEP_R_SUCCESS;
+	ARDENT_RESULT rv = ARDENT_R_SUCCESS;
 	
 	rv = prov_ctx?load_params_from_openssl(prov_ctx)
 	             :load_params_from_environment();
@@ -146,7 +146,7 @@ static void write_log_data_example(LogLevel level, const char* module, const cha
 	idx =  14 + (bytes_len*2);  // 14 chars for formatting and EOL
 	idx += module?strlen(module):0;
 	idx += label?strlen(label):0;
-	msg = kpep_zalloc(idx);
+	msg = ardent_zalloc(idx);
 	if (!msg)
 		return;
 	if (module) {
@@ -171,7 +171,7 @@ static void write_log_data_example(LogLevel level, const char* module, const cha
 		}
 	}
 	fprintf(stderr, "%s\n", msg);  // EOL because this is stderr and we need to advance the cursor
-	kpep_free(msg);
+	ardent_free(msg);
     return;
 }
 

@@ -1,6 +1,9 @@
 # Visual Studio Code configuration
 .vscode/
 
+# Local-only TODO session-resumption references
+TODO_RESUME.md
+
 # All object files
 **/*.o
 

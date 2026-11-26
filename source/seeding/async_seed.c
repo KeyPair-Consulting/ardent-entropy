@@ -1,0 +1,488 @@
+/* ************************************************************************************************
+ * Copyright (C) 2022-2026 Symbiotic Systems Research, LLC
+ * All Rights Reserved * Proprietary and confidential
+ * 
+ * The methods and techniques described herein are considered 
+ * trade secrets and/or confidential. Reproduction or distribution, 
+ * in whole or in part, is forbidden except by express written 
+ * permission of Symbiotic Systems Research, LLC.
+ * Please contact <info@symsysresearch.com> for licensing information.
+ * 
+ * NO WARRANTY, EXPLICIT OR IMPLICIT, IS PROVIDED.
+ * In no event shall the author be liable for any claim or damages.
+ * 
+ * Author: Randall Steck
+ * ***********************************************************************************************/
+
+#include "ardent/ardent.h"
+#include "ardent/ardent_names.h"
+#include "ardent/ardent_cpuinfo.h"
+#include "ardent/ardent_seed_stub.h"
+#include "rdcpu_toolbox.h"
+#include "seed_sources.h"
+#include "ringbuffer.h"
+#include "async_seed.h"
+
+#include "openssl/params.h"
+#include "internal/thread_arch.h"
+
+#include <string.h>
+
+/* ************************************************************************************************
+ * ***********************************************************************************************
+ * Definitions, declarations, and context structure
+ * ***********************************************************************************************
+ * ***********************************************************************************************/
+
+#define MODULE_NAME "SEED-ASYNC"
+
+typedef struct async_ctx_st {
+    char                  name[64];
+    uint32_t              async_mode;
+
+    void                 *source_ctx;
+    const SEED_STUB_INFO *source_info;
+    const STUB_FUNCTIONS *source_fn;
+
+    RING_CTX             *ring_ctx;
+
+    ASYNC_WORKER_STATE    state;
+    CRYPTO_THREAD        *thread;
+    CRYPTO_MUTEX         *mutex;
+    CRYPTO_CONDVAR       *cond;
+
+} ASYNC_CTX;
+
+static const char *base_name = "ASYNC";
+
+static inline int stub_is_valid(const STUB_FUNCTIONS *stub) {
+    return (stub &&
+            stub->new_fn &&
+            stub->free_fn &&
+            stub->gather_fn &&
+            stub->get_name_fn &&
+            stub->get_state_fn);
+}
+
+/* ************************************************************************************************
+ * ***********************************************************************************************
+ * API functions
+ * ***********************************************************************************************
+ * ***********************************************************************************************/
+
+EXPORT_VISIBILITY_HIDDEN
+void async_seed_free(ASYNC_CTX *ctx)
+{
+    CRYPTO_THREAD_RETVAL retval;
+
+    if (ardent_trace_seed_enabled) {
+        TRACE_START;
+    }
+
+    if (!ctx)
+        return;
+
+    // Lock for safe shutdown
+    if (ctx->mutex)
+        ossl_crypto_mutex_lock(ctx->mutex);
+
+    // Handle thread shutdown
+    if (ctx->thread) {
+        // Signal to stop the thread
+        ctx->state = WORKER_STOPPING;
+        ossl_crypto_condvar_signal(ctx->cond);
+        ossl_crypto_mutex_unlock(ctx->mutex);
+        // Wait for thread to finish
+        ossl_crypto_thread_native_join(ctx->thread, &retval);
+        // Reclaim the mutex for the remainder of shutdown
+        ossl_crypto_mutex_lock(ctx->mutex);
+        // Check result
+        if (ctx->state != WORKER_STOPPED) {
+            // Nothing we can do, but log it anyway
+            LOG_SIMPLE_ERROR(MODULE_NAME, "Thread did not stop correctly");
+        }
+        // Thread cleanup
+        ossl_crypto_thread_native_clean(ctx->thread);
+        ctx->thread = NULL;
+    }
+
+    // Free the ring
+    if (ctx->ring_ctx)
+        ring_free(ctx->ring_ctx);
+    // Free the source context
+    if (ctx->source_ctx && ctx->source_fn && ctx->source_fn->free_fn)  
+        ctx->source_fn->free_fn(ctx->source_ctx);
+    // Free the conditional variable
+    if (ctx->cond)
+        ossl_crypto_condvar_free(&ctx->cond);     
+    // Free the mutex
+    if (ctx->mutex) {
+        ossl_crypto_mutex_unlock(ctx->mutex);
+        ossl_crypto_mutex_free(&ctx->mutex);
+    }
+    // Free the ASYNC_CTX structure itself
+    ardent_free(ctx);
+
+    ardent_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async' shutdown successful");
+}
+
+EXPORT_VISIBILITY_HIDDEN
+ASYNC_CTX *async_seed_new(void* prov_ctx, 
+                        const STUB_FUNCTIONS* stub_fn, 
+                        uint32_t ring_sz, 
+                        uint8_t idx, 
+                        uint32_t async_mode, 
+                        ARDENT_RESULT *errnum)
+{
+    ASYNC_CTX *ctx;
+    ARDENT_RESULT rv;
+    int len;
+
+    if (ardent_trace_seed_enabled) {
+        TRACE_START;
+    }
+
+    // Allocate for source context
+    ctx = ardent_zalloc(sizeof(ASYNC_CTX));
+    if (ctx == NULL) {
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (malloc)");
+        if (errnum) *errnum = ARDENT_R_MALLOC_FAIL;
+        return NULL;
+    }
+
+    // Initialize locks for asynchronous operation
+    ctx->async_mode = async_mode;
+    ctx->mutex = ossl_crypto_mutex_new();
+    if (!ctx->mutex) {
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (create mutex)");
+        if (errnum) *errnum = ARDENT_R_MUTEX_FAIL_START;
+        goto err;
+    }
+    ctx->cond = ossl_crypto_condvar_new();
+    if (!ctx->cond) {
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (create condition variable)");
+        if (errnum) *errnum = ARDENT_R_MUTEX_FAIL_START;
+        goto err;
+    }
+
+    // Create the new seed source
+    ctx->source_fn = stub_fn;
+    ctx->source_ctx = ctx->source_fn->new_fn(prov_ctx, idx, errnum);
+    if (!ctx->source_ctx) {
+        LOG_ARDENT_ERROR(MODULE_NAME, *errnum);
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (new source)");
+        goto err;
+    }
+    ctx->source_info = (SEED_STUB_INFO*) ctx->source_ctx;
+
+    // Safely create seed source name (do not fail on error)
+    len = snprintf(ctx->name, sizeof(ctx->name), "%s", ctx->source_info->name);
+    if (len < 0) {
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Unable to format source name");
+        memset(ctx->name, 0, sizeof(ctx->name));
+        strcpy(ctx->name, "UNK-SOURCE");
+    }
+    if ((size_t)len >= sizeof(ctx->name)) {
+        LOG_FORMATTED_ERROR(MODULE_NAME,
+                            "Seed source name '%s' truncated",
+                            ctx->source_info->name);
+    }
+
+    // Create ring
+    if (ctx->async_mode) {
+        rv = ring_new(&ctx->ring_ctx, ring_sz);
+        switch (rv) {
+            case ARDENT_R_SUCCESS:
+                break;
+            case ARDENT_R_RING_NOT_POWER_OF_TWO:
+                LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (size not power-of-two)");
+                if (errnum) *errnum = ARDENT_R_INVALID_ARG;
+                goto err;
+            default:
+                LOG_SIMPLE_ERROR(MODULE_NAME, "Ringbuffer failed startup (new ring)");
+                if (errnum) *errnum = rv;
+                goto err;
+        }
+    }
+
+    // Start initialized
+    if (ctx->source_info->full_entropy)
+        ardent_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async (%s)' startup successful (full entropy)", ctx->name);
+    else 
+        ardent_log(LOG_LVL_INFO, MODULE_NAME, "Seed source 'async (%s)' startup successful (%.6f ent-per-bit)", ctx->name, ctx->source_info->entropy_per_bit);
+
+    if (errnum) *errnum = ARDENT_R_SUCCESS;
+    return ctx;
+
+err:
+    async_seed_free(ctx);
+    return NULL;
+}
+
+EXPORT_VISIBILITY_HIDDEN
+ARDENT_RESULT async_seed_gather(ASYNC_CTX *ctx, unsigned char *out, size_t *out_len, size_t nbits)
+{
+    ARDENT_RESULT rv = ARDENT_R_SUCCESS;
+    size_t gather_bits, gather_bytes;
+
+    if (ardent_trace_seed_enabled) {
+        TRACE_START;
+    }
+
+    if (!nbits)
+        return ARDENT_R_SUCCESS;
+
+    // Validate context
+    if (!ctx || !out_len) {
+        LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_NULL_ARG);
+        return ARDENT_R_NULL_ARG;
+    }
+
+    // Calculate gather size
+    gather_bits = seed_get_gather_sz(ctx->source_info, nbits);
+    gather_bytes = (gather_bits + 7) >> 3;
+    if (!gather_bytes) {
+        LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_INVALID_ARG);
+        return ARDENT_R_INVALID_ARG;
+    }
+
+    if (ardent_trace_seed_enabled) {
+        ardent_trace_fmt(MODULE_NAME, "%s %lu -> %lu", out?"byte":"size", nbits, gather_bytes<<3);
+    }
+
+    // Return gather size?
+    if (!out) {
+        *out_len = gather_bytes;
+        return ARDENT_R_SUCCESS;
+    }
+
+    // Check for adequate size
+    if (*out_len < gather_bytes) {
+        LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_SEED_BUFFER_TOO_SMALL);
+        return ARDENT_R_SEED_BUFFER_TOO_SMALL;
+    }
+
+    // Check state
+    if (async_seed_get_state(ctx) != ARDENT_RAND_STATE_READY) {
+        LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_SEED_NOT_READY);
+        return ARDENT_R_SEED_NOT_READY;
+    }
+
+    // In Asynchronous mode?
+    if (ctx->async_mode) { 
+        // Get from the ring buffer
+        ossl_crypto_mutex_lock(ctx->mutex);
+        rv = ring_dequeue(ctx->ring_ctx, out, gather_bytes);
+
+        // Error: INVALID_ARG or RING_EMPTY
+        if (rv) {
+            gather_bytes = 0; // We didn't gather any bytes
+            if (rv == ARDENT_R_RING_EMPTY) {
+                rv = ARDENT_R_SEED_NOT_READY;
+            }
+        }
+
+        // Trigger thread to gather more entropy if needed
+        ossl_crypto_condvar_signal(ctx->cond);
+        ossl_crypto_mutex_unlock(ctx->mutex);
+    }
+    else {
+        // Gather from backing seed source
+        rv = ctx->source_fn->gather_fn(ctx->source_ctx, out, (size_t*)&gather_bytes, nbits);
+        if (rv) {
+            LOG_ARDENT_ERROR(MODULE_NAME, rv);
+            LOG_FORMATTED_ERROR(MODULE_NAME, "Seed source 'async (%s)' gather operation failed", ctx->source_info->name);
+            goto err;
+        }
+    }
+
+    // Success
+    *out_len = gather_bytes;
+    return rv;
+
+err:
+    // If no error already set, assume a general error
+    if (!rv) {
+        LOG_ARDENT_ERROR(MODULE_NAME, ARDENT_R_ERROR_RETRIEVING_ENTROPY);
+        rv = ARDENT_R_ERROR_RETRIEVING_ENTROPY;
+    }
+
+    // Zeroize
+    memset(out, 0, *out_len);
+    *out_len = 0;
+
+    return rv;
+}
+
+EXPORT_VISIBILITY_HIDDEN
+uint32_t async_seed_get_state(ASYNC_CTX *ctx)
+{
+    uint32_t stub_state;
+    ASYNC_WORKER_STATE worker_state;
+
+    if (!ctx || !ctx->source_ctx || !ctx->source_fn)
+        return ARDENT_RAND_STATE_UNINITIALISED; // Value 0
+
+    if (ctx->mutex)
+        ossl_crypto_mutex_lock(ctx->mutex);
+
+    stub_state = ctx->source_fn->get_state_fn(ctx->source_ctx);
+    worker_state = ctx->state;
+
+    if (ctx->mutex)
+        ossl_crypto_mutex_unlock(ctx->mutex);
+
+    if (stub_state == ARDENT_RAND_STATE_ERROR)
+        return ARDENT_RAND_STATE_ERROR;
+
+    if (ctx->async_mode) {
+        if (worker_state == WORKER_ERROR)
+            return ARDENT_RAND_STATE_ERROR;
+        if (worker_state != WORKER_RUNNING && worker_state != WORKER_INITIALIZED)
+            return ARDENT_RAND_STATE_UNINITIALISED;
+    }
+
+    return stub_state;
+}
+
+EXPORT_VISIBILITY_HIDDEN
+const char* async_seed_get_name(ASYNC_CTX *ctx) 
+{
+    if (!ctx) {
+        ardent_log(LOG_LVL_WARN, MODULE_NAME, "get_name(async) called with NULL context (should not happen)");
+        return NULL;
+    }   
+    return ctx->name;
+}
+
+/* ************************************************************************************************
+ * ***********************************************************************************************
+ * API functions
+ * ***********************************************************************************************
+ * ***********************************************************************************************/
+
+static CRYPTO_THREAD_RETVAL async_worker(void *arg)
+{
+    ASYNC_CTX *ctx = (ASYNC_CTX *)arg;
+    ASYNC_WORKER_STATE local_state;
+
+    if (ardent_trace_thread_enabled) {
+        ardent_trace_fmt(MODULE_NAME, 
+                "THREAD (%p) started for %s", 
+                (void*)(ctx?ctx->thread:NULL),
+                ctx?ctx->name:"unknown");
+    }
+
+    if (!ctx) {
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Thread started with NULL context");
+        return 0;
+    }
+
+    // Hold the lock for startup
+    ossl_crypto_mutex_lock(ctx->mutex);
+
+    // Get starting state and update
+    if (ctx->state != WORKER_INITIALIZED) {
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Thread started with invalid state"); 
+        ossl_crypto_mutex_unlock(ctx->mutex);
+        return 0;
+    }
+    ctx->state = WORKER_RUNNING;    
+
+    // We start with the mutex LOCKED
+    for (;;) {
+        ossl_crypto_condvar_wait(ctx->cond, ctx->mutex); /* atomically releases mutex */
+        local_state = ctx->state;
+        ossl_crypto_mutex_unlock(ctx->mutex);
+
+        if (local_state == WORKER_RUNNING) {
+            if (ardent_trace_thread_enabled) {
+                ardent_trace_fmt(MODULE_NAME, "THREAD (%p) gathering...", (void*)ctx->thread);
+            }
+            // Do the actual gather here!
+            ossl_crypto_mutex_lock(ctx->mutex);
+            continue;
+        }
+        break; /* STOPPING exits the loop */
+    }
+    
+    ossl_crypto_mutex_lock(ctx->mutex);
+    if (ctx->state == WORKER_STOPPING)
+        ctx->state = WORKER_STOPPED;
+    ossl_crypto_mutex_unlock(ctx->mutex);
+
+    if (ardent_trace_thread_enabled) {
+        ardent_trace_fmt(MODULE_NAME, 
+                "THREAD (%p) stopped (%d: %s)", 
+                (void*)ctx->thread, 
+                (ctx->state), 
+                (ctx->state == WORKER_ERROR) ?"error" :
+                (ctx->state == WORKER_STOPPED) ? "clean" : 
+                "unknown");
+    }
+    return 0;
+}
+
+EXPORT_VISIBILITY_HIDDEN
+ARDENT_RESULT async_seed_start_thread(ASYNC_CTX *ctx)
+{
+    ARDENT_RESULT rv = ARDENT_R_SUCCESS;
+
+    if (!ctx) {
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Thread start called with NULL context");
+        return ARDENT_R_NULL_ARG;
+    }
+
+    if (!ctx->async_mode) {
+        ctx->state = WORKER_INITIALIZED; 
+        return ARDENT_R_SUCCESS;
+    }
+
+    if (!ctx->mutex || !ctx->cond) {
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Thread start called with NULL mutex");
+        return ARDENT_R_NULL_ARG;
+    }
+    
+    // Lock for startup
+    ossl_crypto_mutex_lock(ctx->mutex);
+
+    if (ctx->state != WORKER_UNINITIALIZED) {
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Thread start called with invalid state");
+        rv = ARDENT_R_THREAD_NOT_READY;
+        goto err;
+    }
+
+    if (ardent_trace_thread_enabled) {
+        ardent_trace_fmt(MODULE_NAME, 
+                "THREAD starting for %s...", 
+                ctx?ctx->name:"unknown");
+    }
+
+    // Start the thread. IMPORTANT: The thread needs the lock to startup, so 
+    // release it ASAP after starting the thread! DO NOT wait on the thread's 
+    // behavior or some change in the thread state to release the lock.  
+    ctx->state = WORKER_INITIALIZED;  // "Initialized" state tells the thread to go
+    ctx->thread = ossl_crypto_thread_native_start(async_worker, ctx, 1);
+    if (!ctx->thread) {
+        if (ardent_trace_thread_enabled) {
+            ardent_trace_fmt(MODULE_NAME, 
+                    "THREAD failed to start for %s...", 
+                    (void*)(ctx?ctx->thread:NULL),
+                    ctx?ctx->name:"unknown");
+        }        
+        LOG_SIMPLE_ERROR(MODULE_NAME, "Failed to start thread");
+        rv = ARDENT_R_THREAD_NOT_READY;
+        goto err;
+    }
+
+    if (ardent_trace_thread_enabled) {
+        ardent_trace_fmt(MODULE_NAME, 
+                "THREAD (%p) started for %s...", 
+                (void*)(ctx?ctx->thread:NULL),
+                ctx?ctx->name:"unknown");
+    }        
+
+err:
+    ossl_crypto_mutex_unlock(ctx->mutex);
+    return rv;
+}

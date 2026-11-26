@@ -55,7 +55,7 @@
 #include "openssl/core_dispatch.h"    /* OSSL Functions */
 #include "openssl/params.h"
 
-#include "kpep/kpep.h"
+#include "ardent/ardent.h"
 #include "sha2.h"
 
 /* ************************************************************************************************
@@ -135,13 +135,13 @@ static void sha256_calc_chunk(SHA2_CTX* ctx, const uint8_t* chunk)
 EXPORT_VISIBILITY_HIDDEN
 SHA2_CTX* sha2_ctx_new(void)
 {
-    return kpep_zalloc(sizeof(SHA2_CTX));
+    return ardent_zalloc(sizeof(SHA2_CTX));
 }
 
 EXPORT_VISIBILITY_HIDDEN
 void sha2_ctx_free(SHA2_CTX* ctx)
 {
-    kpep_cleanse(ctx, sizeof(SHA2_CTX)); // Zeroize before Free; NULL safely handled
+    ardent_cleanse(ctx, sizeof(SHA2_CTX)); // Zeroize before Free; NULL safely handled
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -261,7 +261,7 @@ int sha2_oneshot(const unsigned char* message, unsigned int len, unsigned char* 
             sha2_final(&ctx, digest, NULL));
 }
 
-static const OSSL_PARAM kpep_sha2_known_gettable_params[] = {
+static const OSSL_PARAM ardent_sha2_known_gettable_params[] = {
     OSSL_PARAM_size_t(OSSL_DIGEST_PARAM_BLOCK_SIZE, NULL),
     OSSL_PARAM_size_t(OSSL_DIGEST_PARAM_SIZE, NULL),
     OSSL_PARAM_END
@@ -270,7 +270,7 @@ static const OSSL_PARAM kpep_sha2_known_gettable_params[] = {
 EXPORT_VISIBILITY_HIDDEN
 const OSSL_PARAM *sha2_gettable_params(void *provctx)
 {
-    return kpep_sha2_known_gettable_params;
+    return ardent_sha2_known_gettable_params;
 }
 
 EXPORT_VISIBILITY_HIDDEN
@@ -280,12 +280,12 @@ int sha2_get_params(OSSL_PARAM params[])
 
     p = OSSL_PARAM_locate(params, OSSL_DIGEST_PARAM_BLOCK_SIZE);
     if (p != NULL && !OSSL_PARAM_set_size_t(p, SHA2_256_BLOCK_SIZE)) {
-        kpep_log(LOG_LVL_ERR, "SHA2", "Failed to set parameter 'blocksize'");
+        ardent_log(LOG_LVL_ERR, "SHA2", "Failed to set parameter 'blocksize'");
         return 0;
     }
     p = OSSL_PARAM_locate(params, OSSL_DIGEST_PARAM_SIZE);
     if (p != NULL && !OSSL_PARAM_set_size_t(p, SHA2_256_DIGEST_SIZE)) {
-        kpep_log(LOG_LVL_ERR, "SHA2", "Failed to set parameter 'size'");
+        ardent_log(LOG_LVL_ERR, "SHA2", "Failed to set parameter 'size'");
         return 0;
     }
     return 1;
@@ -298,7 +298,7 @@ int sha2_get_params(OSSL_PARAM params[])
  * ***********************************************************************************************/
 
 EXPORT_VISIBILITY_HIDDEN
-const OSSL_DISPATCH kpep_sha2_digest_functions[] = {
+const OSSL_DISPATCH ardent_sha2_digest_functions[] = {
     { OSSL_FUNC_DIGEST_NEWCTX,          (void (*)(void))sha2_ctx_new },
     { OSSL_FUNC_DIGEST_FREECTX,         (void (*)(void))sha2_ctx_free },
     { OSSL_FUNC_DIGEST_DUPCTX,          (void (*)(void))sha2_ctx_dup },

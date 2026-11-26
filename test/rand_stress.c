@@ -1,18 +1,18 @@
 /*
- * kpep_stress.c
+ * ardent_stress.c
  *
  * OpenSSL 3.5.5 random-number-generation stress test.
  *
  * Build:
  *   cc -std=c11 -O2 -Wall -Wextra -Wpedantic -pthread \
- *      -o kpep_stress kpep_stress.c $(pkg-config --cflags --libs openssl)
+ *      -o ardent_stress ardent_stress.c $(pkg-config --cflags --libs openssl)
  *
  * Example:
- *   ./kpep_stress 12 --prov=4 --seed=3 --drbg --drbg-digest SHA2-256
+ *   ./ardent_stress 12 --prov=4 --seed=3 --drbg --drbg-digest SHA2-256
  *
  * Methods:
  *   --prov[=N]  RAND_bytes_ex()
- *   --seed[=N]  EVP_RAND "KPEP-SEED"
+ *   --seed[=N]  EVP_RAND "ARDENT-SEED"
  *   --drbg[=N]  EVP_RAND "HMAC-DRBG"
  *   --drbg-digest <name>  Digest to use for HMAC-DRBG (default SHA2-256)
  *
@@ -23,10 +23,10 @@
  * Press Ctrl-C (SIGINT) to stop the test and print the final summary.
  *
  * NOTE:
- * "KPEP-SEED" must be supplied by an OpenSSL provider available to the
+ * "ARDENT-SEED" must be supplied by an OpenSSL provider available to the
  * application's library context. This program fetches it by name and
  * instantiates it as an EVP_RAND. If your provider requires a different
- * property query, adjust KPEP_SEED_PROPERTIES below.
+ * property query, adjust ARDENT_SEED_PROPERTIES below.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -59,9 +59,9 @@
 
 /*
  * Leave this as NULL to use the default OpenSSL provider/property selection.
- * Set it to a provider property query if KPEP-SEED requires one.
+ * Set it to a provider property query if ARDENT-SEED requires one.
  */
-#define KPEP_SEED_PROPERTIES NULL
+#define ARDENT_SEED_PROPERTIES NULL
 #define DEFAULT_DRBG_DIGEST "SHA2-256"
 
 enum method_id {
@@ -115,7 +115,7 @@ static void print_usage(const char *prog)
             "\n"
             "  <total_threads>  Total number of worker threads (> 0)\n"
             "  --prov[=N]       Use RAND_bytes_ex(), optionally N threads\n"
-            "  --seed[=N]       Fetch KPEP-SEED as an EVP_RAND, optionally N threads\n"
+            "  --seed[=N]       Fetch ARDENT-SEED as an EVP_RAND, optionally N threads\n"
             "  --drbg[=N]       Fetch HMAC-DRBG as an EVP_RAND, optionally N threads\n"
             "  --drbg-digest <name>  Set the digest for HMAC-DRBG (default SHA2-256)\n"
             "\n"
@@ -416,10 +416,10 @@ static int preflight_fetches(struct app_config *config)
         case METHOD_PROV:
             break;
         case METHOD_SEED:
-            printf("Preflight: fetching KPEP-SEED...\n");
-            config->rand[i] = fetch_rand("KPEP-SEED", KPEP_SEED_PROPERTIES);
+            printf("Preflight: fetching ARDENT-SEED...\n");
+            config->rand[i] = fetch_rand("ARDENT-SEED", ARDENT_SEED_PROPERTIES);
             if (config->rand[i] == NULL) return -1;
-            printf("Preflight: KPEP-SEED fetch succeeded.\n");
+            printf("Preflight: ARDENT-SEED fetch succeeded.\n");
             break;
         case METHOD_DRBG:
             printf("Preflight: fetching HMAC-DRBG...\n");
@@ -453,7 +453,7 @@ static void *worker_seed(void *arg)
 
     (void)worker->worker_number;
 
-    ctx = create_rand_ctx(worker->rand, "KPEP-SEED", NULL,
+    ctx = create_rand_ctx(worker->rand, "ARDENT-SEED", NULL,
                           worker->worker_number);
     if (ctx == NULL) {
         atomic_fetch_add_explicit(&worker->stats->failures, 1,

@@ -26,8 +26,8 @@
 #include <errno.h>
 #include <pthread.h>
 
-#include "kpep/kpep.h"
-#include "kpep/kpep_names.h"
+#include "ardent/ardent.h"
+#include "ardent/ardent_names.h"
 
 static const char alloc_msg[] = "Memory allocation error writing log entry";
 
@@ -41,7 +41,7 @@ static LogLevel current_log_level = LOG_LVL_FATAL;
 
 #include "openssl/params.h"
 
-static KPEP_RESULT load_params_from_environment(void)
+static ARDENT_RESULT load_params_from_environment(void)
 {
 	char *dbgenv;
 
@@ -49,24 +49,24 @@ static KPEP_RESULT load_params_from_environment(void)
 	if (dbgenv != NULL) {
 		current_log_level = read_log_level_string(dbgenv);
 	}
-	return KPEP_R_SUCCESS;
+	return ARDENT_R_SUCCESS;
 }
 
-static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
+static ARDENT_RESULT load_params_from_openssl(void* prov_ctx)
 {
 	const char *level_str = NULL;
 	OSSL_PARAM params[2], *p = params;
 
 	// Set parameters for lookup
 	*p++ = OSSL_PARAM_construct_utf8_ptr(
-		KPEP_PROV_PARAM_LOG_SYSLOG_LEVEL,
+		ARDENT_PROV_PARAM_LOG_SYSLOG_LEVEL,
 		(char **) &level_str,
 		sizeof(level_str));
 	*p = OSSL_PARAM_construct_end();
 
 	// Lookup
-	if (!kpep_get_core_params(prov_ctx, params))
-		return KPEP_R_CONFIG_LOOKUP_FAILURE;
+	if (!ardent_get_core_params(prov_ctx, params))
+		return ARDENT_R_CONFIG_LOOKUP_FAILURE;
 
 	// It's OK if this key isn't present -- default to 'ERROR'
 	if (level_str)
@@ -74,7 +74,7 @@ static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
 	else 
 		current_log_level = LOG_LVL_ERR;
 
-	return KPEP_R_SUCCESS;
+	return ARDENT_R_SUCCESS;
 }
  
 /* ************************************************************************************************
@@ -83,11 +83,11 @@ static KPEP_RESULT load_params_from_openssl(void* prov_ctx)
  * ************************************************************************************************
  * ***********************************************************************************************/
 
-static KPEP_RESULT init_log_syslog(void* prov_ctx)
+static ARDENT_RESULT init_log_syslog(void* prov_ctx)
 {
-	#if defined (KPEP_TRACE_SINK)
-    printf("*** -SINK: %s\n", __func__);
-    #endif
+	if (ardent_trace_sink_enabled) {
+		ardent_trace("ARDENT-SINK", __func__);
+	}
 	return prov_ctx?load_params_from_openssl(prov_ctx)
 	               :load_params_from_environment();
 }
@@ -128,7 +128,7 @@ static void write_log_data_syslog(LogLevel level, const char* module, const char
 	idx =  14 + (bytes_len*2);  // 14 chars for formatting and EOL
 	idx += module?strlen(module):0;
 	idx += label?strlen(label):0;
-	msg = kpep_zalloc(idx);
+	msg = ardent_zalloc(idx);
 	if (!msg)
 		return;
 	if (module) {
@@ -153,7 +153,7 @@ static void write_log_data_syslog(LogLevel level, const char* module, const char
 		}
 	}
 	syslog(level, "%s", msg);
-	kpep_free(msg);
+	ardent_free(msg);
     return;
 }
 

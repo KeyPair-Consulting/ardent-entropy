@@ -14,10 +14,10 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
-#ifndef KPEP_HMAC_H
-#define KPEP_HMAC_H
+#ifndef ARDENT_HMAC_H
+#define ARDENT_HMAC_H
 
-#include "kpep/kpep.h"
+#include "ardent/ardent.h"
 
 # ifdef __cplusplus
 extern "C" {
@@ -32,8 +32,6 @@ int  hmac_init (HMAC_CTX *ctx,
                 const unsigned char *key,
                 unsigned int key_size,
                 void* params);  // ossl_unused const OSSL_PARAM params[]);
-
-void hmac_reinit(HMAC_CTX *ctx);
 
 int  hmac_update(HMAC_CTX *ctx, 
                 const unsigned char *message,
@@ -54,5 +52,5 @@ int  hmac      (const unsigned char *key,
 # ifdef __cplusplus
 }
 # endif
-#endif /* KPEP_HMAC_H */
+#endif /* ARDENT_HMAC_H */
 

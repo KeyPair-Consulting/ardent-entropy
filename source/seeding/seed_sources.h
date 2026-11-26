@@ -1,0 +1,127 @@
+/* ************************************************************************************************
+ * Copyright (C) 2026 Symbiotic Systems Research, LLC
+ * All Rights Reserved * Proprietary and confidential
+ * 
+ * The methods and techniques described herein are considered 
+ * trade secrets and/or confidential. Reproduction or distribution, 
+ * in whole or in part, is forbidden except by express written 
+ * permission of Symbiotic Systems Research, LLC.
+ * Please contact <info@symsysresearch.com> for licensing information.
+ * 
+ * NO WARRANTY, EXPLICIT OR IMPLICIT, IS PROVIDED.
+ * In no event shall the author be liable for any claim or damages.
+ * 
+ * Author: Randall Steck
+ * ***********************************************************************************************/
+
+#ifndef ARDENT_SEED_SOURCE_H
+#define ARDENT_SEED_SOURCE_H
+#pragma once
+
+#include <stdint.h>
+
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+#else
+#include <sys/time.h>
+#include <time.h>
+#endif
+
+#include "ardent/ardent_names.h"
+#include "ardent/ardent_seed_stub.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Function collections defined in the stub source files
+extern const STUB_FUNCTIONS stub_jitter;
+extern const STUB_FUNCTIONS stub_rdseed;
+extern const STUB_FUNCTIONS stub_rdrand;
+extern const STUB_FUNCTIONS stub_osrand;
+extern const STUB_FUNCTIONS stub_extern;
+
+// Package of information for each seed source
+typedef struct seed_source_def_st {
+    const char *desc;
+    const char *prefix;
+    uint32_t    force_hardware;
+    uint32_t    idx;
+    const STUB_FUNCTIONS *stub_fn;
+} SEED_SOURCE_DEF;
+
+// All seed sources are defined here, with their associated stub function collections and parameters
+static SEED_SOURCE_DEF seed_source_defs[] = {
+    { "jitter",  ARDENT_PROV_PARAM_SEED_JITTER, 0, 0, &stub_jitter },
+    { "rdseed",  ARDENT_PROV_PARAM_SEED_RDSEED, 1, 0, &stub_rdseed },
+    { "rdrand",  ARDENT_PROV_PARAM_SEED_RDRAND, 1, 0, &stub_rdrand },
+    { "osrand1", ARDENT_PROV_PARAM_SEED_OSRAND, 0, 1, &stub_osrand },
+    { "osrand2", ARDENT_PROV_PARAM_SEED_OSRAND, 0, 2, &stub_osrand },
+    { "osrand3", ARDENT_PROV_PARAM_SEED_OSRAND, 0, 3, &stub_osrand },
+    { "osrand4", ARDENT_PROV_PARAM_SEED_OSRAND, 0, 4, &stub_osrand },
+    { "extern1", ARDENT_PROV_PARAM_SEED_EXTERN, 0, 1, &stub_extern },
+    { "extern2", ARDENT_PROV_PARAM_SEED_EXTERN, 0, 2, &stub_extern },
+    { "extern3", ARDENT_PROV_PARAM_SEED_EXTERN, 0, 3, &stub_extern },
+    { "extern4", ARDENT_PROV_PARAM_SEED_EXTERN, 0, 4, &stub_extern },
+    { NULL, NULL, 0, 0, NULL }
+};
+
+#define STUB_NAME_LENGTH 48
+
+/*
+ * This definition is REQUIRED to be the first item in every seed_stud_source context variable.
+ * This definition is used with the structure below to provide limited visibility into the
+ * otherwise opaque context structures.
+ */
+#define COMMON_STUB_INFO             \
+    char     name[STUB_NAME_LENGTH]; \
+    uint32_t idx;                    \
+    uint32_t state;                  \
+    uint32_t full_entropy;           \
+    uint32_t block_size;             \
+    uint32_t block_count;            \
+    double   entropy_per_bit;        \
+                                     \
+    uint32_t prof_last;              \
+    uint32_t prof_last_sz;           \
+    uint32_t prof_min;               \
+    uint32_t prof_max;               \
+    uint32_t prof_avg_g;             \
+    uint32_t prof_avg_w;             \
+    uint32_t prof_count;             \
+    uint64_t prof_total;             \
+    uint64_t prof_total_sz;          \
+    uint64_t prof_last_reset_us;     \
+/*
+ * This structure is used to cast each opaque seed-source context structure so the 
+ * async ring buffer can read the capabilities of each seed-source in order to make 
+ * make use of this information common to all seed-sources.
+ */
+typedef struct {
+    COMMON_STUB_INFO
+} SEED_STUB_INFO;
+
+// Calculate the gather size for a given number of bits based on the seed stub context
+static inline
+uint32_t seed_get_gather_sz(const SEED_STUB_INFO *info, size_t nbits)
+{
+    // Calculate gather size and with bounds checking (block-size .. UINT32_MAX)
+    size_t gather_sz;
+    gather_sz = (info->full_entropy)?nbits:(size_t) (nbits / info->entropy_per_bit);
+    if (gather_sz < info->block_size)
+        gather_sz = info->block_size;
+    if (gather_sz > UINT32_MAX)
+        return 0;  // Too many 
+    return (uint32_t) gather_sz;
+}
+
+// Get a timestamp in microseconds for profiling purposes
+uint32_t seed_stub_profile_now_us(void);
+
+// Update the profiling information for a seed stub context
+void seed_stub_profile_update(SEED_STUB_INFO *info, uint32_t last_us, uint32_t last_sz);
+
+#ifdef __cplusplus
+}
+#endif
+#endif /* ARDENT_SEED_SOURCE_H */

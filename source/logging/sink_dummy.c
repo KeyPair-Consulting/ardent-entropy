@@ -17,13 +17,13 @@
  * DEVLOPER'S NOTE:
  * There is a bizarre bug wherein the call to the init_fn of the fi=rst sink causes a SEGFAULT.
  * This is a "dummy" (do-nothing) sink to address the issue.
- * See DEVELOPER'S NOTE in "kpep_logging/c" for more information.
+ * See DEVELOPER'S NOTE in "ardent_logging/c" for more information.
  */
 
 #include <stdio.h>
 
-#include "kpep/kpep.h"
-#include "kpep/kpep_names.h"
+#include "ardent/ardent.h"
+#include "ardent/ardent_names.h"
 
 /* ************************************************************************************************
  * ************************************************************************************************
@@ -37,19 +37,19 @@
  * ************************************************************************************************
  * ***********************************************************************************************/
  
-static KPEP_RESULT init_log_dummy(void* prov_ctx)
+static ARDENT_RESULT init_log_dummy(void* prov_ctx)
 {
-	#if defined (KPEP_TRACE_SINK)
-    printf("*** -SINK: %s\n", __func__);
-    #endif
-	return KPEP_R_SUCCESS;
+	if (ardent_trace_sink_enabled) {
+		ardent_trace("ARDENT-SINK", __func__);
+	}
+	return ARDENT_R_SUCCESS;
 }
 
 static void fini_log_dummy(void)
 {
-	#if defined (KPEP_TRACE_SINK)
-    printf("*** -SINK: %s\n", __func__);
-    #endif
+	if (ardent_trace_sink_enabled) {
+		ardent_trace("ARDENT-SINK", __func__);
+	}
 	return; // Nothing to do
 }
 
@@ -65,17 +65,17 @@ static LogLevel get_level_dummy(void)
 
 static void write_log_dummy(LogLevel level, const char* module, const char* fmt, va_list args)
 {
-	#if defined (KPEP_TRACE_SINK)
-    printf("*** -SINK: %s\n", __func__);
-    #endif
+	if (ardent_trace_sink_enabled) {
+		ardent_trace("ARDENT-SINK", __func__);
+	}
 	return;
 }
 
 static void write_log_data_dummy(LogLevel level, const char* module, const char* label, unsigned char *bytes, size_t bytes_len)
 {
-	#if defined (KPEP_TRACE_SINK)
-    printf("*** -SINK: %s\n", __func__);
-    #endif
+	if (ardent_trace_sink_enabled) {
+		ardent_trace("ARDENT-SINK", __func__);
+	}
     return;
 }
 

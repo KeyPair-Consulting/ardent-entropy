@@ -14,8 +14,8 @@
  * Author: Randall Steck
  * ***********************************************************************************************/
 
- #ifndef KPEP_APP_COMMON_H
- #define KPEP_APP_COMMON_H
+ #ifndef ARDENT_APP_COMMON_H
+ #define ARDENT_APP_COMMON_H
  
  #ifdef __cplusplus
  extern "C" {
@@ -46,4 +46,4 @@ static void print_hex(const char* key, unsigned int col_width, const unsigned ch
 #ifdef __cplusplus
 }
 #endif
-#endif /* KPEP_APP_COMMON_H */
+#endif /* ARDENT_APP_COMMON_H */
