@@ -34,7 +34,27 @@
         ]
     },
     {
-        "algorithm": "hashDRBG",
+        "algorithm": "HMAC-SHA2-256",
+        "revision": "1.0",
+        "prereqVals": [
+            {
+                "algorithm": "SHA",
+                "valValue": "same"
+            }
+        ],
+        "keyLen": [
+            {
+                "min": 112,
+                "max": 2048,
+                "increment": 8
+            }
+        ],
+        "macLen": [
+            256
+        ]
+    },
+    {
+        "algorithm": "hmacDRBG",
         "revision": "1.0",
         "prereqVals": [
             {
@@ -79,26 +99,6 @@
                 ],
                 "returnedBitsLen": 256
             }
-        ]
-    },
-    {
-        "algorithm": "HMAC-SHA2-256",
-        "revision": "1.0",
-        "prereqVals": [
-            {
-                "algorithm": "SHA",
-                "valValue": "same"
-            }
-        ],
-        "keyLen": [
-            {
-                "min": 112,
-                "max": 2048,
-                "increment": 8
-            }
-        ],
-        "macLen": [
-            256
         ]
     }
 ]
