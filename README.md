@@ -22,7 +22,7 @@ This project/branch is under active development and is on-track for a Release Ca
 
 In the current form, it is a fully working provider and entropy source, and all of the nine (9) stated features above are implemented and working.  There is a TODO.md file in the root of the project that describes the roadmap to RC1.
 
-The current timeline is to release RC1 by Dec 31, 2026. Release of 1.0.0 will be follow the release of the stable OpenSSL 4.x version intended for FIPS 140-3 validation.
+The current timeline is to release RC1 by Dec 31, 2026. Release of 1.0.0 will follow the release of the stable OpenSSL 4.x version intended for FIPS 140-3 validation.
 
 ## BUILDING
 
