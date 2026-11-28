@@ -436,7 +436,6 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
 
     // Debug should be active for provider startup, and it must reflect the current env state.
     ardent_debug_init();
-
     if (ardent_trace_seed_enabled) {
         ardent_trace(MODULE_NAME, "Provider Init Start");
     }
@@ -444,14 +443,6 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
     // Load our error strings into OpenSSL
     if (!ardent_set_openssl_reason_strings()) {
         ERR_raise(ERR_LIB_PROV, PROV_R_VALUE_ERROR);
-    }
-
-    // Output a log message about startup, if the config calls for logging (peek at config)
-    if (OSSL_PROVIDER_conf_get_bool((void*)handle, ARDENT_PROV_PARAM_LOG_SYSLOG_ACTIVATE, 0)) {
-        syslog(LOG_LVL_INFO, MODULE_NAME": Provider startup initialized\n");
-    }
-    if (OSSL_PROVIDER_conf_get_bool((void*)handle, ARDENT_PROV_PARAM_LOG_STDERR_ACTIVATE, 0)) {
-        fprintf(stderr, "%s", MODULE_NAME": Provider startup initialized\n");
     }
 
     /* Pull core functions reated to BIO (at bottom of file) */
@@ -484,6 +475,14 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
         }
     }
 
+    // Output a log message about startup, if the config calls for logging (peek at config)
+    if (OSSL_PROVIDER_conf_get_bool((void*)handle, ARDENT_PROV_PARAM_LOG_SYSLOG_ACTIVATE, 0)) {
+        syslog(LOG_LVL_INFO, MODULE_NAME": Provider startup initialized\n");
+    }
+    if (OSSL_PROVIDER_conf_get_bool((void*)handle, ARDENT_PROV_PARAM_LOG_STDERR_ACTIVATE, 0)) {
+        fprintf(stderr, "%s", MODULE_NAME": Provider startup initialized\n");
+    }
+
     // if libctx not yet existing, create a new one
     if ((corebiometh = ardent_bio_prov_init_bio_method()) == NULL) {
         ardent_log(LOG_LVL_ERR, MODULE_NAME, "Error creating new BIO handle\n");
@@ -511,18 +510,20 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
         goto err;
     }
 
+    // Initialize Logging subsystem
+    rv = ardent_logging_init(newctx);  // Make into context!
+    if (rv) {
+        ERR_raise(ERR_LIB_ARDENT, rv);
+        goto err;
+    }
+
     // Crypto algorithm Self-Tests
     if (!SELF_TEST_post(newctx->st, 0)) {
         ERR_raise(ERR_LIB_PROV, PROV_R_SELF_TEST_POST_FAILURE);
         goto err; 
     }
 
-    // Initialize all subsystems
-    rv = ardent_logging_init(newctx);  // Make into context!
-    if (rv) {
-        ERR_raise(ERR_LIB_ARDENT, rv);
-        goto err;
-    }
+    // Load seeding subsystem
     newctx->seeding = ardent_seeding_new(newctx);
     if (!newctx->seeding) {
         ardent_log(LOG_LVL_ERR, MODULE_NAME, "Error initializing seeding subsystem\n");
@@ -532,7 +533,7 @@ int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
 	// TODO: Log error "some subsystems failed to start"?
 
     // Start the immutable-configured runtime debug listener after provider startup.
-    ardent_debug_control_init(newctx);
+    ardent_debug_control_init(newctx);  // Make into context!
 
     // Signal success
     *out = ardent_dispatch_table;

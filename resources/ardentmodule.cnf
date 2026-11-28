@@ -28,6 +28,11 @@ extlog = extlog_sect
 # Log all FIPS indicators to activate sinks
 fips-indicators = 1
 
+# Before the logging subsystem is active, if you want log messages, 
+# set this to [stderr|syslog]
+#prestart=syslog
+prestart=stderr
+
 [syslog_sect]
 activate=0
 level=INFO

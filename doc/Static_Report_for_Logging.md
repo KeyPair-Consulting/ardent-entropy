@@ -47,13 +47,7 @@ Concurrent logging can observe sink registration/removal while pointers are chan
 - `source/logging/ardent_logging.c:260-269`
 
 **Evidence:**
-`ardent_get_sink_descs()` calls `sprintf()` without an output buffer argument:
-
-```c
-sprintf("  Name: %-12s Lvl: %-12s\n",
-        sinks[idx].name,
-        get_log_level_string(...));
-```
+FIXED
 
 **Risk:**
 This is invalid function use and can cause a compiler diagnostic or undefined behavior depending on the declaration/signature and strict compilation settings.

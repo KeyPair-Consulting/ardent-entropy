@@ -258,20 +258,6 @@ void ardent_logging_fini(void)
 	return;
 }
 
-EXPORT_VISIBILITY_HIDDEN
-void ardent_get_sink_descs(char *buffer)
-{
-	size_t idx;
-	for (idx=0; idx<MAX_SINK_COUNT; ++idx) {
-		if (!sinks[idx].fn) {
-			break;
-		}
-		sprintf("  Name: %-12s Lvl: %-12s\n", 
-				sinks[idx].name, 
-				get_log_level_string(sinks[idx].fn->level_fn()));
-	}
-}
-
 /* ************************************************************************************************
  * ************************************************************************************************
  * CONFIGURATION
